@@ -1,16 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Calendar, CheckSquare, StickyNote, Users, Plus, X, Check, 
   ChevronLeft, ChevronRight, Repeat, Clock, Trash2, AlertCircle, 
   Pencil, Bell, BellOff, ListChecks, Type as TypeIcon, Utensils,
   Download, Upload, Search, Tag, Sparkles, Filter, Smile, Settings, ToggleLeft, ToggleRight,
-  Pin, MessageSquare, LayoutGrid, Info
+  Pin, MessageSquare, LayoutGrid, Info, RefreshCw, Wifi, WifiOff
 } from 'lucide-react';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');`;
 
-// Wersja aplikacji
-const APP_VERSION = '1.0.0';
+// Wersja aplikacji z integracją chmury Supabase
+const APP_VERSION = '1.1.0';
 
 // Dynamic Dark Theme Colors
 const COLORS = {
@@ -46,7 +46,20 @@ const REMINDER_OPTIONS = [
 
 const RECURRENCE_LABELS = { none: 'Jednorazowo', daily: 'Codziennie', weekly: 'Co tydzień', monthly: 'Co miesiąc' };
 
-// Helpers
+function getEnv(key) {
+  try {
+    if (typeof import.meta !== 'undefined' && import.meta && import.meta.env) {
+      return import.meta.env[key] || '';
+    }
+  } catch (e) {
+    // Ignore error if import.meta is unavailable
+  }
+  return '';
+}
+
+const supabaseUrl = getEnv('VITE_SUPABASE_URL');
+const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
+
 function reminderLabel(hours) {
   const opt = REMINDER_OPTIONS.find(o => o.hours === hours);
   return opt ? opt.label : 'Brak';
@@ -136,8 +149,7 @@ function emptyData() {
   };
 }
 
-// Local Storage Manager
-const STORAGE_KEY = 'rodzinny_planer_data_v4'; // Bumping version for new settings structure
+const STORAGE_KEY = 'rodzinny_planer_data_v4';
 const storage = {
   get: () => {
     try {
@@ -159,7 +171,6 @@ const storage = {
   }
 };
 
-// UI Reusable Components
 function Chip({ person, size = 'sm' }) {
   if (!person) return null;
   const s = size === 'sm' ? 'w-5 h-5 text-[10px]' : 'w-8 h-8 text-sm';
@@ -212,7 +223,6 @@ function EmptyState({ text, icon: Icon = Sparkles }) {
   );
 }
 
-// Sub-items List Renderer
 function ChecklistContainer({ items = [], onToggleItem, onAddItem, onRemoveItem }) {
   const [newText, setNewText] = useState('');
 
@@ -267,8 +277,6 @@ function ChecklistContainer({ items = [], onToggleItem, onAddItem, onRemoveItem 
     </div>
   );
 }
-
-// ---------- Modals ----------
 
 function ModalShell({ title, onClose, children }) {
   return (
@@ -809,8 +817,6 @@ function PersonModal({ editPerson, existingCount, onClose, onSave }) {
     </ModalShell>
   );
 }
-
-// ---------- Views ----------
 
 function TodayView({ data, onOpenEvent, onOpenTask, onOpenAddEvent, onOpenAddTask, onToggleTask }) {
   const today = todayStr();
@@ -1385,7 +1391,7 @@ function MealsView({ meals, onUpdateMeal }) {
   );
 }
 
-function SettingsView({ settings, onUpdateSettings, people, onAddPerson, onEditPerson, onDeletePerson, onExport, onImport }) {
+function SettingsView({ settings, onUpdateSettings, people, onAddPerson, onEditPerson, onDeletePerson, onExport, onImport, isCloudConnected }) {
   const enableMeals = settings?.enableMeals ?? true;
   const enableWall = settings?.enableWall ?? true;
 
@@ -1404,6 +1410,17 @@ function SettingsView({ settings, onUpdateSettings, people, onAddPerson, onEditP
         <div>
           <h2 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-2xl font-bold">Opcje i Ustawienia</h2>
           <p className="text-xs text-stone-400">Zarządzaj swoją rodziną i aplikacją</p>
+        </div>
+      </div>
+
+      {/* Stan połączenia z chmurą */}
+      <div style={{ background: COLORS.surface, borderColor: isCloudConnected ? COLORS.success : COLORS.warn }} className="border rounded-2xl p-4 flex items-center gap-3">
+        {isCloudConnected ? <Wifi size={20} className="text-emerald-400" /> : <WifiOff size={20} className="text-red-400" />}
+        <div>
+          <div className="text-sm font-bold">{isCloudConnected ? 'Synchronizacja w chmurze (Supabase)' : 'Tryb Lokalny (Lokalny Storage)'}</div>
+          <div className="text-xs text-stone-400">
+            {isCloudConnected ? 'Wszystkie zmiany są natychmiastowo synchronizowane między telefonami.' : 'Dodaj klucze Supabase w pliku .env, aby włączyć natychmiastową synchronizację.'}
+          </div>
         </div>
       </div>
 
@@ -1534,57 +1551,131 @@ function SettingsView({ settings, onUpdateSettings, people, onAddPerson, onEditP
   );
 }
 
-// ---------- Main App Root ----------
-
 export default function App() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('today');
-  const [modal, setModal] = useState(null); // 'event' | 'task' | 'note' | 'person' | 'wall'
+  const [modal, setModal] = useState(null);
   const [modalPayload, setModalPayload] = useState(null);
   const [addEventDate, setAddEventDate] = useState(todayStr());
   const [detailEvent, setDetailEvent] = useState(null);
   const [detailTask, setDetailTask] = useState(null);
   const [editingPerson, setEditingPerson] = useState(null);
   const [toast, setToast] = useState(null);
+  const [supabaseClient, setSupabaseClient] = useState(null);
 
   const showToast = (msg) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
   };
 
+  // Safe Supabase Client initialization
   useEffect(() => {
-    const loaded = storage.get();
-    if (loaded) {
-      // Migracja ustawień jeśli brak
-      if (!loaded.settings) loaded.settings = emptyData().settings;
-      setData(loaded);
-    } else {
-      const init = emptyData();
-      setData(init);
-      storage.set(init);
+    let client = null;
+    if (supabaseUrl && supabaseAnonKey) {
+      if (window.supabase && typeof window.supabase.createClient === 'function') {
+        client = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+        setSupabaseClient(client);
+      } else {
+        // Dynamically load Supabase library script if not installed via bundler
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+        script.async = true;
+        script.onload = () => {
+          if (window.supabase && typeof window.supabase.createClient === 'function') {
+            const sc = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+            setSupabaseClient(sc);
+          }
+        };
+        document.body.appendChild(script);
+      }
     }
-    setLoading(false);
   }, []);
 
-  const persist = useCallback((next) => {
+  // Synchronizacja danych z Supabase i LocalStorage
+  useEffect(() => {
+    let channel = null;
+
+    async function loadData() {
+      if (supabaseClient) {
+        try {
+          const { data: rows, error } = await supabaseClient
+            .from('family_data')
+            .select('data')
+            .eq('id', 'main_family')
+            .single();
+
+          if (error && error.code === 'PGRST116') {
+            const init = emptyData();
+            await supabaseClient.from('family_data').insert({ id: 'main_family', data: init });
+            setData(init);
+          } else if (rows && rows.data) {
+            setData(rows.data);
+          } else {
+            const local = storage.get() || emptyData();
+            setData(local);
+          }
+
+          // Subskrypcja zmian w czasie rzeczywistym
+          channel = supabaseClient
+            .channel('public:family_data')
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'family_data', filter: 'id=eq.main_family' }, (payload) => {
+              if (payload.new && payload.new.data) {
+                setData(prev => {
+                  const localUserId = prev?.settings?.currentUserId;
+                  const newData = payload.new.data;
+                  if (localUserId && newData.settings) {
+                    newData.settings.currentUserId = localUserId;
+                  }
+                  return newData;
+                });
+                showToast("Zaktualizowano dane od domownika! 🔄");
+              }
+            })
+            .subscribe();
+
+        } catch (err) {
+          console.warn("Supabase load error:", err);
+          setData(storage.get() || emptyData());
+        }
+      } else {
+        setData(storage.get() || emptyData());
+      }
+      setLoading(false);
+    }
+
+    loadData();
+
+    return () => {
+      if (channel && supabaseClient) supabaseClient.removeChannel(channel);
+    };
+  }, [supabaseClient]);
+
+  const persist = useCallback(async (next) => {
     setData(next);
     storage.set(next);
-  }, []);
+
+    if (supabaseClient) {
+      try {
+        await supabaseClient
+          .from('family_data')
+          .upsert({ id: 'main_family', data: next, updated_at: new Date().toISOString() });
+      } catch (e) {
+        console.warn("Chmura Supabase niedostępna - zapisano lokalnie", e);
+      }
+    }
+  }, [supabaseClient]);
 
   if (loading || !data) {
-    return <div style={{ background: COLORS.bg, color: COLORS.ink }} className="min-h-screen flex items-center justify-center text-sm font-medium">Wczytywanie rodzinnego planera…</div>;
+    return <div style={{ background: COLORS.bg, color: COLORS.ink }} className="min-h-screen flex items-center justify-center text-sm font-medium">Łączenie z rodzinnym planerem…</div>;
   }
 
-  // Current User Configuration
   const currentUserId = data.settings?.currentUserId || null;
 
-  // Filtrowanie notatek tylko dla zalogowanego użytkownika (lub dla wszystkich, jeśli notatka nie ma autora)
   const visibleNotes = currentUserId 
     ? data.notes.filter(n => !n.personId || n.personId === currentUserId)
     : data.notes;
 
-  // Action handlers
   const upsertEvent = ev => {
     const noteId = modalPayload?.noteId;
     const nextNotes = noteId ? data.notes.filter(n => n.id !== noteId) : data.notes;
@@ -1649,7 +1740,6 @@ export default function App() {
 
   const deletePerson = id => {
     if (confirm("Czy na pewno usunąć tę osobę? Wydarzenia i zadania z nią powiązane mogą zostać usierocone.")) {
-      // Przy usuwaniu profilu wyczyszczamy powiązanie dla obecnego użytkownika, jeśli to on
       const nextSettings = data.settings.currentUserId === id ? { ...data.settings, currentUserId: null } : data.settings;
       persist({ ...data, people: data.people.filter(p => p.id !== id), settings: nextSettings });
       showToast("Usunięto profil");
@@ -1858,6 +1948,7 @@ export default function App() {
             onDeletePerson={deletePerson}
             onExport={exportBackup}
             onImport={importBackup}
+            isCloudConnected={!!supabaseClient}
           />
         )}
       </main>
