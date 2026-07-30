@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Calendar, CheckSquare, StickyNote, Users, Plus, X, Check, 
   ChevronLeft, ChevronRight, Repeat, Clock, Trash2, AlertCircle, 
   Pencil, Bell, BellOff, ListChecks, Type as TypeIcon, Utensils,
   Download, Upload, Search, Tag, Sparkles, Filter, Smile, Settings, ToggleLeft, ToggleRight,
-  Pin, MessageSquare, LayoutGrid, Info, RefreshCw, Wifi, WifiOff
+  Pin, MessageSquare, LayoutGrid, Info, Wifi, WifiOff
 } from 'lucide-react';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');`;
@@ -290,7 +290,7 @@ function ModalShell({ title, onClose, children }) {
           <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-xl font-bold">{title}</h3>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-800 transition" style={{ color: COLORS.inkSoft }}><X size={22} /></button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="p-5 pb-[max(env(safe-area-inset-bottom),1.25rem)]">{children}</div>
       </div>
     </div>
   );
@@ -1415,11 +1415,11 @@ function SettingsView({ settings, onUpdateSettings, people, onAddPerson, onEditP
 
       {/* Stan połączenia z chmurą */}
       <div style={{ background: COLORS.surface, borderColor: isCloudConnected ? COLORS.success : COLORS.warn }} className="border rounded-2xl p-4 flex items-center gap-3">
-        {isCloudConnected ? <Wifi size={20} className="text-emerald-400" /> : <WifiOff size={20} className="text-red-400" />}
+        {isCloudConnected ? <Wifi size={20} className="text-emerald-400 shrink-0" /> : <WifiOff size={20} className="text-red-400 shrink-0" />}
         <div>
-          <div className="text-sm font-bold">{isCloudConnected ? 'Synchronizacja w chmurze (Supabase)' : 'Tryb Lokalny (Lokalny Storage)'}</div>
+          <div className="text-sm font-bold">{isCloudConnected ? 'Synchronizacja w chmurze aktywna' : 'Tryb Lokalny (Lokalny Storage)'}</div>
           <div className="text-xs text-stone-400">
-            {isCloudConnected ? 'Wszystkie zmiany są natychmiastowo synchronizowane między telefonami.' : 'Dodaj klucze Supabase w pliku .env, aby włączyć natychmiastową synchronizację.'}
+            {isCloudConnected ? 'Wszystkie zmiany są natychmiastowo synchronizowane między telefonami.' : 'Dodaj klucze Supabase, aby włączyć natychmiastową synchronizację.'}
           </div>
         </div>
       </div>
@@ -1569,7 +1569,6 @@ export default function App() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Safe Supabase Client initialization
   useEffect(() => {
     let client = null;
     if (supabaseUrl && supabaseAnonKey) {
@@ -1577,7 +1576,7 @@ export default function App() {
         client = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
         setSupabaseClient(client);
       } else {
-        // Dynamically load Supabase library script if not installed via bundler
+        // Fallback w przypadku braku bundlera
         const script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
         script.async = true;
@@ -1592,7 +1591,6 @@ export default function App() {
     }
   }, []);
 
-  // Synchronizacja danych z Supabase i LocalStorage
   useEffect(() => {
     let channel = null;
 
@@ -1671,10 +1669,7 @@ export default function App() {
   }
 
   const currentUserId = data.settings?.currentUserId || null;
-
-  const visibleNotes = currentUserId 
-    ? data.notes.filter(n => !n.personId || n.personId === currentUserId)
-    : data.notes;
+  const visibleNotes = currentUserId ? data.notes.filter(n => !n.personId || n.personId === currentUserId) : data.notes;
 
   const upsertEvent = ev => {
     const noteId = modalPayload?.noteId;
@@ -1726,10 +1721,7 @@ export default function App() {
   };
 
   const updateMeal = (mondayKey, weekMeals) => {
-    const nextMeals = {
-      ...(data.meals || {}),
-      [mondayKey]: weekMeals
-    };
+    const nextMeals = { ...(data.meals || {}), [mondayKey]: weekMeals };
     persist({ ...data, meals: nextMeals });
   };
 
@@ -1809,7 +1801,6 @@ export default function App() {
 
   const openAddEvent = (dateStr) => { setAddEventDate(dateStr || todayStr()); setModalPayload(null); setModal('event'); };
   const openAddTask = (dateStr) => { setModalPayload(null); setModal('task'); };
-
   const openConvertNote = (note, type) => {
     setModalPayload({ initial: { note: note.text || '', items: note.items || [] }, noteId: note.id });
     if (type === 'event') setAddEventDate(todayStr());
@@ -1820,7 +1811,6 @@ export default function App() {
   const openEditTask = (t) => { setDetailTask(null); setModalPayload({ editItem: t }); setModal('task'); };
   const openEditNote = (n) => { setModalPayload({ editItem: n }); setModal('note'); };
   const openEditPerson = (p) => { setEditingPerson(p); setModal('person'); };
-
   const closeModal = () => { setModal(null); setModalPayload(null); setEditingPerson(null); };
 
   const exportBackup = () => {
@@ -1871,14 +1861,14 @@ export default function App() {
 
       {/* Toast Alert */}
       {toast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-stone-800 text-stone-100 text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl border border-stone-700 flex items-center gap-2 animate-bounce">
-          <Sparkles size={14} className="text-amber-400" />
+        <div className="fixed top-[max(env(safe-area-inset-top),1rem)] left-1/2 -translate-x-1/2 z-50 bg-stone-800 text-stone-100 text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl border border-stone-700 flex items-center gap-2 animate-bounce mt-2">
+          <Sparkles size={14} className="text-amber-400 shrink-0" />
           {toast}
         </div>
       )}
 
-      {/* Globalny Header */}
-      <header className="flex items-center justify-between px-5 pt-6 pb-4 sticky top-0 z-30 bg-[#121214]/85 backdrop-blur-md border-b border-stone-800/50">
+      {/* Globalny Header - Obsługa SafeArea-Top */}
+      <header className="flex items-center justify-between px-5 pt-[max(env(safe-area-inset-top,1.5rem),1.5rem)] pb-4 sticky top-0 z-30 bg-[#121214]/85 backdrop-blur-md border-b border-stone-800/50">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
             <Sparkles size={18} />
@@ -1896,70 +1886,23 @@ export default function App() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-24 max-w-2xl mx-auto w-full">
-        {tab === 'today' && (
-          <TodayView 
-            data={data} 
-            onOpenEvent={setDetailEvent} 
-            onOpenTask={setDetailTask} 
-            onOpenAddEvent={openAddEvent}
-            onOpenAddTask={openAddTask}
-            onToggleTask={toggleTask}
-          />
-        )}
+      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-[max(env(safe-area-inset-bottom,6rem),6rem)] max-w-2xl mx-auto w-full">
+        {tab === 'today' && <TodayView data={data} onOpenEvent={setDetailEvent} onOpenTask={setDetailTask} onOpenAddEvent={openAddEvent} onOpenAddTask={openAddTask} onToggleTask={toggleTask} />}
         {tab === 'calendar' && <CalendarView data={data} onOpenAdd={openAddEvent} onOpenEvent={setDetailEvent} />}
-        {tab === 'tasks' && (
-          <TasksView 
-            data={data} 
-            onToggleTask={toggleTask} 
-            onDeleteTask={deleteTask} 
-            onOpenTask={setDetailTask} 
-            onOpenAddTask={openAddTask}
-          />
-        )}
-        {tab === 'notes' && (
-          <NotesView 
-            notes={visibleNotes} 
-            onDelete={deleteNote} 
-            onConvert={openConvertNote} 
-            onEdit={openEditNote} 
-            onToggleItem={toggleNoteItem} 
-            onOpenAddNote={() => setModal('note')}
-          />
-        )}
-        {tab === 'wall' && enableWall && (
-          <WallView 
-            wall={data.wall} 
-            people={data.people} 
-            onDeleteWallMessage={deleteWallMessage} 
-            onTogglePinWallMessage={togglePinWallMessage}
-            onOpenAddWall={() => setModal('wall')}
-          />
-        )}
+        {tab === 'tasks' && <TasksView data={data} onToggleTask={toggleTask} onDeleteTask={deleteTask} onOpenTask={setDetailTask} onOpenAddTask={openAddTask} />}
+        {tab === 'notes' && <NotesView notes={visibleNotes} onDelete={deleteNote} onConvert={openConvertNote} onEdit={openEditNote} onToggleItem={toggleNoteItem} onOpenAddNote={() => setModal('note')} />}
+        {tab === 'wall' && enableWall && <WallView wall={data.wall} people={data.people} onDeleteWallMessage={deleteWallMessage} onTogglePinWallMessage={togglePinWallMessage} onOpenAddWall={() => setModal('wall')} />}
         {tab === 'meals' && enableMeals && <MealsView meals={data.meals} onUpdateMeal={updateMeal} />}
-        
-        {tab === 'settings' && (
-          <SettingsView 
-            settings={data.settings} 
-            onUpdateSettings={updateSettings}
-            people={data.people}
-            onAddPerson={() => setModal('person')}
-            onEditPerson={openEditPerson}
-            onDeletePerson={deletePerson}
-            onExport={exportBackup}
-            onImport={importBackup}
-            isCloudConnected={!!supabaseClient}
-          />
-        )}
+        {tab === 'settings' && <SettingsView settings={data.settings} onUpdateSettings={updateSettings} people={data.people} onAddPerson={() => setModal('person')} onEditPerson={openEditPerson} onDeletePerson={deletePerson} onExport={exportBackup} onImport={importBackup} isCloudConnected={!!supabaseClient} />}
       </main>
 
-      {/* Navigation Bar */}
-      <nav style={{ background: COLORS.surface, borderColor: COLORS.border }} className="border-t fixed bottom-0 left-0 right-0 z-40 shadow-xl pb-safe">
+      {/* Navigation Bar - Obsługa SafeArea-Bottom */}
+      <nav style={{ background: COLORS.surface, borderColor: COLORS.border }} className="border-t fixed bottom-0 left-0 right-0 z-40 shadow-xl pb-[env(safe-area-inset-bottom)]">
         <div className="max-w-md mx-auto flex items-center justify-around overflow-x-auto no-scrollbar">
           {TABS.map(({ id, label, icon: Icon }) => {
             const active = tab === id;
             return (
-              <button key={id} onClick={() => setTab(id)} className="flex-1 min-w-[60px] flex flex-col items-center gap-1.5 py-3 transition">
+              <button key={id} onClick={() => setTab(id)} className="flex-1 min-w-[60px] flex flex-col items-center gap-1.5 pt-3 pb-2 transition">
                 <Icon size={20} color={active ? COLORS.accent : COLORS.inkSoft} strokeWidth={active ? 2.5 : 2} />
                 <span style={{ color: active ? COLORS.accent : COLORS.inkSoft, fontWeight: active ? 700 : 500 }} className="text-[10px] tracking-wide">{label}</span>
               </button>
@@ -1975,27 +1918,8 @@ export default function App() {
       {modal === 'wall' && <AddWallMessageModal people={data.people} currentUserId={currentUserId} onClose={closeModal} onSave={addWallMessage} />}
       {modal === 'person' && <PersonModal editPerson={editingPerson} existingCount={data.people.length} onClose={closeModal} onSave={upsertPerson} />}
 
-      {detailEvent && (
-        <EventDetailModal 
-          event={detailEvent} 
-          people={data.people} 
-          onClose={() => setDetailEvent(null)} 
-          onEdit={openEditEvent} 
-          onDelete={deleteEvent} 
-          onToggleSubItem={toggleSubItem}
-        />
-      )}
-      {detailTask && (
-        <TaskDetailModal
-          task={data.tasks.find(t => t.id === detailTask.id) || detailTask}
-          people={data.people}
-          onClose={() => setDetailTask(null)}
-          onToggle={toggleTask}
-          onDelete={deleteTask}
-          onEdit={openEditTask}
-          onToggleSubItem={toggleSubItem}
-        />
-      )}
+      {detailEvent && <EventDetailModal event={detailEvent} people={data.people} onClose={() => setDetailEvent(null)} onEdit={openEditEvent} onDelete={deleteEvent} onToggleSubItem={toggleSubItem} />}
+      {detailTask && <TaskDetailModal task={data.tasks.find(t => t.id === detailTask.id) || detailTask} people={data.people} onClose={() => setDetailTask(null)} onToggle={toggleTask} onDelete={deleteTask} onEdit={openEditTask} onToggleSubItem={toggleSubItem} />}
     </div>
   );
 }
