@@ -9,8 +9,8 @@ import {
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');`;
 
-// Wersja aplikacji z integracją chmury Supabase
-const APP_VERSION = '1.1.0';
+// Wersja aplikacji
+const APP_VERSION = '1.1.2';
 
 // Dynamic Dark Theme Colors
 const COLORS = {
@@ -46,13 +46,14 @@ const REMINDER_OPTIONS = [
 
 const RECURRENCE_LABELS = { none: 'Jednorazowo', daily: 'Codziennie', weekly: 'Co tydzień', monthly: 'Co miesiąc' };
 
+// Bezpieczne wczytywanie środowiska (podgląd webowy vs lokalny Vite)
 function getEnv(key) {
   try {
     if (typeof import.meta !== 'undefined' && import.meta && import.meta.env) {
       return import.meta.env[key] || '';
     }
   } catch (e) {
-    // Ignore error if import.meta is unavailable
+    // Ignoruj, gdy import.meta nie jest dostępne
   }
   return '';
 }
@@ -60,6 +61,7 @@ function getEnv(key) {
 const supabaseUrl = getEnv('VITE_SUPABASE_URL');
 const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
 
+// Helpers
 function reminderLabel(hours) {
   const opt = REMINDER_OPTIONS.find(o => o.hours === hours);
   return opt ? opt.label : 'Brak';
@@ -149,6 +151,7 @@ function emptyData() {
   };
 }
 
+// Local Storage Manager
 const STORAGE_KEY = 'rodzinny_planer_data_v4';
 const storage = {
   get: () => {
@@ -171,6 +174,7 @@ const storage = {
   }
 };
 
+// UI Reusable Components
 function Chip({ person, size = 'sm' }) {
   if (!person) return null;
   const s = size === 'sm' ? 'w-5 h-5 text-[10px]' : 'w-8 h-8 text-sm';
@@ -223,6 +227,7 @@ function EmptyState({ text, icon: Icon = Sparkles }) {
   );
 }
 
+// Sub-items List Renderer
 function ChecklistContainer({ items = [], onToggleItem, onAddItem, onRemoveItem }) {
   const [newText, setNewText] = useState('');
 
@@ -277,6 +282,8 @@ function ChecklistContainer({ items = [], onToggleItem, onAddItem, onRemoveItem 
     </div>
   );
 }
+
+// ---------- Modals ----------
 
 function ModalShell({ title, onClose, children }) {
   return (
@@ -817,6 +824,8 @@ function PersonModal({ editPerson, existingCount, onClose, onSave }) {
     </ModalShell>
   );
 }
+
+// ---------- Views ----------
 
 function TodayView({ data, onOpenEvent, onOpenTask, onOpenAddEvent, onOpenAddTask, onToggleTask }) {
   const today = todayStr();
@@ -1391,7 +1400,7 @@ function MealsView({ meals, onUpdateMeal }) {
   );
 }
 
-function SettingsView({ settings, onUpdateSettings, people, onAddPerson, onEditPerson, onDeletePerson, onExport, onImport, isCloudConnected }) {
+function SettingsView({ settings, onUpdateSettings, people, onAddPerson, onEditPerson, onDeletePerson, onExport, onImport, cloudStatus }) {
   const enableMeals = settings?.enableMeals ?? true;
   const enableWall = settings?.enableWall ?? true;
 
@@ -1414,12 +1423,16 @@ function SettingsView({ settings, onUpdateSettings, people, onAddPerson, onEditP
       </div>
 
       {/* Stan połączenia z chmurą */}
-      <div style={{ background: COLORS.surface, borderColor: isCloudConnected ? COLORS.success : COLORS.warn }} className="border rounded-2xl p-4 flex items-center gap-3">
-        {isCloudConnected ? <Wifi size={20} className="text-emerald-400 shrink-0" /> : <WifiOff size={20} className="text-red-400 shrink-0" />}
+      <div style={{ background: COLORS.surface, borderColor: cloudStatus === 'active' ? COLORS.success : COLORS.warn }} className="border rounded-2xl p-4 flex items-center gap-3">
+        {cloudStatus === 'active' ? <Wifi size={20} className="text-emerald-400" /> : <WifiOff size={20} className="text-red-400" />}
         <div>
-          <div className="text-sm font-bold">{isCloudConnected ? 'Synchronizacja w chmurze aktywna' : 'Tryb Lokalny (Lokalny Storage)'}</div>
+          <div className="text-sm font-bold">
+            {cloudStatus === 'active' ? 'Synchronizacja w chmurze (Supabase)' : cloudStatus === 'error' ? 'Błąd synchronizacji' : 'Tryb Lokalny (Lokalny Storage)'}
+          </div>
           <div className="text-xs text-stone-400">
-            {isCloudConnected ? 'Wszystkie zmiany są natychmiastowo synchronizowane między telefonami.' : 'Dodaj klucze Supabase, aby włączyć natychmiastową synchronizację.'}
+            {cloudStatus === 'active' 
+              ? 'Wszystkie zmiany są natychmiastowo synchronizowane między telefonami.' 
+              : 'Skonfiguruj połączenie z Supabase (VITE_SUPABASE_URL i KEY), by włączyć live sync.'}
           </div>
         </div>
       </div>
@@ -1551,6 +1564,8 @@ function SettingsView({ settings, onUpdateSettings, people, onAddPerson, onEditP
   );
 }
 
+// ---------- Main App Root ----------
+
 export default function App() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1562,115 +1577,164 @@ export default function App() {
   const [detailTask, setDetailTask] = useState(null);
   const [editingPerson, setEditingPerson] = useState(null);
   const [toast, setToast] = useState(null);
-  const [supabaseClient, setSupabaseClient] = useState(null);
+  
+  // Status: 'local', 'error', 'active'
+  const [cloudStatus, setCloudStatus] = useState('local');
 
   const showToast = (msg) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
   };
 
+  // 1. Ładowanie skryptu Supabase dla środowiska bez bundlera i inicjalizacja
   useEffect(() => {
     let client = null;
-    if (supabaseUrl && supabaseAnonKey) {
-      if (window.supabase && typeof window.supabase.createClient === 'function') {
-        client = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
-        setSupabaseClient(client);
-      } else {
-        // Fallback w przypadku braku bundlera
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-        script.async = true;
-        script.onload = () => {
-          if (window.supabase && typeof window.supabase.createClient === 'function') {
-            const sc = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
-            setSupabaseClient(sc);
-          }
-        };
-        document.body.appendChild(script);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
     let channel = null;
 
-    async function loadData() {
-      if (supabaseClient) {
-        try {
-          const { data: rows, error } = await supabaseClient
-            .from('family_data')
-            .select('data')
-            .eq('id', 'main_family')
-            .single();
+    const initSupabaseAndData = async (supabaseObj) => {
+      if (!supabaseObj) {
+         setCloudStatus('local');
+         setData(storage.get() || emptyData());
+         setLoading(false);
+         return;
+      }
 
-          if (error && error.code === 'PGRST116') {
-            const init = emptyData();
-            await supabaseClient.from('family_data').insert({ id: 'main_family', data: init });
-            setData(init);
-          } else if (rows && rows.data) {
-            setData(rows.data);
-          } else {
-            const local = storage.get() || emptyData();
-            setData(local);
-          }
+      console.log("Łączenie z Supabase...");
+      window.supabaseClient = supabaseObj; // Global ref do zapisu
+      
+      try {
+        const { data: rows, error } = await supabaseObj
+          .from('family_data')
+          .select('data')
+          .eq('id', 'main_family')
+          .single();
 
-          // Subskrypcja zmian w czasie rzeczywistym
-          channel = supabaseClient
-            .channel('public:family_data')
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'family_data', filter: 'id=eq.main_family' }, (payload) => {
-              if (payload.new && payload.new.data) {
-                setData(prev => {
-                  const localUserId = prev?.settings?.currentUserId;
-                  const newData = payload.new.data;
-                  if (localUserId && newData.settings) {
-                    newData.settings.currentUserId = localUserId;
-                  }
-                  return newData;
-                });
-                showToast("Zaktualizowano dane od domownika! 🔄");
-              }
-            })
-            .subscribe();
+        let currentData;
 
-        } catch (err) {
-          console.warn("Supabase load error:", err);
-          setData(storage.get() || emptyData());
+        if (error) {
+           console.warn("Błąd odczytu bazy:", error.message);
+           // Brak wpisu -> ratujemy lokalnymi
+           if (error.code === 'PGRST116' || error.message.includes('find no rows')) {
+               currentData = storage.get() || emptyData();
+               console.log("Tworzę nowy wpis w bazie z lokalnych danych...");
+               const { error: insertErr } = await supabaseObj.from('family_data').upsert({ id: 'main_family', data: currentData });
+               if(insertErr) {
+                 console.error("Nie udało się utworzyć wpisu:", insertErr);
+                 setCloudStatus('error');
+               } else {
+                 setCloudStatus('active');
+               }
+           } else {
+               setCloudStatus('error');
+               currentData = storage.get() || emptyData();
+           }
+        } else if (rows && rows.data) {
+           console.log("Dane pobrane poprawnie z chmury!");
+           currentData = rows.data;
+           storage.set(currentData); // nadpisujemy lokalnie
+           setCloudStatus('active');
         }
-      } else {
+
+        setData(currentData);
+
+        // Subskrypcja nasłuchująca w czasie rzeczywistym
+        if (cloudStatus !== 'error') {
+            channel = supabaseObj
+              .channel('public:family_data')
+              .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'family_data', filter: 'id=eq.main_family' }, (payload) => {
+                console.log("Aktualizacja z chmury dotarła!");
+                if (payload.new && payload.new.data) {
+                  setData(prev => {
+                    const localUserId = prev?.settings?.currentUserId;
+                    const newData = payload.new.data;
+                    if (localUserId && newData.settings) {
+                      newData.settings.currentUserId = localUserId; // Zachowaj profil zalogowanej osoby
+                    }
+                    storage.set(newData);
+                    return newData;
+                  });
+                  showToast("Zaktualizowano dane od domownika! 🔄");
+                }
+              })
+              .subscribe();
+        }
+
+      } catch (err) {
+        console.error("Krytyczny błąd połączenia:", err);
+        setCloudStatus('error');
         setData(storage.get() || emptyData());
       }
+      
       setLoading(false);
+    };
+
+    if (supabaseUrl && supabaseAnonKey) {
+      // Spróbuj użyć zainstalowanego modułu (Vite)
+      if (window.supabase && typeof window.supabase.createClient === 'function') {
+         client = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+         initSupabaseAndData(client);
+      } else {
+         // Dynamically load via CDN for sandboxes
+         const script = document.createElement('script');
+         script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+         script.async = true;
+         script.onload = () => {
+           if (window.supabase) {
+             client = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+             initSupabaseAndData(client);
+           }
+         };
+         script.onerror = () => initSupabaseAndData(null);
+         document.body.appendChild(script);
+      }
+    } else {
+      initSupabaseAndData(null);
     }
 
-    loadData();
-
     return () => {
-      if (channel && supabaseClient) supabaseClient.removeChannel(channel);
+      if (channel && client) client.removeChannel(channel);
     };
-  }, [supabaseClient]);
+  }, []);
 
+  // Persist funkcja zapisująca jednocześnie lokalnie i w Supabase
   const persist = useCallback(async (next) => {
     setData(next);
     storage.set(next);
 
-    if (supabaseClient) {
+    if (window.supabaseClient && cloudStatus !== 'local') {
       try {
-        await supabaseClient
+        console.log("Wysyłam dane do Supabase...");
+        const { error } = await window.supabaseClient
           .from('family_data')
           .upsert({ id: 'main_family', data: next, updated_at: new Date().toISOString() });
+          
+        if (error) {
+            console.error("Błąd podczas zapisu w chmurze:", error);
+            setCloudStatus('error');
+        } else {
+            console.log("Zapis w chmurze udany.");
+            setCloudStatus('active');
+        }
       } catch (e) {
-        console.warn("Chmura Supabase niedostępna - zapisano lokalnie", e);
+        console.warn("Chmura niedostępna - zapisano lokalnie", e);
+        setCloudStatus('error');
       }
     }
-  }, [supabaseClient]);
+  }, [cloudStatus]);
 
   if (loading || !data) {
-    return <div style={{ background: COLORS.bg, color: COLORS.ink }} className="min-h-screen flex items-center justify-center text-sm font-medium">Łączenie z rodzinnym planerem…</div>;
+    return <div style={{ background: COLORS.bg, color: COLORS.ink }} className="min-h-screen flex items-center justify-center text-sm font-medium animate-pulse">Łączenie z domową bazą danych…</div>;
   }
 
+  // Current User Configuration
   const currentUserId = data.settings?.currentUserId || null;
-  const visibleNotes = currentUserId ? data.notes.filter(n => !n.personId || n.personId === currentUserId) : data.notes;
 
+  // Filtrowanie notatek tylko dla zalogowanego użytkownika (lub dla wszystkich, jeśli notatka nie ma autora)
+  const visibleNotes = currentUserId 
+    ? data.notes.filter(n => !n.personId || n.personId === currentUserId)
+    : data.notes;
+
+  // Action handlers
   const upsertEvent = ev => {
     const noteId = modalPayload?.noteId;
     const nextNotes = noteId ? data.notes.filter(n => n.id !== noteId) : data.notes;
@@ -1721,7 +1785,10 @@ export default function App() {
   };
 
   const updateMeal = (mondayKey, weekMeals) => {
-    const nextMeals = { ...(data.meals || {}), [mondayKey]: weekMeals };
+    const nextMeals = {
+      ...(data.meals || {}),
+      [mondayKey]: weekMeals
+    };
     persist({ ...data, meals: nextMeals });
   };
 
@@ -1732,6 +1799,7 @@ export default function App() {
 
   const deletePerson = id => {
     if (confirm("Czy na pewno usunąć tę osobę? Wydarzenia i zadania z nią powiązane mogą zostać usierocone.")) {
+      // Przy usuwaniu profilu wyczyszczamy powiązanie dla obecnego użytkownika, jeśli to on
       const nextSettings = data.settings.currentUserId === id ? { ...data.settings, currentUserId: null } : data.settings;
       persist({ ...data, people: data.people.filter(p => p.id !== id), settings: nextSettings });
       showToast("Usunięto profil");
@@ -1801,6 +1869,7 @@ export default function App() {
 
   const openAddEvent = (dateStr) => { setAddEventDate(dateStr || todayStr()); setModalPayload(null); setModal('event'); };
   const openAddTask = (dateStr) => { setModalPayload(null); setModal('task'); };
+
   const openConvertNote = (note, type) => {
     setModalPayload({ initial: { note: note.text || '', items: note.items || [] }, noteId: note.id });
     if (type === 'event') setAddEventDate(todayStr());
@@ -1811,6 +1880,7 @@ export default function App() {
   const openEditTask = (t) => { setDetailTask(null); setModalPayload({ editItem: t }); setModal('task'); };
   const openEditNote = (n) => { setModalPayload({ editItem: n }); setModal('note'); };
   const openEditPerson = (p) => { setEditingPerson(p); setModal('person'); };
+
   const closeModal = () => { setModal(null); setModalPayload(null); setEditingPerson(null); };
 
   const exportBackup = () => {
@@ -1861,13 +1931,13 @@ export default function App() {
 
       {/* Toast Alert */}
       {toast && (
-        <div className="fixed top-[max(env(safe-area-inset-top),1rem)] left-1/2 -translate-x-1/2 z-50 bg-stone-800 text-stone-100 text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl border border-stone-700 flex items-center gap-2 animate-bounce mt-2">
-          <Sparkles size={14} className="text-amber-400 shrink-0" />
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-stone-800 text-stone-100 text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl border border-stone-700 flex items-center gap-2 animate-bounce">
+          <Sparkles size={14} className="text-amber-400" />
           {toast}
         </div>
       )}
 
-      {/* Globalny Header - Obsługa SafeArea-Top */}
+      {/* Globalny Header */}
       <header className="flex items-center justify-between px-5 pt-[max(env(safe-area-inset-top,1.5rem),1.5rem)] pb-4 sticky top-0 z-30 bg-[#121214]/85 backdrop-blur-md border-b border-stone-800/50">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
@@ -1887,22 +1957,69 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto px-4 pt-4 pb-[max(env(safe-area-inset-bottom,6rem),6rem)] max-w-2xl mx-auto w-full">
-        {tab === 'today' && <TodayView data={data} onOpenEvent={setDetailEvent} onOpenTask={setDetailTask} onOpenAddEvent={openAddEvent} onOpenAddTask={openAddTask} onToggleTask={toggleTask} />}
+        {tab === 'today' && (
+          <TodayView 
+            data={data} 
+            onOpenEvent={setDetailEvent} 
+            onOpenTask={setDetailTask} 
+            onOpenAddEvent={openAddEvent}
+            onOpenAddTask={openAddTask}
+            onToggleTask={toggleTask}
+          />
+        )}
         {tab === 'calendar' && <CalendarView data={data} onOpenAdd={openAddEvent} onOpenEvent={setDetailEvent} />}
-        {tab === 'tasks' && <TasksView data={data} onToggleTask={toggleTask} onDeleteTask={deleteTask} onOpenTask={setDetailTask} onOpenAddTask={openAddTask} />}
-        {tab === 'notes' && <NotesView notes={visibleNotes} onDelete={deleteNote} onConvert={openConvertNote} onEdit={openEditNote} onToggleItem={toggleNoteItem} onOpenAddNote={() => setModal('note')} />}
-        {tab === 'wall' && enableWall && <WallView wall={data.wall} people={data.people} onDeleteWallMessage={deleteWallMessage} onTogglePinWallMessage={togglePinWallMessage} onOpenAddWall={() => setModal('wall')} />}
+        {tab === 'tasks' && (
+          <TasksView 
+            data={data} 
+            onToggleTask={toggleTask} 
+            onDeleteTask={deleteTask} 
+            onOpenTask={setDetailTask} 
+            onOpenAddTask={openAddTask}
+          />
+        )}
+        {tab === 'notes' && (
+          <NotesView 
+            notes={visibleNotes} 
+            onDelete={deleteNote} 
+            onConvert={openConvertNote} 
+            onEdit={openEditNote} 
+            onToggleItem={toggleNoteItem} 
+            onOpenAddNote={() => setModal('note')}
+          />
+        )}
+        {tab === 'wall' && enableWall && (
+          <WallView 
+            wall={data.wall} 
+            people={data.people} 
+            onDeleteWallMessage={deleteWallMessage} 
+            onTogglePinWallMessage={togglePinWallMessage}
+            onOpenAddWall={() => setModal('wall')}
+          />
+        )}
         {tab === 'meals' && enableMeals && <MealsView meals={data.meals} onUpdateMeal={updateMeal} />}
-        {tab === 'settings' && <SettingsView settings={data.settings} onUpdateSettings={updateSettings} people={data.people} onAddPerson={() => setModal('person')} onEditPerson={openEditPerson} onDeletePerson={deletePerson} onExport={exportBackup} onImport={importBackup} isCloudConnected={!!supabaseClient} />}
+        
+        {tab === 'settings' && (
+          <SettingsView 
+            settings={data.settings} 
+            onUpdateSettings={updateSettings}
+            people={data.people}
+            onAddPerson={() => setModal('person')}
+            onEditPerson={openEditPerson}
+            onDeletePerson={deletePerson}
+            onExport={exportBackup}
+            onImport={importBackup}
+            cloudStatus={cloudStatus}
+          />
+        )}
       </main>
 
-      {/* Navigation Bar - Obsługa SafeArea-Bottom */}
-      <nav style={{ background: COLORS.surface, borderColor: COLORS.border }} className="border-t fixed bottom-0 left-0 right-0 z-40 shadow-xl pb-[env(safe-area-inset-bottom)]">
+      {/* Navigation Bar */}
+      <nav style={{ background: COLORS.surface, borderColor: COLORS.border }} className="border-t fixed bottom-0 left-0 right-0 z-40 shadow-xl pb-[max(env(safe-area-inset-bottom),0.5rem)]">
         <div className="max-w-md mx-auto flex items-center justify-around overflow-x-auto no-scrollbar">
           {TABS.map(({ id, label, icon: Icon }) => {
             const active = tab === id;
             return (
-              <button key={id} onClick={() => setTab(id)} className="flex-1 min-w-[60px] flex flex-col items-center gap-1.5 pt-3 pb-2 transition">
+              <button key={id} onClick={() => setTab(id)} className="flex-1 min-w-[60px] flex flex-col items-center gap-1.5 pt-3 pb-1 transition">
                 <Icon size={20} color={active ? COLORS.accent : COLORS.inkSoft} strokeWidth={active ? 2.5 : 2} />
                 <span style={{ color: active ? COLORS.accent : COLORS.inkSoft, fontWeight: active ? 700 : 500 }} className="text-[10px] tracking-wide">{label}</span>
               </button>
@@ -1918,8 +2035,27 @@ export default function App() {
       {modal === 'wall' && <AddWallMessageModal people={data.people} currentUserId={currentUserId} onClose={closeModal} onSave={addWallMessage} />}
       {modal === 'person' && <PersonModal editPerson={editingPerson} existingCount={data.people.length} onClose={closeModal} onSave={upsertPerson} />}
 
-      {detailEvent && <EventDetailModal event={detailEvent} people={data.people} onClose={() => setDetailEvent(null)} onEdit={openEditEvent} onDelete={deleteEvent} onToggleSubItem={toggleSubItem} />}
-      {detailTask && <TaskDetailModal task={data.tasks.find(t => t.id === detailTask.id) || detailTask} people={data.people} onClose={() => setDetailTask(null)} onToggle={toggleTask} onDelete={deleteTask} onEdit={openEditTask} onToggleSubItem={toggleSubItem} />}
+      {detailEvent && (
+        <EventDetailModal 
+          event={detailEvent} 
+          people={data.people} 
+          onClose={() => setDetailEvent(null)} 
+          onEdit={openEditEvent} 
+          onDelete={deleteEvent} 
+          onToggleSubItem={toggleSubItem}
+        />
+      )}
+      {detailTask && (
+        <TaskDetailModal
+          task={data.tasks.find(t => t.id === detailTask.id) || detailTask}
+          people={data.people}
+          onClose={() => setDetailTask(null)}
+          onToggle={toggleTask}
+          onDelete={deleteTask}
+          onEdit={openEditTask}
+          onToggleSubItem={toggleSubItem}
+        />
+      )}
     </div>
   );
 }
