@@ -1,17 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { getSupabaseClient } from './supabase.js';
 import { 
   Calendar, CheckSquare, StickyNote, Users, Plus, X, Check, 
   ChevronLeft, ChevronRight, Repeat, Clock, Trash2, AlertCircle, 
-  Pencil, Bell, BellOff, ListChecks, Type as TypeIcon, Utensils,
-  Download, Upload, Search, Tag, Sparkles, Filter, Smile, Settings, ToggleLeft, ToggleRight,
-  Pin, MessageSquare, LayoutGrid, Info, RefreshCw, Wifi, WifiOff, LogOut, ArrowRight
+  Pencil, Bell, BellOff, Utensils, Sparkles, Settings, ToggleLeft, ToggleRight,
+  Pin, MessageSquare, Info, RefreshCw, Wifi, LogOut, ArrowRight, Key
 } from 'lucide-react';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');`;
 
 // Wersja aplikacji z pełnym systemem Auth i Prywatnymi Notatkami
-const APP_VERSION = '2.0.0';
-
 const COLORS = {
   bg: '#121214', surface: '#1E1E22', surfaceHighlight: '#2A2A30', 
   ink: '#F3F3F5', inkSoft: '#A0A0AB', border: '#33333C', 
@@ -32,14 +30,6 @@ const REMINDER_OPTIONS = [
   { hours: 24, label: '1 dzień przed' },
 ];
 const RECURRENCE_LABELS = { none: 'Jednorazowo', daily: 'Codziennie', weekly: 'Co tydzień', monthly: 'Co miesiąc' };
-
-function getEnv(key) {
-  try { if (typeof import.meta !== 'undefined' && import.meta && import.meta.env) return import.meta.env[key] || ''; } catch (e) {}
-  return '';
-}
-
-const supabaseUrl = getEnv('VITE_SUPABASE_URL');
-const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
 
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
 function toDateStr(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
@@ -770,7 +760,43 @@ function MealsView({ meals, onUpdateMeal }) {
   );
 }
 
-function SettingsView({ family, profile, settings, onUpdateSettings, people, onAddPerson, onEditPerson, onDeletePerson, onSignOut }) {
+function SettingsView({ family, profile, settings, onUpdateSettings, people, onAddPerson, onEditPerson, onDeletePerson, onSignOut, supabase, showToast, onDeleteFamily }) {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwdLoading, setPwdLoading] = useState(false);
+  const [pwdMessage, setPwdMessage] = useState(null);
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) {
+      setPwdMessage({ type: 'error', text: 'Hasło musi mieć co najmniej 6 znaków.' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwdMessage({ type: 'error', text: 'Hasła nie są identyczne.' });
+      return;
+    }
+
+    setPwdLoading(true);
+    setPwdMessage(null);
+
+    try {
+      const { error } = await supabase?.auth?.updateUser({ password: newPassword }) || {};
+      if (error) {
+        setPwdMessage({ type: 'error', text: error.message || 'Nie udało się zmienić hasła.' });
+      } else {
+        setPwdMessage({ type: 'success', text: 'Hasło zostało pomyślnie zmienione!' });
+        setNewPassword('');
+        setConfirmPassword('');
+        if (showToast) showToast('Hasło zmienione pomyślnie!');
+      }
+    } catch {
+      setPwdMessage({ type: 'error', text: 'Wystąpił błąd podczas zmiany hasła.' });
+    } finally {
+      setPwdLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="flex items-center justify-between px-1">
@@ -820,6 +846,44 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
       </div>
 
       <div className="bg-[#1E1E22] border border-[#33333C] rounded-2xl p-4 space-y-4">
+        <h3 className="text-sm font-bold border-b border-[#33333C] pb-2 flex items-center gap-2 text-stone-100"><Key size={16} className="text-amber-400" /> Zmiana hasła</h3>
+        <form onSubmit={handleChangePassword} className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold mb-1 block text-stone-400">Nowe hasło</label>
+            <input 
+              type="password" 
+              value={newPassword} 
+              onChange={e => setNewPassword(e.target.value)} 
+              placeholder="Minimum 6 znaków"
+              className="w-full border border-[#33333C] rounded-xl px-3 py-2 text-sm bg-stone-900 text-stone-200 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold mb-1 block text-stone-400">Powtórz nowe hasło</label>
+            <input 
+              type="password" 
+              value={confirmPassword} 
+              onChange={e => setConfirmPassword(e.target.value)} 
+              placeholder="Wpisz ponowne nowe hasło"
+              className="w-full border border-[#33333C] rounded-xl px-3 py-2 text-sm bg-stone-900 text-stone-200 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+          {pwdMessage && (
+            <div className={`text-xs p-2.5 rounded-xl flex items-center gap-2 ${pwdMessage.type === 'error' ? 'bg-red-950/50 text-red-400 border border-red-900/50' : 'bg-emerald-950/50 text-emerald-400 border border-emerald-900/50'}`}>
+              <AlertCircle size={14} /> {pwdMessage.text}
+            </div>
+          )}
+          <button 
+            type="submit" 
+            disabled={pwdLoading} 
+            className="px-4 py-2 bg-amber-500 text-stone-950 rounded-xl text-xs font-bold hover:bg-amber-400 transition disabled:opacity-50"
+          >
+            {pwdLoading ? 'Zapisywanie...' : 'Zmień hasło'}
+          </button>
+        </form>
+      </div>
+
+      <div className="bg-[#1E1E22] border border-[#33333C] rounded-2xl p-4 space-y-4">
         <h3 className="text-sm font-bold border-b border-[#33333C] pb-2 text-stone-100">Moduły</h3>
         <div className="flex items-center justify-between py-1">
           <div><div className="text-sm font-semibold">Tablica</div><div className="text-xs text-stone-400">Dedykowana sekcja na wiadomości.</div></div>
@@ -830,13 +894,45 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
           <button onClick={() => onUpdateSettings({ ...settings, enableMeals: !settings.enableMeals })}>{settings.enableMeals ? <ToggleRight size={32} className="text-amber-400" /> : <ToggleLeft size={32} className="text-stone-600" />}</button>
         </div>
       </div>
+
+      <div className="bg-[#1E1E22] border border-red-900/40 rounded-2xl p-4 space-y-3">
+        <h3 className="text-sm font-bold border-b border-red-900/40 pb-2 text-red-400 flex items-center gap-2">
+          <Trash2 size={16} /> Strefa niebezpieczna
+        </h3>
+        <p className="text-xs text-stone-400 leading-relaxed">
+          Usunięcie rodziny spowoduje skasowanie całego wspólnego kalendarza, zadań, notatek i listy domowników. Nastąpi powrót do ekranu wyboru rodziny.
+        </p>
+        <button 
+          type="button"
+          onClick={onDeleteFamily} 
+          className="w-full py-2.5 bg-red-950/80 border border-red-800/80 text-red-400 hover:bg-red-900 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2"
+        >
+          <Trash2 size={15} /> Usuń rodzinę i zresetuj dane
+        </button>
+      </div>
     </div>
   );
 }
 
 /* --- AUTH & ONBOARDING VIEWS --- */
 
-function AuthScreen({ supabase, onAuthSuccess }) {
+function PoweredByFooter({ className = "" }) {
+  return (
+    <footer className={`mt-8 text-center text-xs text-stone-500 flex items-center justify-center gap-1.5 ${className}`}>
+      <span>Powered by</span>
+      <a 
+        href="https://syncup.pl" 
+        target="_blank" 
+        rel="noopener noreferrer" 
+        className="text-stone-400 hover:text-amber-400 transition font-medium underline decoration-stone-700 underline-offset-2"
+      >
+        syncup.pl
+      </a>
+    </footer>
+  );
+}
+
+function AuthScreen({ supabase }) {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -879,6 +975,8 @@ function AuthScreen({ supabase, onAuthSuccess }) {
           <button type="button" onClick={() => setIsLogin(!isLogin)} className="text-xs text-stone-400 hover:text-amber-400 transition">{isLogin ? 'Nie masz konta? Zarejestruj się' : 'Masz już konto? Zaloguj się'}</button>
         </div>
       </form>
+      
+      <PoweredByFooter />
     </div>
   );
 }
@@ -944,6 +1042,7 @@ function FamilyOnboarding({ supabase, session, onFamilyJoined }) {
           </button>
           <button onClick={async () => await supabase.auth.signOut()} className="w-full py-4 text-xs font-semibold text-stone-500">Wyloguj mnie</button>
         </div>
+        <PoweredByFooter />
       </div>
     );
   }
@@ -965,6 +1064,7 @@ function FamilyOnboarding({ supabase, session, onFamilyJoined }) {
           {loading ? 'Ładowanie...' : 'Dalej'}
         </button>
       </form>
+      <PoweredByFooter />
     </div>
   );
 }
@@ -1002,6 +1102,7 @@ function ProfileSelection({ supabase, profile, data, onProfileSelected }) {
           Wejdź do aplikacji <ArrowRight size={18} />
         </button>
       </div>
+      <PoweredByFooter />
     </div>
   );
 }
@@ -1010,7 +1111,7 @@ function ProfileSelection({ supabase, profile, data, onProfileSelected }) {
 /* --- MAIN APP --- */
 
 export default function App() {
-  const [supabaseClient, setSupabaseClient] = useState(null);
+  const [supabaseClient] = useState(() => getSupabaseClient());
   
   // Auth state
   const [session, setSession] = useState(null);
@@ -1032,23 +1133,6 @@ export default function App() {
   const [toast, setToast] = useState(null);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
-
-  // Init Supabase safely
-  useEffect(() => {
-    let client = null;
-    if (supabaseUrl && supabaseAnonKey) {
-      if (window.supabase && window.supabase.createClient) {
-        client = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
-        setSupabaseClient(client);
-      } else {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-        script.async = true;
-        script.onload = () => setSupabaseClient(window.supabase.createClient(supabaseUrl, supabaseAnonKey));
-        document.body.appendChild(script);
-      }
-    }
-  }, []);
 
   // Auth Listener
   useEffect(() => {
@@ -1185,7 +1269,7 @@ export default function App() {
   };
 
   const openAddEvent = (dateStr) => { setAddEventDate(dateStr || todayStr()); setModalPayload(null); setModal('event'); };
-  const openAddTask = (dateStr) => { setModalPayload(null); setModal('task'); };
+  const openAddTask = () => { setModalPayload(null); setModal('task'); };
   const openConvertNote = (note, type) => { setModalPayload({ initial: { note: note.text || '', items: note.items || [] }, noteId: note.id }); if (type === 'event') setAddEventDate(todayStr()); setModal(type); };
   const openEditEvent = ev => { setDetailEvent(null); setModalPayload({ editItem: ev }); setAddEventDate(ev.date); setModal('event'); };
   const openEditTask = t => { setDetailTask(null); setModalPayload({ editItem: t }); setModal('task'); };
@@ -1194,6 +1278,28 @@ export default function App() {
   const closeModal = () => { setModal(null); setModalPayload(null); setEditingPerson(null); };
 
   const handleSignOut = async () => { if(confirm('Czy na pewno chcesz się wylogować?')) await supabaseClient.auth.signOut(); };
+
+  const deleteFamily = async () => {
+    if (!confirm("CZY NA PEWNO CHCESZ USUNĄĆ TĘ RODZINĘ?\n\nWszystkie wydarzenia, zadania, notatki, posiłki oraz osoby zostaną trwale usunięte z bazy danych. Nastąpi przekierowanie do ekranu startowego.")) return;
+
+    if (supabaseClient && family) {
+      try {
+        await supabaseClient.from('family_state').delete().eq('family_id', family.id);
+        if (profile?.id) {
+          await supabaseClient.from('profiles').update({ family_id: null, person_id: null }).eq('id', profile.id);
+        }
+        await supabaseClient.from('families').delete().eq('id', family.id);
+      } catch (e) {
+        console.warn('Błąd podczas usuwania rodziny:', e);
+      }
+    }
+
+    setFamily(null);
+    setProfile(null);
+    setData(null);
+    setTab('today');
+    showToast("Rodzina została usunięta.");
+  };
 
   const TABS = [
     { id: 'today', label: 'Dziś', icon: Clock },
@@ -1225,7 +1331,9 @@ export default function App() {
         {tab === 'notes' && <NotesView notes={visibleNotes} onDelete={deleteNote} onConvert={openConvertNote} onEdit={openEditNote} onToggleItem={toggleNoteItem} onOpenAddNote={() => setModal('note')} />}
         {tab === 'wall' && data.settings?.enableWall && <WallView wall={data.wall} people={data.people} onDeleteWallMessage={deleteWallMessage} onTogglePinWallMessage={togglePinWallMessage} onOpenAddWall={() => setModal('wall')} />}
         {tab === 'meals' && data.settings?.enableMeals && <MealsView meals={data.meals} onUpdateMeal={updateMeal} />}
-        {tab === 'settings' && <SettingsView family={family} profile={profile} settings={data.settings} onUpdateSettings={updateSettings} people={data.people} onAddPerson={() => setModal('person')} onEditPerson={openEditPerson} onDeletePerson={deletePerson} onSignOut={handleSignOut} />}
+        {tab === 'settings' && <SettingsView family={family} profile={profile} settings={data.settings} onUpdateSettings={updateSettings} people={data.people} onAddPerson={() => setModal('person')} onEditPerson={openEditPerson} onDeletePerson={deletePerson} onSignOut={handleSignOut} supabase={supabaseClient} showToast={showToast} onDeleteFamily={deleteFamily} />}
+        
+        <PoweredByFooter className="mt-12 mb-4" />
       </main>
 
       <nav style={{ background: COLORS.surface, borderColor: COLORS.border }} className="border-t fixed bottom-0 left-0 right-0 z-40 shadow-xl pb-safe">

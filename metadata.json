@@ -1,0 +1,6 @@
+{
+  "name": "Rodzinny Planer",
+  "description": "Rodzinny Planer - A family planner app imported from GitHub matarc91/rodzinny-planer",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
