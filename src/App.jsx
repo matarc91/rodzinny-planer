@@ -1,35 +1,26 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Calendar, CheckSquare, StickyNote, Users, Plus, X, Check, 
   ChevronLeft, ChevronRight, Repeat, Clock, Trash2, AlertCircle, 
   Pencil, Bell, BellOff, ListChecks, Type as TypeIcon, Utensils,
   Download, Upload, Search, Tag, Sparkles, Filter, Smile, Settings, ToggleLeft, ToggleRight,
-  Pin, MessageSquare, LayoutGrid, Info, RefreshCw, Wifi, WifiOff, LogOut, Key, Copy
+  Pin, MessageSquare, LayoutGrid, Info, RefreshCw, Wifi, WifiOff, LogOut, ArrowRight
 } from 'lucide-react';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');`;
 
-// Wersja aplikacji z integracją chmury Supabase i Autoryzacją
-const APP_VERSION = '2.0.0 (Autoryzacja i Kody)';
+// Wersja aplikacji z pełnym systemem Auth i Prywatnymi Notatkami
+const APP_VERSION = '2.0.0';
 
-// Dynamic Dark Theme Colors
 const COLORS = {
-  bg: '#121214',         // Main dark background
-  surface: '#1E1E22',    // Card / Surface background
-  surfaceHighlight: '#2A2A30', // Hover/Active states
-  ink: '#F3F3F5',        // Primary text
-  inkSoft: '#A0A0AB',    // Secondary text
-  border: '#33333C',     // Subtle borders
-  success: '#4E9A58',    // Green check
-  warn: '#E57373',       // Alert red/orange
-  accent: '#E2B053',     // Warm accent gold
-  accentSoft: '#2C271D', // Highlighted card bg
+  bg: '#121214', surface: '#1E1E22', surfaceHighlight: '#2A2A30', 
+  ink: '#F3F3F5', inkSoft: '#A0A0AB', border: '#33333C', 
+  success: '#4E9A58', warn: '#E57373', accent: '#E2B053', accentSoft: '#2C271D',
 };
 
 const PERSON_PALETTE = ['#5B8FF9', '#F65D79', '#5AD8A6', '#A770EF', '#F6BD16', '#6DC8EC', '#FF9D4D', '#36B37E'];
 const AVATAR_EMOJIS = ['👨', '👩', '👧', '👦', '👶', '👵', '👴', '🐕', '🐈', '⭐'];
 const CARD_COLORS = ['#2C271D', '#1F2A38', '#2C1F2B', '#1D2C24', '#2E221E'];
-
 const WEEKDAYS = ['pon', 'wt', 'śr', 'czw', 'pt', 'sob', 'nd'];
 const MONTHS = ['styczeń','luty','marzec','kwiecień','maj','czerwiec','lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
 
@@ -38,61 +29,29 @@ const REMINDER_OPTIONS = [
   { hours: 0, label: 'O czasie wydarzenia' },
   { hours: 1, label: '1 godz. przed' },
   { hours: 2, label: '2 godz. przed' },
-  { hours: 3, label: '3 godz. przed' },
-  { hours: 6, label: '6 godz. przed' },
-  { hours: 12, label: '12 godz. przed' },
   { hours: 24, label: '1 dzień przed' },
 ];
-
 const RECURRENCE_LABELS = { none: 'Jednorazowo', daily: 'Codziennie', weekly: 'Co tydzień', monthly: 'Co miesiąc' };
 
 function getEnv(key) {
-  try {
-    if (typeof import.meta !== 'undefined' && import.meta && import.meta.env) {
-      return import.meta.env[key] || '';
-    }
-  } catch (e) {
-    // Ignore error if import.meta is unavailable
-  }
+  try { if (typeof import.meta !== 'undefined' && import.meta && import.meta.env) return import.meta.env[key] || ''; } catch (e) {}
   return '';
 }
 
 const supabaseUrl = getEnv('VITE_SUPABASE_URL');
 const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
 
-function reminderLabel(hours) {
-  const opt = REMINDER_OPTIONS.find(o => o.hours === hours);
-  return opt ? opt.label : 'Brak';
-}
-
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
 function toDateStr(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
 function todayStr() { return toDateStr(new Date()); }
-function parseDate(s) { 
-  if (!s) return new Date();
-  const [y, m, d] = s.split('-').map(Number); 
-  return new Date(y, m - 1, d); 
-}
-function weekdayIdx(dateStr) { const d = parseDate(dateStr); return (d.getDay() + 6) % 7; }
+function parseDate(s) { if (!s) return new Date(); const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
+function weekdayIdx(dateStr) { return (parseDate(dateStr).getDay() + 6) % 7; }
 function dayOfMonth(dateStr) { return parseDate(dateStr).getDate(); }
-function getMonday(dateStr) {
-  const d = parseDate(dateStr);
-  const idx = (d.getDay() + 6) % 7;
-  d.setDate(d.getDate() - idx);
-  return toDateStr(d);
-}
-function addDays(dateStr, n) {
-  const d = parseDate(dateStr);
-  d.setDate(d.getDate() + n);
-  return toDateStr(d);
-}
-function addMonths(dateStr, n) {
-  const d = parseDate(dateStr);
-  d.setMonth(d.getMonth() + n);
-  return toDateStr(d);
-}
+function getMonday(dateStr) { const d = parseDate(dateStr); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return toDateStr(d); }
+function addDays(dateStr, n) { const d = parseDate(dateStr); d.setDate(d.getDate() + n); return toDateStr(d); }
+function addMonths(dateStr, n) { const d = parseDate(dateStr); d.setMonth(d.getMonth() + n); return toDateStr(d); }
 function uid(prefix) { return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); }
-function generateCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
+function reminderLabel(hours) { const opt = REMINDER_OPTIONS.find(o => o.hours === hours); return opt ? opt.label : 'Brak'; }
 
 function occursOnDate(event, dateStr) {
   if (dateStr < event.date) return false;
@@ -113,57 +72,27 @@ function getPeriodKey(freq, dateStr) {
 
 function isTaskDoneForPeriod(task, dateStr) {
   const freq = task.recurrence?.freq || 'none';
-  const key = getPeriodKey(freq, dateStr);
-  return !!(task.completions && task.completions[key]);
+  return !!(task.completions && task.completions[getPeriodKey(freq, dateStr)]);
 }
 
 function emptyData() {
   return { 
-    people: [], 
-    events: [], 
-    tasks: [], 
-    notes: [],
-    wall: [],
-    meals: {},
-    settings: {
-      enableMeals: true,
-      enableWall: true
-    }
+    people: [
+      { id: 'p_1', name: 'Mama', color: '#F65D79', emoji: '👩' },
+      { id: 'p_2', name: 'Tata', color: '#5B8FF9', emoji: '👨' }
+    ], 
+    events: [], tasks: [], notes: [], wall: [], meals: {},
+    settings: { enableMeals: true, enableWall: true }
   };
 }
 
-const STORAGE_KEY = 'rodzinny_planer_data_v4';
-const storage = {
-  get: () => {
-    try {
-      const val = localStorage.getItem(STORAGE_KEY);
-      return val ? JSON.parse(val) : null;
-    } catch (e) {
-      console.warn("Storage read error", e);
-      return null;
-    }
-  },
-  set: (data) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      return true;
-    } catch (e) {
-      console.warn("Storage write error", e);
-      return false;
-    }
-  }
-};
-
+/* --- COMPONENTS --- */
 
 function Chip({ person, size = 'sm' }) {
   if (!person) return null;
   const s = size === 'sm' ? 'w-5 h-5 text-[10px]' : 'w-8 h-8 text-sm';
   return (
-    <span
-      title={person.name}
-      style={{ background: person.color || COLORS.accent, color: '#fff' }}
-      className={`inline-flex items-center justify-center rounded-full font-semibold shrink-0 shadow-sm ${s}`}
-    >
+    <span title={person.name} style={{ background: person.color || COLORS.accent, color: '#fff' }} className={`inline-flex items-center justify-center rounded-full font-semibold shrink-0 shadow-sm ${s}`}>
       {person.emoji || person.name.slice(0, 1).toUpperCase()}
     </span>
   );
@@ -188,9 +117,7 @@ function Section({ title, children, action }) {
   return (
     <div className="mb-6">
       <div className="flex items-center justify-between mb-3 px-1">
-        <h2 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-lg font-bold flex items-center gap-2">
-          {title}
-        </h2>
+        <h2 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-lg font-bold flex items-center gap-2">{title}</h2>
         {action}
       </div>
       {children}
@@ -201,81 +128,48 @@ function Section({ title, children, action }) {
 function EmptyState({ text, icon: Icon = Sparkles }) {
   return (
     <div style={{ color: COLORS.inkSoft, borderColor: COLORS.border }} className="text-sm border border-dashed rounded-2xl p-6 text-center flex flex-col items-center justify-center gap-2 bg-stone-900/40">
-      <Icon size={24} className="opacity-40" />
-      <span>{text}</span>
+      <Icon size={24} className="opacity-40" /><span>{text}</span>
     </div>
   );
 }
 
 function ChecklistContainer({ items = [], onToggleItem, onAddItem, onRemoveItem }) {
   const [newText, setNewText] = useState('');
-
-  const handleAdd = () => {
-    if (!newText.trim()) return;
-    onAddItem(newText.trim());
-    setNewText('');
-  };
-
+  const handleAdd = () => { if (!newText.trim()) return; onAddItem(newText.trim()); setNewText(''); };
   return (
     <div className="space-y-2 mt-2">
       {items.length > 0 && (
         <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
           {items.map(item => (
             <div key={item.id} className="flex items-center gap-2.5 bg-stone-800/60 p-2 rounded-xl border border-stone-800">
-              <button 
-                type="button" 
-                onClick={() => onToggleItem(item.id)}
-                style={{ borderColor: item.done ? COLORS.success : COLORS.border, background: item.done ? COLORS.success : 'transparent' }} 
-                className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors"
-              >
+              <button type="button" onClick={() => onToggleItem(item.id)} style={{ borderColor: item.done ? COLORS.success : COLORS.border, background: item.done ? COLORS.success : 'transparent' }} className="w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors">
                 {item.done && <Check size={12} color="#fff" strokeWidth={3} />}
               </button>
-              <span className={`text-sm flex-1 ${item.done ? 'line-through text-stone-500' : 'text-stone-200'}`}>
-                {item.text}
-              </span>
-              {onRemoveItem && (
-                <button type="button" onClick={() => onRemoveItem(item.id)} className="text-stone-500 hover:text-red-400 p-1">
-                  <X size={15} />
-                </button>
-              )}
+              <span className={`text-sm flex-1 ${item.done ? 'line-through text-stone-500' : 'text-stone-200'}`}>{item.text}</span>
+              {onRemoveItem && <button type="button" onClick={() => onRemoveItem(item.id)} className="text-stone-500 hover:text-red-400 p-1"><X size={15} /></button>}
             </div>
           ))}
         </div>
       )}
-
       {onAddItem && (
         <div className="flex items-center gap-2 pt-1">
-          <input
-            value={newText}
-            onChange={e => setNewText(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); } }}
-            placeholder="Dodaj pozycję do listy..."
-            style={{ borderColor: COLORS.border, background: COLORS.surfaceHighlight, color: COLORS.ink }}
-            className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none"
-          />
-          <button type="button" onClick={handleAdd} style={{ background: COLORS.accent, color: '#121214' }} className="rounded-xl w-9 h-9 flex items-center justify-center font-bold shrink-0 hover:opacity-90">
-            <Plus size={18} />
-          </button>
+          <input value={newText} onChange={e => setNewText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); } }} placeholder="Dodaj pozycję..." style={{ borderColor: COLORS.border, background: COLORS.surfaceHighlight, color: COLORS.ink }} className="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none" />
+          <button type="button" onClick={handleAdd} style={{ background: COLORS.accent, color: '#121214' }} className="rounded-xl w-9 h-9 flex items-center justify-center font-bold shrink-0 hover:opacity-90"><Plus size={18} /></button>
         </div>
       )}
     </div>
   );
 }
 
-
 function ModalShell({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm animate-fadeIn" onClick={onClose}>
-      <div
-        style={{ background: COLORS.surface }}
-        className="w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl max-h-[90vh] overflow-y-auto shadow-2xl transition-all border border-stone-800"
-        onClick={e => e.stopPropagation()}
-      >
+      <div style={{ background: COLORS.surface }} className="w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl max-h-[90vh] overflow-y-auto shadow-2xl transition-all border border-stone-800" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b sticky top-0 bg-stone-900/90 backdrop-blur z-10" style={{ borderColor: COLORS.border }}>
           <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-xl font-bold">{title}</h3>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-800 transition" style={{ color: COLORS.inkSoft }}><X size={22} /></button>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-800 transition text-stone-400"><X size={22} /></button>
         </div>
-        <div className="p-5 pb-[max(env(safe-area-inset-bottom),1.25rem)]">{children}</div>
+        <div className="p-5">{children}</div>
       </div>
     </div>
   );
@@ -287,19 +181,8 @@ function PersonPicker({ people, selected, onToggle }) {
       {people.map(p => {
         const isOn = selected.includes(p.id);
         return (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => onToggle(p.id)}
-            style={{
-              background: isOn ? p.color : COLORS.surfaceHighlight,
-              borderColor: p.color,
-              color: isOn ? '#fff' : p.color,
-            }}
-            className="px-3 py-1.5 rounded-full border text-xs font-medium flex items-center gap-1.5 transition-all shadow-sm"
-          >
-            <Chip person={p} size="sm" />
-            <span>{p.name}</span>
+          <button key={p.id} type="button" onClick={() => onToggle(p.id)} style={{ background: isOn ? p.color : COLORS.surfaceHighlight, borderColor: p.color, color: isOn ? '#fff' : p.color }} className="px-3 py-1.5 rounded-full border text-xs font-medium flex items-center gap-1.5 transition-all shadow-sm">
+            <Chip person={p} size="sm" /><span>{p.name}</span>
           </button>
         );
       })}
@@ -311,19 +194,7 @@ function RecurrencePicker({ value, onChange }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {Object.entries(RECURRENCE_LABELS).map(([k, label]) => (
-        <button
-          key={k}
-          type="button"
-          onClick={() => onChange(k)}
-          style={{
-            background: value === k ? COLORS.accent : COLORS.surfaceHighlight,
-            borderColor: value === k ? COLORS.accent : COLORS.border,
-            color: value === k ? '#121214' : COLORS.ink,
-          }}
-          className="px-3 py-1.5 rounded-xl border text-xs font-semibold transition"
-        >
-          {label}
-        </button>
+        <button key={k} type="button" onClick={() => onChange(k)} style={{ background: value === k ? COLORS.accent : COLORS.surfaceHighlight, borderColor: value === k ? COLORS.accent : COLORS.border, color: value === k ? '#121214' : COLORS.ink }} className="px-3 py-1.5 rounded-xl border text-xs font-semibold transition">{label}</button>
       ))}
     </div>
   );
@@ -331,26 +202,15 @@ function RecurrencePicker({ value, onChange }) {
 
 function ReminderPicker({ value, onChange }) {
   return (
-    <select
-      value={value === null ? 'null' : value}
-      onChange={e => {
-        const val = e.target.value === 'null' ? null : Number(e.target.value);
-        onChange(val);
-      }}
-      style={{ borderColor: COLORS.border, background: COLORS.surfaceHighlight, color: COLORS.ink }}
-      className="w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 transition cursor-pointer"
-    >
-      {REMINDER_OPTIONS.map(opt => (
-        <option key={String(opt.hours)} value={opt.hours === null ? 'null' : opt.hours} className="bg-stone-900 text-stone-100">
-          {opt.label}
-        </option>
-      ))}
+    <select value={value === null ? 'null' : value} onChange={e => { const val = e.target.value === 'null' ? null : Number(e.target.value); onChange(val); }} style={{ borderColor: COLORS.border, background: COLORS.surfaceHighlight, color: COLORS.ink }} className="w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none cursor-pointer">
+      {REMINDER_OPTIONS.map(opt => <option key={String(opt.hours)} value={opt.hours === null ? 'null' : opt.hours} className="bg-stone-900 text-stone-100">{opt.label}</option>)}
     </select>
   );
 }
 
 const inputStyle = "w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 transition bg-stone-900 text-stone-100";
 
+/* --- MODALS --- */
 
 function AddEventModal({ people, currentUserId, initialDate, initial, editItem, onClose, onSave }) {
   const isEdit = !!editItem;
@@ -363,67 +223,26 @@ function AddEventModal({ people, currentUserId, initialDate, initial, editItem, 
   const [items, setItems] = useState(editItem?.items || initial?.items || []);
   const [reminderHours, setReminderHours] = useState(editItem ? (editItem.reminder?.hours ?? null) : 0);
 
-  const togglePerson = id => setPersonIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  const handleAddItem = text => setItems(prev => [...prev, { id: uid('it'), text, done: false }]);
-  const handleToggleItem = id => setItems(prev => prev.map(i => i.id === id ? { ...i, done: !i.done } : i));
-  const handleRemoveItem = id => setItems(prev => prev.filter(i => i.id !== id));
-
   const save = () => {
     if (!title.trim()) return;
-    onSave({
-      id: editItem?.id || uid('ev'),
-      title: title.trim(),
-      date, time, personIds,
-      recurrence: { freq },
-      note: note.trim(),
-      items,
-      reminder: reminderHours === null ? null : { hours: reminderHours },
-    });
+    onSave({ id: editItem?.id || uid('ev'), title: title.trim(), date, time, personIds, recurrence: { freq }, note: note.trim(), items, reminder: reminderHours === null ? null : { hours: reminderHours } });
     onClose();
   };
 
   return (
     <ModalShell title={isEdit ? 'Edytuj wydarzenie' : 'Nowe wydarzenie'} onClose={onClose}>
       <div className="space-y-4">
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Tytuł wydarzenia</label>
-          <input autoFocus value={title} onChange={e => setTitle(e.target.value)} placeholder="np. Dentysta, Trening, Wycieczka"
-            style={{ borderColor: COLORS.border }} className={inputStyle} />
-        </div>
+        <div><label className="text-xs font-semibold mb-1 block text-stone-400">Tytuł wydarzenia</label><input autoFocus value={title} onChange={e => setTitle(e.target.value)} placeholder="np. Dentysta" style={{ borderColor: COLORS.border }} className={inputStyle} /></div>
         <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Data</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ borderColor: COLORS.border }} className={inputStyle} />
-          </div>
-          <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Godzina (opcjonalnie)</label>
-            <input type="time" value={time} onChange={e => setTime(e.target.value)} style={{ borderColor: COLORS.border }} className={inputStyle} />
-          </div>
+          <div><label className="text-xs font-semibold mb-1 block text-stone-400">Data</label><input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ borderColor: COLORS.border }} className={inputStyle} /></div>
+          <div><label className="text-xs font-semibold mb-1 block text-stone-400">Godzina</label><input type="time" value={time} onChange={e => setTime(e.target.value)} style={{ borderColor: COLORS.border }} className={inputStyle} /></div>
         </div>
-        <div>
-          <label className="text-xs font-semibold mb-1.5 block" style={{ color: COLORS.inkSoft }}>Przypisane osoby</label>
-          <PersonPicker people={people} selected={personIds} onToggle={togglePerson} />
-        </div>
-        <div>
-          <label className="text-xs font-semibold mb-1.5 block" style={{ color: COLORS.inkSoft }}>Powtarzanie</label>
-          <RecurrencePicker value={freq} onChange={setFreq} />
-        </div>
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Przypomnienie</label>
-          <ReminderPicker value={reminderHours} onChange={setReminderHours} />
-        </div>
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Opis / Notatka</label>
-          <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Dodatkowe informacje..."
-            style={{ borderColor: COLORS.border }} className={`${inputStyle} h-20 resize-none`} />
-        </div>
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Checklista w wydarzeniu</label>
-          <ChecklistContainer items={items} onToggleItem={handleToggleItem} onAddItem={handleAddItem} onRemoveItem={handleRemoveItem} />
-        </div>
-        <button onClick={save} style={{ background: COLORS.accent, color: '#121214' }} className="w-full rounded-xl py-3 text-sm font-bold shadow hover:opacity-90 transition mt-2">
-          {isEdit ? 'Zapisz zmiany' : 'Dodaj wydarzenie'}
-        </button>
+        <div><label className="text-xs font-semibold mb-1.5 block text-stone-400">Przypisane osoby</label><PersonPicker people={people} selected={personIds} onToggle={id => setPersonIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])} /></div>
+        <div><label className="text-xs font-semibold mb-1.5 block text-stone-400">Powtarzanie</label><RecurrencePicker value={freq} onChange={setFreq} /></div>
+        <div><label className="text-xs font-semibold mb-1 block text-stone-400">Przypomnienie</label><ReminderPicker value={reminderHours} onChange={setReminderHours} /></div>
+        <div><label className="text-xs font-semibold mb-1 block text-stone-400">Notatka</label><textarea value={note} onChange={e => setNote(e.target.value)} style={{ borderColor: COLORS.border }} className={`${inputStyle} h-20 resize-none`} /></div>
+        <div><label className="text-xs font-semibold mb-1 block text-stone-400">Checklista</label><ChecklistContainer items={items} onToggleItem={id => setItems(p => p.map(i => i.id === id ? { ...i, done: !i.done } : i))} onAddItem={text => setItems(p => [...p, { id: uid('it'), text, done: false }])} onRemoveItem={id => setItems(p => p.filter(i => i.id !== id))} /></div>
+        <button onClick={save} style={{ background: COLORS.accent, color: '#121214' }} className="w-full rounded-xl py-3 text-sm font-bold shadow hover:opacity-90 transition mt-2">{isEdit ? 'Zapisz' : 'Dodaj wydarzenie'}</button>
       </div>
     </ModalShell>
   );
@@ -440,69 +259,75 @@ function AddTaskModal({ people, currentUserId, initial, editItem, onClose, onSav
   const [items, setItems] = useState(editItem?.items || initial?.items || []);
   const [reminderHours, setReminderHours] = useState(editItem ? (editItem.reminder?.hours ?? null) : 0);
 
-  const togglePerson = id => setPersonIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  const handleAddItem = text => setItems(prev => [...prev, { id: uid('it'), text, done: false }]);
-  const handleToggleItem = id => setItems(prev => prev.map(i => i.id === id ? { ...i, done: !i.done } : i));
-  const handleRemoveItem = id => setItems(prev => prev.filter(i => i.id !== id));
-
   const save = () => {
     if (!title.trim()) return;
-    onSave({
-      id: editItem?.id || uid('task'),
-      title: title.trim(),
-      dueDate, time, personIds,
-      recurrence: { freq },
-      note: note.trim(),
-      items,
-      reminder: reminderHours === null ? null : { hours: reminderHours },
-      completions: editItem?.completions || {},
-      createdAt: editItem?.createdAt || todayStr(),
-    });
+    onSave({ id: editItem?.id || uid('task'), title: title.trim(), dueDate, time, personIds, recurrence: { freq }, note: note.trim(), items, reminder: reminderHours === null ? null : { hours: reminderHours }, completions: editItem?.completions || {}, createdAt: editItem?.createdAt || todayStr() });
     onClose();
   };
 
   return (
     <ModalShell title={isEdit ? 'Edytuj zadanie' : 'Nowe zadanie'} onClose={onClose}>
       <div className="space-y-4">
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Co trzeba zrobić?</label>
-          <input autoFocus value={title} onChange={e => setTitle(e.target.value)} placeholder="np. Zrobić opłaty, Wynieść śmieci"
-            style={{ borderColor: COLORS.border }} className={inputStyle} />
-        </div>
+        <div><label className="text-xs font-semibold mb-1 block text-stone-400">Zadanie</label><input autoFocus value={title} onChange={e => setTitle(e.target.value)} style={{ borderColor: COLORS.border }} className={inputStyle} /></div>
         <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Termin</label>
-            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ borderColor: COLORS.border }} className={inputStyle} />
-          </div>
-          <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Godzina (opcjonalnie)</label>
-            <input type="time" value={time} onChange={e => setTime(e.target.value)} style={{ borderColor: COLORS.border }} className={inputStyle} />
-          </div>
+          <div><label className="text-xs font-semibold mb-1 block text-stone-400">Termin</label><input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ borderColor: COLORS.border }} className={inputStyle} /></div>
+          <div><label className="text-xs font-semibold mb-1 block text-stone-400">Godzina</label><input type="time" value={time} onChange={e => setTime(e.target.value)} style={{ borderColor: COLORS.border }} className={inputStyle} /></div>
+        </div>
+        <div><label className="text-xs font-semibold mb-1.5 block text-stone-400">Wykonawca</label><PersonPicker people={people} selected={personIds} onToggle={id => setPersonIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])} /></div>
+        <div><label className="text-xs font-semibold mb-1.5 block text-stone-400">Powtarzanie</label><RecurrencePicker value={freq} onChange={setFreq} /></div>
+        <div><label className="text-xs font-semibold mb-1 block text-stone-400">Przypomnienie</label><ReminderPicker value={reminderHours} onChange={setReminderHours} /></div>
+        <div><label className="text-xs font-semibold mb-1 block text-stone-400">Notatka</label><textarea value={note} onChange={e => setNote(e.target.value)} style={{ borderColor: COLORS.border }} className={`${inputStyle} h-20 resize-none`} /></div>
+        <div><label className="text-xs font-semibold mb-1 block text-stone-400">Checklista</label><ChecklistContainer items={items} onToggleItem={id => setItems(p => p.map(i => i.id === id ? { ...i, done: !i.done } : i))} onAddItem={text => setItems(p => [...p, { id: uid('it'), text, done: false }])} onRemoveItem={id => setItems(p => p.filter(i => i.id !== id))} /></div>
+        <button onClick={save} style={{ background: COLORS.accent, color: '#121214' }} className="w-full rounded-xl py-3 text-sm font-bold shadow hover:opacity-90 transition mt-2">{isEdit ? 'Zapisz' : 'Dodaj zadanie'}</button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function NoteModal({ editItem, currentUserId, onClose, onSave }) {
+  const isEdit = !!editItem;
+  const [text, setText] = useState(editItem?.text || '');
+  const [items, setItems] = useState(editItem?.items || []);
+
+  const save = () => {
+    if (!text.trim() && items.length === 0) return;
+    onSave({ id: editItem?.id || uid('note'), text: text.trim(), items, createdAt: editItem?.createdAt || new Date().toISOString(), personId: editItem?.personId || currentUserId });
+    onClose();
+  };
+
+  return (
+    <ModalShell title={isEdit ? 'Edytuj notatkę' : 'Nowa notatka'} onClose={onClose}>
+      <div className="space-y-4">
+        <div className="bg-amber-900/20 border border-amber-900/50 rounded-xl p-3 flex items-start gap-2 text-amber-200/80 text-xs">
+          <Info size={16} className="shrink-0 mt-0.5" />
+          <p>Notatki są <b>prywatne</b> i widoczne tylko dla Ciebie. Inni domownicy zobaczą je dopiero, gdy zamienisz je w Zadanie lub Wydarzenie.</p>
         </div>
         <div>
-          <label className="text-xs font-semibold mb-1.5 block" style={{ color: COLORS.inkSoft }}>Kto odpowiada?</label>
-          <PersonPicker people={people} selected={personIds} onToggle={togglePerson} />
+          <label className="text-xs font-semibold mb-1 block text-stone-400">Treść</label>
+          <textarea autoFocus value={text} onChange={e => setText(e.target.value)} style={{ borderColor: COLORS.border }} className={`${inputStyle} h-24 resize-none`} />
         </div>
         <div>
-          <label className="text-xs font-semibold mb-1.5 block" style={{ color: COLORS.inkSoft }}>Powtarzanie</label>
-          <RecurrencePicker value={freq} onChange={setFreq} />
+          <label className="text-xs font-semibold mb-1 block text-stone-400">Lista pozycji</label>
+          <ChecklistContainer items={items} onToggleItem={id => setItems(p => p.map(i => i.id === id ? { ...i, done: !i.done } : i))} onAddItem={text => setItems(p => [...p, { id: uid('it'), text, done: false }])} onRemoveItem={id => setItems(p => p.filter(i => i.id !== id))} />
         </div>
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Przypomnienie</label>
-          <ReminderPicker value={reminderHours} onChange={setReminderHours} />
-        </div>
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Notatka</label>
-          <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Opcjonalny opis..."
-            style={{ borderColor: COLORS.border }} className={`${inputStyle} h-20 resize-none`} />
-        </div>
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Pod-zadania / Checklista</label>
-          <ChecklistContainer items={items} onToggleItem={handleToggleItem} onAddItem={handleAddItem} onRemoveItem={handleRemoveItem} />
-        </div>
-        <button onClick={save} style={{ background: COLORS.accent, color: '#121214' }} className="w-full rounded-xl py-3 text-sm font-bold shadow hover:opacity-90 transition mt-2">
-          {isEdit ? 'Zapisz zmiany' : 'Dodaj zadanie'}
-        </button>
+        <button onClick={save} style={{ background: COLORS.accent, color: '#121214' }} className="w-full rounded-xl py-3 text-sm font-bold shadow hover:opacity-90 transition mt-2">{isEdit ? 'Zapisz' : 'Zapisz notatkę'}</button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function PersonModal({ editPerson, existingCount, onClose, onSave }) {
+  const [name, setName] = useState(editPerson?.name || '');
+  const [color, setColor] = useState(editPerson?.color || PERSON_PALETTE[existingCount % PERSON_PALETTE.length]);
+  const [emoji, setEmoji] = useState(editPerson?.emoji || '👨');
+  const save = () => { if (name.trim()) { onSave({ id: editPerson?.id || uid('p'), name: name.trim(), color, emoji }); onClose(); } };
+  return (
+    <ModalShell title={editPerson ? "Edytuj członka rodziny" : "Dodaj osobę"} onClose={onClose}>
+      <div className="space-y-4">
+        <div><label className="text-xs font-semibold mb-1 block text-stone-400">Imię / Rola</label><input autoFocus value={name} onChange={e => setName(e.target.value)} style={{ borderColor: COLORS.border }} className={inputStyle} /></div>
+        <div><label className="text-xs font-semibold mb-1.5 block text-stone-400">Ikona</label><div className="flex flex-wrap gap-2 p-2 rounded-xl bg-stone-900 border border-stone-800">{AVATAR_EMOJIS.map(em => <button key={em} type="button" onClick={() => setEmoji(em)} className={`w-9 h-9 rounded-lg text-lg flex items-center justify-center transition ${emoji === em ? 'bg-stone-800 shadow-md scale-110' : 'hover:bg-stone-800/50'}`}>{em}</button>)}</div></div>
+        <div><label className="text-xs font-semibold mb-1.5 block text-stone-400">Kolor</label><div className="flex flex-wrap gap-2">{PERSON_PALETTE.map(c => <button key={c} type="button" onClick={() => setColor(c)} style={{ background: c }} className={`w-8 h-8 rounded-full transition-transform ${color === c ? 'ring-2 ring-offset-2 ring-stone-900 scale-110' : 'opacity-80'}`} />)}</div></div>
+        <button onClick={save} style={{ background: COLORS.accent, color: '#121214' }} className="w-full rounded-xl py-3 text-sm font-bold shadow hover:opacity-90 transition mt-2">{editPerson ? 'Zapisz' : 'Dodaj osobę'}</button>
       </div>
     </ModalShell>
   );
@@ -513,83 +338,15 @@ function AddWallMessageModal({ people, currentUserId, onClose, onSave }) {
   const [personId, setPersonId] = useState(currentUserId || people[0]?.id || '');
   const [color, setColor] = useState(CARD_COLORS[0]);
   const [isPinned, setIsPinned] = useState(false);
-
-  const save = () => {
-    if (!text.trim()) return;
-    onSave({
-      id: uid('w'),
-      text: text.trim(),
-      personId,
-      color,
-      isPinned,
-      createdAt: new Date().toISOString()
-    });
-    onClose();
-  };
-
+  const save = () => { if (text.trim()) { onSave({ id: uid('w'), text: text.trim(), personId, color, isPinned, createdAt: new Date().toISOString() }); onClose(); } };
   return (
-    <ModalShell title="Zostaw wiadomość na tablicy" onClose={onClose}>
+    <ModalShell title="Wiadomość na tablicy" onClose={onClose}>
       <div className="space-y-4">
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Wiadomość / Informacja</label>
-          <textarea 
-            autoFocus 
-            value={text} 
-            onChange={e => setText(e.target.value)} 
-            placeholder="np. Obiad w lodówce, Klucze są u sąsiada..."
-            style={{ borderColor: COLORS.border }} 
-            className={`${inputStyle} h-28 resize-none`} 
-          />
-        </div>
-
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Podpisane przez</label>
-          <div className="flex flex-wrap gap-2">
-            {people.map(p => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setPersonId(p.id)}
-                className={`px-3 py-1.5 rounded-full border text-xs font-medium flex items-center gap-1.5 transition ${personId === p.id ? 'bg-amber-400 text-stone-950 font-bold border-amber-400' : 'bg-stone-800 text-stone-300 border-stone-700'}`}
-              >
-                <Chip person={p} size="sm" />
-                <span>{p.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Styl karteczki</label>
-          <div className="flex gap-2">
-            {CARD_COLORS.map(c => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setColor(c)}
-                style={{ background: c }}
-                className={`w-8 h-8 rounded-xl border transition ${color === c ? 'border-amber-400 scale-110 ring-2 ring-amber-400/40' : 'border-stone-700'}`}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 pt-1">
-          <input 
-            type="checkbox" 
-            id="pinMsg" 
-            checked={isPinned} 
-            onChange={e => setIsPinned(e.target.checked)} 
-            className="w-4 h-4 rounded text-amber-500 bg-stone-900 border-stone-700 focus:ring-0"
-          />
-          <label htmlFor="pinMsg" className="text-xs font-medium text-stone-300 flex items-center gap-1 cursor-pointer">
-            <Pin size={14} className="text-amber-400" /> Przypnij na samej górze
-          </label>
-        </div>
-
-        <button onClick={save} style={{ background: COLORS.accent, color: '#121214' }} className="w-full rounded-xl py-3 text-sm font-bold shadow hover:opacity-90 transition mt-2">
-          Przypnij wiadomość
-        </button>
+        <div><textarea autoFocus value={text} onChange={e => setText(e.target.value)} placeholder="Wiadomość..." style={{ borderColor: COLORS.border }} className={`${inputStyle} h-28 resize-none`} /></div>
+        <div><label className="text-xs font-semibold mb-1 block text-stone-400">Podpisane przez</label><div className="flex flex-wrap gap-2">{people.map(p => <button key={p.id} type="button" onClick={() => setPersonId(p.id)} className={`px-3 py-1.5 rounded-full border text-xs font-medium flex items-center gap-1.5 transition ${personId === p.id ? 'bg-amber-400 text-stone-950 font-bold border-amber-400' : 'bg-stone-800 text-stone-300 border-stone-700'}`}><Chip person={p} size="sm" /><span>{p.name}</span></button>)}</div></div>
+        <div><label className="text-xs font-semibold mb-1 block text-stone-400">Styl</label><div className="flex gap-2">{CARD_COLORS.map(c => <button key={c} type="button" onClick={() => setColor(c)} style={{ background: c }} className={`w-8 h-8 rounded-xl border transition ${color === c ? 'border-amber-400 scale-110 ring-2' : 'border-stone-700'}`} />)}</div></div>
+        <div className="flex items-center gap-2 pt-1"><input type="checkbox" id="pinMsg" checked={isPinned} onChange={e => setIsPinned(e.target.checked)} className="w-4 h-4 rounded text-amber-500 bg-stone-900 border-stone-700" /><label htmlFor="pinMsg" className="text-xs font-medium text-stone-300 flex items-center gap-1 cursor-pointer"><Pin size={14} className="text-amber-400" /> Przypnij na górze</label></div>
+        <button onClick={save} style={{ background: COLORS.accent, color: '#121214' }} className="w-full rounded-xl py-3 text-sm font-bold shadow hover:opacity-90 transition mt-2">Przypnij</button>
       </div>
     </ModalShell>
   );
@@ -601,42 +358,20 @@ function EventDetailModal({ event, people, onClose, onEdit, onDelete, onToggleSu
       <div className="space-y-4">
         <div>
           <h4 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-xl font-bold">{event.title}</h4>
-          <div className="flex items-center gap-2 flex-wrap text-xs mt-1 font-mono" style={{ color: COLORS.inkSoft }}>
+          <div className="flex items-center gap-2 flex-wrap text-xs mt-1 font-mono text-stone-400">
             <span>📅 {event.date} {event.time ? `· ⏰ ${event.time}` : ''}</span>
             {event.recurrence?.freq !== 'none' && <span className="flex items-center gap-1 bg-amber-900/40 text-amber-300 px-2 py-0.5 rounded"><Repeat size={12} /> {RECURRENCE_LABELS[event.recurrence.freq]}</span>}
           </div>
         </div>
-
-        <div className="flex items-center gap-2 text-xs" style={{ color: COLORS.inkSoft }}>
-          {event.reminder ? <Bell size={14} className="text-amber-400" /> : <BellOff size={14} />}
-          <span>{event.reminder ? `Przypomnienie: ${reminderLabel(event.reminder.hours)}` : 'Brak przypomnienia'}</span>
+        <div className="flex items-center gap-2 text-xs text-stone-400">
+          {event.reminder ? <Bell size={14} className="text-amber-400" /> : <BellOff size={14} />} <span>{event.reminder ? `Przypomnienie: ${reminderLabel(event.reminder.hours)}` : 'Brak przypomnienia'}</span>
         </div>
-
-        <div>
-          <div className="text-xs font-semibold mb-1" style={{ color: COLORS.inkSoft }}>Biorą udział:</div>
-          <PersonRow people={people} personIds={event.personIds} />
-        </div>
-
-        {event.note && (
-          <div style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }} className="border rounded-xl p-3 text-sm whitespace-pre-wrap text-stone-300">
-            {event.note}
-          </div>
-        )}
-
-        {event.items && event.items.length > 0 && (
-          <div>
-            <div className="text-xs font-semibold mb-1" style={{ color: COLORS.inkSoft }}>Lista kroków / zakupów:</div>
-            <ChecklistContainer items={event.items} onToggleItem={(itemId) => onToggleSubItem(event.id, itemId, 'event')} />
-          </div>
-        )}
-
+        <div><div className="text-xs font-semibold mb-1 text-stone-400">Biorą udział:</div><PersonRow people={people} personIds={event.personIds} /></div>
+        {event.note && <div style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }} className="border rounded-xl p-3 text-sm whitespace-pre-wrap text-stone-300">{event.note}</div>}
+        {event.items?.length > 0 && <div><div className="text-xs font-semibold mb-1 text-stone-400">Kroki:</div><ChecklistContainer items={event.items} onToggleItem={(itemId) => onToggleSubItem(event.id, itemId, 'event')} /></div>}
         <div className="flex gap-2 pt-2">
-          <button onClick={() => onEdit(event)} style={{ borderColor: COLORS.border, color: COLORS.ink }} className="flex-1 border rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-1.5 hover:bg-stone-800">
-            <Pencil size={15} /> Edytuj
-          </button>
-          <button onClick={() => { onDelete(event.id); onClose(); }} style={{ borderColor: COLORS.border, color: COLORS.warn }} className="border rounded-xl px-4 flex items-center justify-center hover:bg-red-950/40">
-            <Trash2 size={16} />
-          </button>
+          <button onClick={() => onEdit(event)} style={{ borderColor: COLORS.border, color: COLORS.ink }} className="flex-1 border rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-1.5 hover:bg-stone-800"><Pencil size={15} /> Edytuj</button>
+          <button onClick={() => { onDelete(event.id); onClose(); }} style={{ borderColor: COLORS.border, color: COLORS.warn }} className="border rounded-xl px-4 flex items-center justify-center hover:bg-red-950/40"><Trash2 size={16} /></button>
         </div>
       </div>
     </ModalShell>
@@ -644,214 +379,62 @@ function EventDetailModal({ event, people, onClose, onEdit, onDelete, onToggleSu
 }
 
 function TaskDetailModal({ task, people, onClose, onToggle, onDelete, onEdit, onToggleSubItem }) {
-  const today = todayStr();
-  const isDone = isTaskDoneForPeriod(task, today);
-
+  const isDone = isTaskDoneForPeriod(task, todayStr());
   return (
     <ModalShell title="Szczegóły zadania" onClose={onClose}>
       <div className="space-y-4">
         <div>
           <h4 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-xl font-bold">{task.title}</h4>
-          <div className="flex items-center gap-2 flex-wrap text-xs mt-1 font-mono" style={{ color: COLORS.inkSoft }}>
+          <div className="flex items-center gap-2 flex-wrap text-xs mt-1 font-mono text-stone-400">
             <span>Termin: {task.dueDate} {task.time ? `· ⏰ ${task.time}` : ''}</span>
             {task.recurrence?.freq !== 'none' && <span className="flex items-center gap-1 bg-amber-900/40 text-amber-300 px-2 py-0.5 rounded"><Repeat size={12} /> {RECURRENCE_LABELS[task.recurrence.freq]}</span>}
           </div>
         </div>
-
-        <div>
-          <div className="text-xs font-semibold mb-1" style={{ color: COLORS.inkSoft }}>Przypisani wykonawcy:</div>
-          <PersonRow people={people} personIds={task.personIds} />
-        </div>
-
-        {task.note && (
-          <div style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }} className="border rounded-xl p-3 text-sm whitespace-pre-wrap text-stone-300">
-            {task.note}
-          </div>
-        )}
-
-        {task.items && task.items.length > 0 && (
-          <div>
-            <div className="text-xs font-semibold mb-1" style={{ color: COLORS.inkSoft }}>Checklista zadania:</div>
-            <ChecklistContainer items={task.items} onToggleItem={(itemId) => onToggleSubItem(task.id, itemId, 'task')} />
-          </div>
-        )}
-
+        <div><div className="text-xs font-semibold mb-1 text-stone-400">Wykonawcy:</div><PersonRow people={people} personIds={task.personIds} /></div>
+        {task.note && <div style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }} className="border rounded-xl p-3 text-sm whitespace-pre-wrap text-stone-300">{task.note}</div>}
+        {task.items?.length > 0 && <div><div className="text-xs font-semibold mb-1 text-stone-400">Checklista:</div><ChecklistContainer items={task.items} onToggleItem={(itemId) => onToggleSubItem(task.id, itemId, 'task')} /></div>}
         <div className="flex gap-2 pt-2">
-          <button onClick={() => { onToggle(task); onClose(); }} style={{ background: isDone ? COLORS.surfaceHighlight : COLORS.success, color: '#fff', borderColor: COLORS.border }} className="flex-1 border rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-1.5 shadow">
-            <Check size={16} /> {isDone ? 'Cofnij wykonanie' : 'Oznacz jako wykonane'}
-          </button>
-          <button onClick={() => onEdit(task)} style={{ borderColor: COLORS.border, color: COLORS.ink }} className="border rounded-xl px-3 hover:bg-stone-800">
-            <Pencil size={16} />
-          </button>
-          <button onClick={() => { onDelete(task.id); onClose(); }} style={{ borderColor: COLORS.border, color: COLORS.warn }} className="border rounded-xl px-3 hover:bg-red-950/40">
-            <Trash2 size={16} />
-          </button>
+          <button onClick={() => { onToggle(task); onClose(); }} style={{ background: isDone ? COLORS.surfaceHighlight : COLORS.success, color: '#fff', borderColor: COLORS.border }} className="flex-1 border rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-1.5 shadow"><Check size={16} /> {isDone ? 'Cofnij wykonanie' : 'Zrobione'}</button>
+          <button onClick={() => onEdit(task)} style={{ borderColor: COLORS.border, color: COLORS.ink }} className="border rounded-xl px-3 hover:bg-stone-800"><Pencil size={16} /></button>
+          <button onClick={() => { onDelete(task.id); onClose(); }} style={{ borderColor: COLORS.border, color: COLORS.warn }} className="border rounded-xl px-3 hover:bg-red-950/40"><Trash2 size={16} /></button>
         </div>
       </div>
     </ModalShell>
   );
 }
 
-function NoteModal({ editItem, currentUserId, onClose, onSave }) {
-  const isEdit = !!editItem;
-  const [text, setText] = useState(editItem?.text || '');
-  const [items, setItems] = useState(editItem?.items || []);
-
-  const handleAddItem = textVal => setItems(prev => [...prev, { id: uid('it'), text: textVal, done: false }]);
-  const handleToggleItem = id => setItems(prev => prev.map(i => i.id === id ? { ...i, done: !i.done } : i));
-  const handleRemoveItem = id => setItems(prev => prev.filter(i => i.id !== id));
-
-  const save = () => {
-    const cleanText = text.trim();
-    if (!cleanText && items.length === 0) return;
-
-    onSave({ 
-      id: editItem?.id || uid('note'), 
-      text: cleanText, 
-      items, 
-      createdAt: editItem?.createdAt || new Date().toISOString(),
-      personId: editItem?.personId || currentUserId
-    });
-    onClose();
-  };
-
-  return (
-    <ModalShell title={isEdit ? 'Edytuj notatkę' : 'Nowa notatka'} onClose={onClose}>
-      <div className="space-y-4">
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Treść / Opis</label>
-          <textarea 
-            autoFocus 
-            value={text} 
-            onChange={e => setText(e.target.value)} 
-            placeholder="Wpisz treść notatki lub nagłówek..."
-            style={{ borderColor: COLORS.border }} 
-            className={`${inputStyle} h-24 resize-none`} 
-          />
-        </div>
-
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Lista pozycji / Zakupów</label>
-          <ChecklistContainer items={items} onToggleItem={handleToggleItem} onAddItem={handleAddItem} onRemoveItem={handleRemoveItem} />
-        </div>
-
-        <button onClick={save} style={{ background: COLORS.accent, color: '#121214' }} className="w-full rounded-xl py-3 text-sm font-bold shadow hover:opacity-90 transition mt-2">
-          {isEdit ? 'Zapisz zmiany' : 'Zapisz notatkę'}
-        </button>
-      </div>
-    </ModalShell>
-  );
-}
-
-function PersonModal({ editPerson, existingCount, onClose, onSave }) {
-  const [name, setName] = useState(editPerson?.name || '');
-  const [color, setColor] = useState(editPerson?.color || PERSON_PALETTE[existingCount % PERSON_PALETTE.length]);
-  const [emoji, setEmoji] = useState(editPerson?.emoji || '👨');
-
-  const save = () => {
-    if (!name.trim()) return;
-    onSave({
-      id: editPerson?.id || uid('p'),
-      name: name.trim(),
-      color,
-      emoji
-    });
-    onClose();
-  };
-
-  return (
-    <ModalShell title={editPerson ? "Edytuj członka rodziny" : "Dodaj osobę"} onClose={onClose}>
-      <div className="space-y-4">
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>Imię / Rola</label>
-          <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="np. Mama, Janek"
-            style={{ borderColor: COLORS.border }} className={inputStyle} />
-        </div>
-
-        <div>
-          <label className="text-xs font-semibold mb-1.5 block" style={{ color: COLORS.inkSoft }}>Ikona / Awatar</label>
-          <div className="flex flex-wrap gap-2 p-2 rounded-xl bg-stone-900 border border-stone-800">
-            {AVATAR_EMOJIS.map(em => (
-              <button
-                key={em}
-                type="button"
-                onClick={() => setEmoji(em)}
-                className={`w-9 h-9 rounded-lg text-lg flex items-center justify-center transition ${emoji === em ? 'bg-stone-800 shadow-md scale-110' : 'hover:bg-stone-800/50'}`}
-              >
-                {em}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="text-xs font-semibold mb-1.5 block" style={{ color: COLORS.inkSoft }}>Kolor rozpoznawczy</label>
-          <div className="flex flex-wrap gap-2">
-            {PERSON_PALETTE.map(c => (
-              <button key={c} type="button" onClick={() => setColor(c)} style={{ background: c }}
-                className={`w-8 h-8 rounded-full transition-transform ${color === c ? 'ring-2 ring-offset-2 ring-stone-900 scale-110' : 'opacity-80 hover:opacity-100'}`} />
-            ))}
-          </div>
-        </div>
-
-        <button onClick={save} style={{ background: COLORS.accent, color: '#121214' }} className="w-full rounded-xl py-3 text-sm font-bold shadow hover:opacity-90 transition mt-2">
-          {editPerson ? 'Zapisz zmiany' : 'Dodaj osobę'}
-        </button>
-      </div>
-    </ModalShell>
-  );
-}
-
+/* --- VIEWS --- */
 
 function TodayView({ data, onOpenEvent, onOpenTask, onOpenAddEvent, onOpenAddTask, onToggleTask }) {
   const today = todayStr();
   const events = data.events.filter(ev => occursOnDate(ev, today)).sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
-  const tasksToday = data.tasks.filter(t => {
-    const freq = t.recurrence?.freq || 'none';
-    if (freq === 'none') return t.dueDate === today;
-    return t.dueDate <= today || freq !== 'none';
-  });
-  const pendingTasks = tasksToday.filter(t => !isTaskDoneForPeriod(t, today));
+  const pendingTasks = data.tasks.filter(t => { const f = t.recurrence?.freq || 'none'; return (f === 'none' ? t.dueDate === today : t.dueDate <= today || f !== 'none'); }).filter(t => !isTaskDoneForPeriod(t, today));
   const overdue = data.tasks.filter(t => (t.recurrence?.freq || 'none') === 'none' && t.dueDate < today && !isTaskDoneForPeriod(t, today));
-
-  const monday = getMonday(today);
-  const dayIdx = weekdayIdx(today);
-  const enableMeals = data.settings?.enableMeals ?? true;
-  const enableWall = data.settings?.enableWall ?? true;
-  const todayMeal = enableMeals ? (data.meals?.[monday]?.[dayIdx] || null) : null;
-
-  const pinnedWallMessages = enableWall ? (data.wall || []).filter(w => w.isPinned) : [];
+  const todayMeal = data.settings?.enableMeals ? (data.meals?.[getMonday(today)]?.[weekdayIdx(today)] || null) : null;
+  const pinnedWall = data.settings?.enableWall ? (data.wall || []).filter(w => w.isPinned) : [];
 
   return (
-    <div className="space-y-6">
-      <div className="px-1 flex items-center justify-between">
+    <div className="space-y-6 animate-fadeIn">
+      <div className="flex items-center justify-between">
         <div>
-          <div style={{ color: COLORS.inkSoft, fontFamily: 'IBM Plex Mono' }} className="text-xs uppercase tracking-wide">
-            {new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </div>
+          <div className="text-xs uppercase tracking-wide text-stone-400 font-mono">{new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
           <h2 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-2xl font-bold mt-0.5">Dziś w domu</h2>
         </div>
         <div className="flex gap-1.5">
-          <button onClick={() => onOpenAddEvent(today)} style={{ background: COLORS.surface, borderColor: COLORS.border, color: COLORS.ink }} className="px-3 py-1.5 border rounded-xl text-xs font-semibold flex items-center gap-1 shadow-xs hover:bg-stone-800">
-            <Plus size={14} /> Wydarzenie
-          </button>
-          <button onClick={() => onOpenAddTask(today)} style={{ background: COLORS.accent, color: '#121214' }} className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs hover:opacity-90">
-            <Plus size={14} /> Zadanie
-          </button>
+          <button onClick={() => onOpenAddEvent(today)} style={{ background: COLORS.surface, borderColor: COLORS.border }} className="px-3 py-1.5 border rounded-xl text-xs font-semibold flex items-center gap-1 shadow-xs hover:bg-stone-800"><Plus size={14} /> Wydarzenie</button>
+          <button onClick={() => onOpenAddTask(today)} style={{ background: COLORS.accent, color: '#121214' }} className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs hover:opacity-90"><Plus size={14} /> Zadanie</button>
         </div>
       </div>
 
-      {pinnedWallMessages.length > 0 && (
+      {pinnedWall.length > 0 && (
         <div className="space-y-2">
-          {pinnedWallMessages.map(msg => {
+          {pinnedWall.map(msg => {
             const author = data.people.find(p => p.id === msg.personId);
             return (
-              <div key={msg.id} style={{ background: msg.color || COLORS.surfaceHighlight, borderColor: COLORS.accent }} className="border rounded-2xl p-3.5 shadow-md flex items-start gap-3">
+              <div key={msg.id} style={{ background: msg.color, borderColor: COLORS.accent }} className="border rounded-2xl p-3.5 shadow-md flex items-start gap-3">
                 <Pin size={16} className="text-amber-400 shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs text-amber-300/80 font-bold mb-0.5 flex items-center gap-1">
-                    <span>{author?.name || 'Domownik'}</span>
-                  </div>
+                  <div className="text-xs text-amber-300/80 font-bold mb-0.5">{author?.name || 'Domownik'}</div>
                   <p className="text-sm font-medium text-stone-100 whitespace-pre-wrap">{msg.text}</p>
                 </div>
                 <Chip person={author} />
@@ -865,28 +448,23 @@ function TodayView({ data, onOpenEvent, onOpenTask, onOpenAddEvent, onOpenAddTas
         <Section title="Zaległe zadania">
           <div className="space-y-2">
             {overdue.map(t => (
-              <div key={t.id} onClick={() => onOpenTask(t)} style={{ background: '#2C1B1B', borderColor: COLORS.warn }} className="w-full border rounded-2xl p-3.5 flex items-start gap-3 shadow-2xs hover:shadow-xs transition cursor-pointer">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); onToggleTask(t); }} 
-                  className="w-6 h-6 rounded-lg border-2 border-red-400/50 hover:border-success flex items-center justify-center shrink-0 transition-colors mt-0.5 bg-red-950/20"
-                ></button>
+              <div key={t.id} onClick={() => onOpenTask(t)} style={{ background: '#2C1B1B', borderColor: COLORS.warn }} className="w-full border rounded-2xl p-3.5 flex items-start gap-3 shadow-2xs cursor-pointer">
+                <button onClick={(e) => { e.stopPropagation(); onToggleTask(t); }} className="w-6 h-6 rounded-lg border-2 border-red-400/50 hover:border-success flex items-center justify-center shrink-0 mt-0.5 bg-red-950/20"></button>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold" style={{ color: COLORS.ink }}>{t.title}</div>
-                  <div className="text-xs font-mono" style={{ color: COLORS.warn }}>Termin był: {t.dueDate}</div>
+                  <div className="text-sm font-semibold">{t.title}</div>
+                  <div className="text-xs font-mono text-red-400">Termin był: {t.dueDate}</div>
                   <PersonRow people={data.people} personIds={t.personIds} />
                 </div>
-                <AlertCircle size={18} style={{ color: COLORS.warn }} className="shrink-0 opacity-50" />
+                <AlertCircle size={18} className="text-red-400 shrink-0 opacity-50" />
               </div>
             ))}
           </div>
         </Section>
       )}
 
-      {enableMeals && todayMeal && (todayMeal.lunch || todayMeal.dinner || todayMeal.breakfast) && (
+      {todayMeal && (todayMeal.lunch || todayMeal.dinner || todayMeal.breakfast) && (
         <div style={{ background: COLORS.accentSoft, borderColor: '#5C4A28' }} className="border rounded-2xl p-4 shadow-2xs">
-          <div className="flex items-center gap-2 mb-2 font-bold text-sm text-amber-300">
-            <Utensils size={16} /> Dzisiejsze menu
-          </div>
+          <div className="flex items-center gap-2 mb-2 font-bold text-sm text-amber-300"><Utensils size={16} /> Dzisiejsze menu</div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
             {todayMeal.breakfast && <div><span className="font-semibold text-amber-400/80">Śniadanie:</span> <span className="text-stone-200">{todayMeal.breakfast}</span></div>}
             {todayMeal.lunch && <div><span className="font-semibold text-amber-400/80">Obiad:</span> <span className="text-amber-200 font-bold">{todayMeal.lunch}</span></div>}
@@ -896,21 +474,15 @@ function TodayView({ data, onOpenEvent, onOpenTask, onOpenAddEvent, onOpenAddTas
       )}
 
       <Section title="Plan wydarzeń na dziś">
-        {events.length === 0 ? (
-          <EmptyState text="Brak zaplanowanych wydarzeń na dziś" icon={Calendar} />
-        ) : (
+        {events.length === 0 ? <EmptyState text="Brak wydarzeń na dziś" icon={Calendar} /> : (
           <div className="space-y-2">
             {events.map(ev => (
-              <div key={ev.id} onClick={() => onOpenEvent(ev)} style={{ background: COLORS.surface, borderColor: COLORS.border }} className="w-full border rounded-2xl p-3.5 text-left shadow-2xs hover:shadow-xs transition cursor-pointer">
+              <div key={ev.id} onClick={() => onOpenEvent(ev)} style={{ background: COLORS.surface, borderColor: COLORS.border }} className="w-full border rounded-2xl p-3.5 text-left shadow-2xs cursor-pointer">
                 <div className="flex items-center gap-2.5">
-                  {ev.time ? (
-                    <span style={{ fontFamily: 'IBM Plex Mono', color: COLORS.accent, background: '#2B261D' }} className="text-xs px-2 py-0.5 rounded-md font-semibold shrink-0">{ev.time}</span>
-                  ) : (
-                    <span className="text-xs text-stone-500 font-mono shrink-0">Cały dzień</span>
-                  )}
-                  <span className="text-sm font-semibold flex-1 truncate" style={{ color: COLORS.ink }}>{ev.title}</span>
+                  {ev.time ? <span style={{ fontFamily: 'IBM Plex Mono', color: COLORS.accent, background: '#2B261D' }} className="text-xs px-2 py-0.5 rounded-md font-semibold shrink-0">{ev.time}</span> : <span className="text-xs text-stone-500 font-mono shrink-0">Cały dzień</span>}
+                  <span className="text-sm font-semibold flex-1 truncate">{ev.title}</span>
                 </div>
-                {ev.note && <div className="text-xs mt-1.5 line-clamp-1" style={{ color: COLORS.inkSoft }}>{ev.note}</div>}
+                {ev.note && <div className="text-xs mt-1.5 line-clamp-1 text-stone-400">{ev.note}</div>}
                 <PersonRow people={data.people} personIds={ev.personIds} />
               </div>
             ))}
@@ -919,18 +491,13 @@ function TodayView({ data, onOpenEvent, onOpenTask, onOpenAddEvent, onOpenAddTas
       </Section>
 
       <Section title="Do zrobienia dzisiaj">
-        {pendingTasks.length === 0 ? (
-          <EmptyState text="Wszystkie dzisiejsze zadania ukończone! 🎉" icon={CheckSquare} />
-        ) : (
+        {pendingTasks.length === 0 ? <EmptyState text="Wszystkie dzisiejsze zadania ukończone! 🎉" icon={CheckSquare} /> : (
           <div className="space-y-2">
             {pendingTasks.map(t => (
-              <div key={t.id} onClick={() => onOpenTask(t)} style={{ background: COLORS.surface, borderColor: COLORS.border }} className="w-full border rounded-2xl p-3.5 flex items-start gap-3 shadow-2xs hover:shadow-xs transition cursor-pointer">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); onToggleTask(t); }} 
-                  className="w-6 h-6 rounded-lg border-2 border-stone-600 hover:border-success flex items-center justify-center shrink-0 transition-colors mt-0.5 bg-stone-900/50"
-                ></button>
+              <div key={t.id} onClick={() => onOpenTask(t)} style={{ background: COLORS.surface, borderColor: COLORS.border }} className="w-full border rounded-2xl p-3.5 flex items-start gap-3 shadow-2xs cursor-pointer">
+                <button onClick={(e) => { e.stopPropagation(); onToggleTask(t); }} className="w-6 h-6 rounded-lg border-2 border-stone-600 flex items-center justify-center shrink-0 mt-0.5 bg-stone-900/50"></button>
                 <div className="flex-1 min-w-0">
-                  <span className="text-sm font-medium block" style={{ color: COLORS.ink }}>{t.title}</span>
+                  <span className="text-sm font-medium block">{t.title}</span>
                   <PersonRow people={data.people} personIds={t.personIds} />
                 </div>
               </div>
@@ -949,94 +516,55 @@ function CalendarView({ data, onOpenAdd, onOpenEvent }) {
 
   const d = parseDate(monthAnchor);
   const year = d.getFullYear(), month = d.getMonth();
-  const firstOfMonth = new Date(year, month, 1);
-  const startOffset = (firstOfMonth.getDay() + 6) % 7;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  const cells = [];
-  for (let i = 0; i < startOffset; i++) cells.push(null);
-  for (let day = 1; day <= daysInMonth; day++) cells.push(toDateStr(new Date(year, month, day)));
-
-  const eventsForDay = dateStr => data.events.filter(ev => {
-    const matchesDay = occursOnDate(ev, dateStr);
-    const matchesPerson = personFilter === 'all' || ev.personIds?.includes(personFilter);
-    return matchesDay && matchesPerson;
-  });
-
-  const dayEvents = eventsForDay(selectedDay);
+  const startOffset = (new Date(year, month, 1).getDay() + 6) % 7;
+  
+  const cells = Array(startOffset).fill(null).concat(Array.from({length: daysInMonth}, (_, i) => toDateStr(new Date(year, month, i + 1))));
+  const dayEvents = data.events.filter(ev => occursOnDate(ev, selectedDay) && (personFilter === 'all' || ev.personIds?.includes(personFilter)));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fadeIn">
       <div className="flex items-center justify-between px-1">
         <button onClick={() => setMonthAnchor(addMonths(monthAnchor, -1))} className="p-2 rounded-xl hover:bg-stone-800"><ChevronLeft size={20} /></button>
-        <h2 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-xl font-bold capitalize">{MONTHS[month]} {year}</h2>
+        <h2 style={{ fontFamily: 'Fraunces' }} className="text-xl font-bold capitalize text-stone-100">{MONTHS[month]} {year}</h2>
         <button onClick={() => setMonthAnchor(addMonths(monthAnchor, 1))} className="p-2 rounded-xl hover:bg-stone-800"><ChevronRight size={20} /></button>
       </div>
 
       <div className="flex gap-1.5 overflow-x-auto pb-1 px-1 no-scrollbar">
         <button onClick={() => setPersonFilter('all')} style={{ background: personFilter === 'all' ? COLORS.accent : COLORS.surface, color: personFilter === 'all' ? '#121214' : COLORS.ink, borderColor: COLORS.border }} className="px-3 py-1 rounded-full border text-xs font-semibold shrink-0">Wszyscy</button>
-        {data.people.map(p => (
-          <button key={p.id} onClick={() => setPersonFilter(p.id)} style={{ background: personFilter === p.id ? p.color : COLORS.surface, color: personFilter === p.id ? '#fff' : p.color, borderColor: p.color }} className="px-3 py-1 rounded-full border text-xs font-semibold shrink-0 flex items-center gap-1">
-            <Chip person={p} size="sm" /> {p.name}
-          </button>
-        ))}
+        {data.people.map(p => <button key={p.id} onClick={() => setPersonFilter(p.id)} style={{ background: personFilter === p.id ? p.color : COLORS.surface, color: personFilter === p.id ? '#fff' : p.color, borderColor: p.color }} className="px-3 py-1 rounded-full border text-xs font-semibold shrink-0 flex items-center gap-1"><Chip person={p} size="sm" /> {p.name}</button>)}
       </div>
 
-      <div className="border rounded-2xl p-3 shadow-xs" style={{ background: COLORS.surface, borderColor: COLORS.border }}>
+      <div className="border rounded-2xl p-3 shadow-xs bg-[#1E1E22] border-[#33333C]">
         <div className="grid grid-cols-7 gap-1 mb-2">
-          {WEEKDAYS.map(w => <div key={w} style={{ color: COLORS.inkSoft }} className="text-center text-[10px] uppercase font-bold tracking-wider">{w}</div>)}
+          {WEEKDAYS.map(w => <div key={w} className="text-center text-[10px] uppercase font-bold tracking-wider text-stone-500">{w}</div>)}
         </div>
         <div className="grid grid-cols-7 gap-1">
           {cells.map((dateStr, i) => {
             if (!dateStr) return <div key={i} className="aspect-square" />;
-            const evs = eventsForDay(dateStr);
             const isToday = dateStr === todayStr();
             const isSelected = dateStr === selectedDay;
+            const evs = data.events.filter(ev => occursOnDate(ev, dateStr));
             return (
-              <button key={dateStr} onClick={() => setSelectedDay(dateStr)}
-                style={{
-                  background: isSelected ? COLORS.accent : isToday ? COLORS.accentSoft : 'transparent',
-                  color: isSelected ? '#121214' : COLORS.ink,
-                  borderColor: isToday && !isSelected ? COLORS.accent : 'transparent'
-                }}
-                className={`aspect-square rounded-xl flex flex-col items-center justify-between p-1 relative text-xs border transition ${isSelected ? 'shadow-md font-bold' : 'hover:bg-stone-800'}`}>
+              <button key={dateStr} onClick={() => setSelectedDay(dateStr)} style={{ background: isSelected ? COLORS.accent : isToday ? COLORS.accentSoft : 'transparent', color: isSelected ? '#121214' : COLORS.ink, borderColor: isToday && !isSelected ? COLORS.accent : 'transparent' }} className={`aspect-square rounded-xl flex flex-col items-center justify-between p-1 relative text-xs border ${isSelected ? 'shadow-md font-bold' : ''}`}>
                 <span className={`font-semibold ${isToday ? 'underline font-bold' : ''}`}>{dayOfMonth(dateStr)}</span>
-                {evs.length > 0 && (
-                  <div className="flex gap-0.5 justify-center flex-wrap max-w-full">
-                    {evs.slice(0, 3).map((ev, idx) => {
-                      const p = data.people.find(pp => ev.personIds?.[0] === pp.id);
-                      return <span key={idx} style={{ background: isSelected ? '#121214' : (p ? p.color : COLORS.inkSoft) }} className="w-1.5 h-1.5 rounded-full" />;
-                    })}
-                  </div>
-                )}
+                {evs.length > 0 && <div className="flex gap-0.5 justify-center flex-wrap max-w-full">{evs.slice(0, 3).map((ev, idx) => { const p = data.people.find(pp => ev.personIds?.[0] === pp.id); return <span key={idx} style={{ background: isSelected ? '#121214' : (p ? p.color : COLORS.inkSoft) }} className="w-1.5 h-1.5 rounded-full" />; })}</div>}
               </button>
             );
           })}
         </div>
       </div>
 
-      <Section
-        title={parseDate(selectedDay).toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}
-        action={
-          <button onClick={() => onOpenAdd(selectedDay)} style={{ background: COLORS.accent, color: '#121214' }} className="rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1 shadow-xs">
-            <Plus size={14} /> Dodaj wydarzenie
-          </button>
-        }
-      >
-        {dayEvents.length === 0 ? <EmptyState text="Brak zaplanowanych wydarzeń w tym dniu" /> : (
+      <Section title={parseDate(selectedDay).toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })} action={<button onClick={() => onOpenAdd(selectedDay)} style={{ background: COLORS.accent, color: '#121214' }} className="rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1"><Plus size={14} /> Dodaj</button>}>
+        {dayEvents.length === 0 ? <EmptyState text="Brak wydarzeń w tym dniu" /> : (
           <div className="space-y-2">
             {dayEvents.sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99')).map(ev => (
-              <div key={ev.id} onClick={() => onOpenEvent(ev)} style={{ background: COLORS.surface, borderColor: COLORS.border }} className="w-full border rounded-2xl p-3.5 text-left shadow-2xs hover:shadow-xs transition cursor-pointer">
+              <div key={ev.id} onClick={() => onOpenEvent(ev)} className="w-full border rounded-2xl p-3.5 text-left bg-[#1E1E22] border-[#33333C] cursor-pointer">
                 <div className="flex items-center gap-2.5">
-                  {ev.time ? (
-                    <span style={{ fontFamily: 'IBM Plex Mono', color: COLORS.accent, background: '#2B261D' }} className="text-xs px-2 py-0.5 rounded-md font-semibold">{ev.time}</span>
-                  ) : (
-                    <span className="text-xs text-stone-500 font-mono">Cały dzień</span>
-                  )}
-                  <span className="text-sm font-semibold flex-1 truncate" style={{ color: COLORS.ink }}>{ev.title}</span>
-                  {ev.recurrence?.freq !== 'none' && <Repeat size={14} style={{ color: COLORS.inkSoft }} />}
+                  {ev.time ? <span style={{ color: COLORS.accent, background: '#2B261D' }} className="text-xs px-2 py-0.5 rounded-md font-semibold font-mono">{ev.time}</span> : <span className="text-xs text-stone-500 font-mono">Cały dzień</span>}
+                  <span className="text-sm font-semibold flex-1 truncate">{ev.title}</span>
+                  {ev.recurrence?.freq !== 'none' && <Repeat size={14} className="text-stone-500" />}
                 </div>
-                {ev.note && <div className="text-xs mt-1.5 line-clamp-1" style={{ color: COLORS.inkSoft }}>{ev.note}</div>}
                 <PersonRow people={data.people} personIds={ev.personIds} />
               </div>
             ))}
@@ -1050,55 +578,26 @@ function CalendarView({ data, onOpenAdd, onOpenEvent }) {
 function TasksView({ data, onToggleTask, onDeleteTask, onOpenTask, onOpenAddTask }) {
   const today = todayStr();
   const [filter, setFilter] = useState('all');
-  const [search, setSearch] = useState('');
-
-  const visible = data.tasks.filter(t => {
-    const matchesPerson = filter === 'all' || t.personIds?.includes(filter);
-    const matchesSearch = t.title.toLowerCase().includes(search.toLowerCase());
-    return matchesPerson && matchesSearch;
-  });
-
+  const visible = data.tasks.filter(t => filter === 'all' || t.personIds?.includes(filter));
   const pending = visible.filter(t => !isTaskDoneForPeriod(t, today));
   const done = visible.filter(t => isTaskDoneForPeriod(t, today));
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 animate-fadeIn">
       <div className="flex items-center justify-between px-1">
-        <h2 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-2xl font-bold">Zadania i domowe obowiązki</h2>
-        <button onClick={() => onOpenAddTask(today)} style={{ background: COLORS.accent, color: '#121214' }} className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs shrink-0 ml-2">
-          <Plus size={14} /> Nowe zadanie
-        </button>
+        <h2 style={{ fontFamily: 'Fraunces' }} className="text-2xl font-bold text-stone-100">Zadania</h2>
+        <button onClick={() => onOpenAddTask(today)} style={{ background: COLORS.accent, color: '#121214' }} className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1"><Plus size={14} /> Zadanie</button>
       </div>
 
-      <div className="space-y-2">
-        <div className="relative">
-          <Search size={16} className="absolute left-3.5 top-3 text-stone-500" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Szukaj w zadaniach..."
-            className="w-full border rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none bg-stone-900 text-stone-100"
-            style={{ borderColor: COLORS.border }}
-          />
-        </div>
-
-        <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-          <button onClick={() => setFilter('all')} style={{ background: filter === 'all' ? COLORS.accent : COLORS.surface, color: filter === 'all' ? '#121214' : COLORS.ink, borderColor: COLORS.border }} className="px-3 py-1 rounded-full border text-xs font-semibold shrink-0">Wszyscy</button>
-          {data.people.map(p => (
-            <button key={p.id} onClick={() => setFilter(p.id)} style={{ background: filter === p.id ? p.color : COLORS.surface, color: filter === p.id ? '#fff' : p.color, borderColor: p.color }} className="px-3 py-1 rounded-full border text-xs font-semibold shrink-0 flex items-center gap-1">
-              <Chip person={p} size="sm" /> {p.name}
-            </button>
-          ))}
-        </div>
+      <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+        <button onClick={() => setFilter('all')} style={{ background: filter === 'all' ? COLORS.accent : COLORS.surface, color: filter === 'all' ? '#121214' : COLORS.ink, borderColor: COLORS.border }} className="px-3 py-1 rounded-full border text-xs font-semibold shrink-0">Wszyscy</button>
+        {data.people.map(p => <button key={p.id} onClick={() => setFilter(p.id)} style={{ background: filter === p.id ? p.color : COLORS.surface, color: filter === p.id ? '#fff' : p.color, borderColor: p.color }} className="px-3 py-1 rounded-full border text-xs font-semibold shrink-0 flex items-center gap-1"><Chip person={p} size="sm" /> {p.name}</button>)}
       </div>
 
       <Section title={`Do zrobienia (${pending.length})`}>
-        {pending.length === 0 ? <EmptyState text="Wszystko zrobione! Czas na odpoczynek 🎉" icon={CheckSquare} /> : (
+        {pending.length === 0 ? <EmptyState text="Wszystko zrobione!" icon={CheckSquare} /> : (
           <div className="space-y-2">
-            {pending.map(t => (
-              <TaskRow key={t.id} t={t} people={data.people} today={today} onToggle={onToggleTask} onDelete={onDeleteTask} onOpen={onOpenTask} />
-            ))}
+            {pending.map(t => <TaskRow key={t.id} t={t} people={data.people} today={today} onToggle={onToggleTask} onDelete={onDeleteTask} onOpen={onOpenTask} />)}
           </div>
         )}
       </Section>
@@ -1106,9 +605,7 @@ function TasksView({ data, onToggleTask, onDeleteTask, onOpenTask, onOpenAddTask
       {done.length > 0 && (
         <Section title={`Wykonane (${done.length})`}>
           <div className="space-y-2 opacity-60">
-            {done.map(t => (
-              <TaskRow key={t.id} t={t} people={data.people} today={today} onToggle={onToggleTask} onDelete={onDeleteTask} onOpen={onOpenTask} />
-            ))}
+            {done.map(t => <TaskRow key={t.id} t={t} people={data.people} today={today} onToggle={onToggleTask} onDelete={onDeleteTask} onOpen={onOpenTask} />)}
           </div>
         </Section>
       )}
@@ -1120,88 +617,69 @@ function TaskRow({ t, people, today, onToggle, onDelete, onOpen }) {
   const isDone = isTaskDoneForPeriod(t, today);
   const isOverdue = (t.recurrence?.freq || 'none') === 'none' && t.dueDate < today && !isDone;
   return (
-    <div onClick={() => onOpen(t)} style={{ background: COLORS.surface, borderColor: isOverdue ? COLORS.warn : COLORS.border }} className="border rounded-2xl p-3.5 flex items-start gap-3 shadow-2xs hover:shadow-xs transition cursor-pointer">
-      <button 
-        onClick={(e) => { e.stopPropagation(); onToggle(t); }} 
-        style={{ borderColor: isDone ? COLORS.success : COLORS.inkSoft, background: isDone ? COLORS.success : 'transparent' }} 
-        className="w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors mt-0.5 bg-stone-900/50"
-      >
+    <div onClick={() => onOpen(t)} style={{ background: COLORS.surface, borderColor: isOverdue ? COLORS.warn : COLORS.border }} className="border rounded-2xl p-3.5 flex items-start gap-3 cursor-pointer">
+      <button onClick={(e) => { e.stopPropagation(); onToggle(t); }} style={{ borderColor: isDone ? COLORS.success : COLORS.inkSoft, background: isDone ? COLORS.success : 'transparent' }} className="w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 mt-0.5 bg-stone-900/50">
         {isDone && <Check size={14} color="#fff" strokeWidth={3} />}
       </button>
       <div className="flex-1 min-w-0">
-        <div style={{ color: COLORS.ink, textDecoration: isDone ? 'line-through' : 'none' }} className={`text-sm font-semibold truncate block ${isDone ? 'opacity-50' : ''}`}>{t.title}</div>
+        <div style={{ textDecoration: isDone ? 'line-through' : 'none' }} className={`text-sm font-semibold truncate ${isDone ? 'opacity-50' : ''}`}>{t.title}</div>
         <div className="flex items-center gap-2 mt-0.5 mb-1">
           <span className="text-[11px] font-mono text-stone-500">Termin: {t.dueDate}</span>
-          {t.recurrence?.freq !== 'none' && (
-            <span style={{ color: COLORS.inkSoft }} className="text-[10px] bg-stone-800 px-1.5 py-0.2 rounded flex items-center gap-0.5"><Repeat size={10} /> {RECURRENCE_LABELS[t.recurrence.freq]}</span>
-          )}
-          {isOverdue && <span style={{ color: COLORS.warn }} className="text-[11px] font-bold">Zaległe!</span>}
+          {t.recurrence?.freq !== 'none' && <span className="text-[10px] bg-stone-800 text-stone-400 px-1.5 py-0.5 rounded flex items-center gap-0.5"><Repeat size={10} /> {RECURRENCE_LABELS[t.recurrence.freq]}</span>}
+          {isOverdue && <span className="text-[11px] font-bold text-red-400">Zaległe!</span>}
         </div>
         <PersonRow people={people} personIds={t.personIds} />
       </div>
-      <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="p-1 hover:text-red-400 text-stone-500 mt-1"><Trash2 size={16} /></button>
+      <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="p-1 text-stone-500 hover:text-red-400"><Trash2 size={16} /></button>
     </div>
   );
 }
 
 function NotesView({ notes, onDelete, onConvert, onEdit, onToggleItem, onOpenAddNote }) {
   const sorted = [...notes].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 animate-fadeIn">
       <div className="flex items-center justify-between px-1">
-        <h2 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-2xl font-bold">Notatki</h2>
-        <button onClick={onOpenAddNote} style={{ background: COLORS.accent, color: '#121214' }} className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs">
-          <Plus size={14} /> Dodaj notatkę
-        </button>
+        <div>
+          <h2 style={{ fontFamily: 'Fraunces' }} className="text-2xl font-bold text-stone-100">Notatki</h2>
+          <p className="text-xs text-stone-400">Prywatne notatki i listy</p>
+        </div>
+        <button onClick={onOpenAddNote} style={{ background: COLORS.accent, color: '#121214' }} className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1"><Plus size={14} /> Notatka</button>
       </div>
 
-      {sorted.length === 0 ? <EmptyState text="Brak zapisanych notatek lub list zakupów" icon={StickyNote} /> : (
+      {sorted.length === 0 ? <EmptyState text="Brak zapisanych notatek" icon={StickyNote} /> : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {sorted.map(n => (
-            <div key={n.id} style={{ background: COLORS.surface, borderColor: COLORS.border }} className="border rounded-2xl p-4 flex flex-col justify-between shadow-2xs hover:shadow-xs transition">
+            <div key={n.id} style={{ background: COLORS.surface, borderColor: COLORS.border }} className="border rounded-2xl p-4 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-stone-800 text-stone-400 font-semibold">
-                    Notatka
+                  <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-amber-900/30 text-amber-500 border border-amber-900/50 font-semibold flex items-center gap-1">
+                    Prywatne
                   </span>
                   <div className="flex gap-1">
-                    <button onClick={() => onEdit(n)} className="p-1 text-stone-500 hover:text-stone-200"><Pencil size={15} /></button>
+                    <button onClick={() => onEdit(n)} className="p-1 text-stone-500"><Pencil size={15} /></button>
                     <button onClick={() => onDelete(n.id)} className="p-1 text-stone-500 hover:text-red-400"><Trash2 size={15} /></button>
                   </div>
                 </div>
-
-                {n.text && (
-                  <p className="text-sm whitespace-pre-wrap my-1 font-normal text-stone-200">{n.text}</p>
-                )}
-
-                {n.items && n.items.length > 0 && (
+                {n.text && <p className="text-sm whitespace-pre-wrap my-1 text-stone-200">{n.text}</p>}
+                {n.items?.length > 0 && (
                   <div className="space-y-1.5 my-2">
                     {n.items.map(item => (
-                      <button key={item.id} onClick={() => onToggleItem(n.id, item.id)} className="flex items-center gap-2.5 w-full text-left group">
-                        <span style={{ borderColor: item.done ? COLORS.success : COLORS.border, background: item.done ? COLORS.success : 'transparent' }} className="w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors">
+                      <button key={item.id} onClick={() => onToggleItem(n.id, item.id)} className="flex items-center gap-2.5 w-full text-left">
+                        <span style={{ borderColor: item.done ? COLORS.success : COLORS.border, background: item.done ? COLORS.success : 'transparent' }} className="w-4 h-4 rounded border-2 flex items-center justify-center shrink-0">
                           {item.done && <Check size={10} color="#fff" strokeWidth={3} />}
                         </span>
-                        <span style={{ color: item.done ? COLORS.inkSoft : COLORS.ink, textDecoration: item.done ? 'line-through' : 'none' }} className="text-sm font-medium flex-1">
-                          {item.text}
-                        </span>
+                        <span style={{ textDecoration: item.done ? 'line-through' : 'none' }} className={`text-sm font-medium flex-1 ${item.done ? 'text-stone-500' : 'text-stone-100'}`}>{item.text}</span>
                       </button>
                     ))}
                   </div>
                 )}
               </div>
-
-              <div className="pt-3 border-t mt-2 flex items-center justify-between" style={{ borderColor: COLORS.border }}>
-                <span className="text-[10px] font-mono text-stone-500">
-                  {new Date(n.createdAt).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })}
-                </span>
+              <div className="pt-3 border-t border-stone-800 mt-2 flex items-center justify-between">
+                <span className="text-[10px] font-mono text-stone-500">{new Date(n.createdAt).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })}</span>
                 <div className="flex gap-1">
-                  <button onClick={() => onConvert(n, 'task')} title="Zamień na zadanie" className="border px-2 py-1 rounded-lg text-[10px] font-semibold flex items-center gap-1 hover:bg-stone-800" style={{ borderColor: COLORS.border, color: COLORS.ink }}>
-                    <CheckSquare size={12} /> Zadanie
-                  </button>
-                  <button onClick={() => onConvert(n, 'event')} title="Zamień na wydarzenie" className="border px-2 py-1 rounded-lg text-[10px] font-semibold flex items-center gap-1 hover:bg-stone-800" style={{ borderColor: COLORS.border, color: COLORS.ink }}>
-                    <Calendar size={12} /> Wydarzenie
-                  </button>
+                  <button onClick={() => onConvert(n, 'task')} className="border border-stone-700 px-2 py-1 rounded-lg text-[10px] font-semibold flex items-center gap-1 hover:bg-stone-800"><CheckSquare size={12} /> Zadanie</button>
+                  <button onClick={() => onConvert(n, 'event')} className="border border-stone-700 px-2 py-1 rounded-lg text-[10px] font-semibold flex items-center gap-1 hover:bg-stone-800"><Calendar size={12} /> Wydarz.</button>
                 </div>
               </div>
             </div>
@@ -1213,66 +691,32 @@ function NotesView({ notes, onDelete, onConvert, onEdit, onToggleItem, onOpenAdd
 }
 
 function WallView({ wall = [], people, onDeleteWallMessage, onTogglePinWallMessage, onOpenAddWall }) {
-  const sorted = [...wall].sort((a, b) => {
-    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-    return b.createdAt.localeCompare(a.createdAt);
-  });
-
+  const sorted = [...wall].sort((a, b) => (a.isPinned !== b.isPinned ? (a.isPinned ? -1 : 1) : b.createdAt.localeCompare(a.createdAt)));
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 animate-fadeIn">
       <div className="flex items-center justify-between px-1">
-        <div>
-          <h2 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-2xl font-bold">Tablica Wiadomości</h2>
-          <p className="text-xs text-stone-400">Wirtualna korkówka lodówki</p>
-        </div>
-        <button onClick={onOpenAddWall} style={{ background: COLORS.accent, color: '#121214' }} className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs">
-          <Plus size={14} /> Wiadomość
-        </button>
+        <div><h2 style={{ fontFamily: 'Fraunces' }} className="text-2xl font-bold text-stone-100">Tablica</h2><p className="text-xs text-stone-400">Wirtualna korkówka</p></div>
+        <button onClick={onOpenAddWall} style={{ background: COLORS.accent, color: '#121214' }} className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1"><Plus size={14} /> Wiadomość</button>
       </div>
-
-      {sorted.length === 0 ? (
-        <EmptyState text="Brak wiadomości na tablicy" icon={MessageSquare} />
-      ) : (
+      {sorted.length === 0 ? <EmptyState text="Brak wiadomości" icon={MessageSquare} /> : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {sorted.map(msg => {
             const author = people.find(p => p.id === msg.personId);
             return (
-              <div 
-                key={msg.id} 
-                style={{ background: msg.color || COLORS.surface, borderColor: msg.isPinned ? COLORS.accent : COLORS.border }} 
-                className="border rounded-2xl p-4 flex flex-col justify-between shadow-2xs hover:shadow-xs transition relative"
-              >
+              <div key={msg.id} style={{ background: msg.color || COLORS.surface, borderColor: msg.isPinned ? COLORS.accent : COLORS.border }} className="border rounded-2xl p-4 flex flex-col justify-between relative">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2 bg-black/20 pr-2.5 rounded-full">
-                      <Chip person={author} size="sm" />
-                      <span className="text-xs font-bold text-stone-200">{author?.name || 'Domownik'}</span>
-                    </div>
+                    <div className="flex items-center gap-2 bg-black/20 pr-2.5 rounded-full"><Chip person={author} size="sm" /><span className="text-xs font-bold text-stone-200">{author?.name || 'Domownik'}</span></div>
                     <div className="flex items-center gap-1">
-                      <button 
-                        onClick={() => onTogglePinWallMessage(msg.id)} 
-                        className={`p-1 rounded transition ${msg.isPinned ? 'text-amber-400' : 'text-stone-500 hover:text-stone-300'}`}
-                      >
-                        <Pin size={15} />
-                      </button>
-                      <button onClick={() => onDeleteWallMessage(msg.id)} className="p-1 text-stone-500 hover:text-red-400">
-                        <Trash2 size={15} />
-                      </button>
+                      <button onClick={() => onTogglePinWallMessage(msg.id)} className={`p-1 rounded ${msg.isPinned ? 'text-amber-400' : 'text-stone-500'}`}><Pin size={15} /></button>
+                      <button onClick={() => onDeleteWallMessage(msg.id)} className="p-1 text-stone-500 hover:text-red-400"><Trash2 size={15} /></button>
                     </div>
                   </div>
-
                   <p className="text-sm whitespace-pre-wrap my-2 text-stone-100 font-medium">{msg.text}</p>
                 </div>
-
                 <div className="pt-2 border-t mt-2 flex items-center justify-between border-stone-800/80">
-                  <span className="text-[10px] font-mono text-stone-500">
-                    {new Date(msg.createdAt).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                  {msg.isPinned && (
-                    <span className="text-[10px] font-bold text-amber-400 flex items-center gap-0.5">
-                      <Pin size={10} /> Przypięte
-                    </span>
-                  )}
+                  <span className="text-[10px] font-mono text-stone-500">{new Date(msg.createdAt).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                  {msg.isPinned && <span className="text-[10px] font-bold text-amber-400 flex items-center gap-0.5"><Pin size={10} /> Przypięte</span>}
                 </div>
               </div>
             );
@@ -1285,88 +729,38 @@ function WallView({ wall = [], people, onDeleteWallMessage, onTogglePinWallMessa
 
 function MealsView({ meals, onUpdateMeal }) {
   const [mondayAnchor, setMondayAnchor] = useState(getMonday(todayStr()));
-
-  const days = [0, 1, 2, 3, 4, 5, 6].map(offset => addDays(mondayAnchor, offset));
+  const days = Array(7).fill(0).map((_, i) => addDays(mondayAnchor, i));
   const weekMeals = meals?.[mondayAnchor] || {};
 
-  const handleMealChange = (dayIdx, mealType, value) => {
-    const updatedWeek = {
-      ...weekMeals,
-      [dayIdx]: {
-        ...(weekMeals[dayIdx] || {}),
-        [mealType]: value
-      }
-    };
-    onUpdateMeal(mondayAnchor, updatedWeek);
-  };
-
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 animate-fadeIn">
       <div className="flex items-center justify-between px-1">
-        <div>
-          <h2 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-2xl font-bold">Planer Posiłków</h2>
-          <p className="text-xs text-stone-400">Jadłospis na cały tydzień</p>
-        </div>
-        <div className="flex items-center gap-2 border rounded-xl p-1" style={{ background: COLORS.surface, borderColor: COLORS.border }}>
+        <div><h2 style={{ fontFamily: 'Fraunces' }} className="text-2xl font-bold text-stone-100">Posiłki</h2><p className="text-xs text-stone-400">Jadłospis</p></div>
+        <div className="flex items-center gap-2 border rounded-xl p-1 bg-[#1E1E22] border-[#33333C]">
           <button onClick={() => setMondayAnchor(addDays(mondayAnchor, -7))} className="p-1 rounded-lg hover:bg-stone-800"><ChevronLeft size={18} /></button>
           <span className="text-xs font-mono font-semibold">{parseDate(mondayAnchor).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })}</span>
           <button onClick={() => setMondayAnchor(addDays(mondayAnchor, 7))} className="p-1 rounded-lg hover:bg-stone-800"><ChevronRight size={18} /></button>
         </div>
       </div>
-
       <div className="space-y-3">
         {days.map((dateStr, idx) => {
           const isToday = dateStr === todayStr();
-          const dayMeal = weekMeals[idx] || {};
-
+          const dm = weekMeals[idx] || {};
           return (
             <div key={dateStr} style={{ background: isToday ? COLORS.accentSoft : COLORS.surface, borderColor: isToday ? COLORS.accent : COLORS.border }} className="border rounded-2xl p-4 shadow-2xs">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs font-bold uppercase font-mono px-2 py-0.5 rounded ${isToday ? 'bg-amber-500 text-stone-950' : 'bg-stone-800 text-stone-300'}`}>
-                    {WEEKDAYS[idx]}
-                  </span>
-                  <span className="text-xs font-semibold text-stone-400">
-                    {parseDate(dateStr).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' })}
-                  </span>
+                  <span className={`text-xs font-bold uppercase font-mono px-2 py-0.5 rounded ${isToday ? 'bg-amber-500 text-stone-950' : 'bg-stone-800 text-stone-300'}`}>{WEEKDAYS[idx]}</span>
+                  <span className="text-xs font-semibold text-stone-400">{parseDate(dateStr).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' })}</span>
                 </div>
-                {isToday && <span className="text-[10px] font-bold text-amber-400">DZIŚ</span>}
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <div>
-                  <label className="text-[10px] font-bold uppercase text-stone-500 block mb-0.5">Śniadanie</label>
-                  <input
-                    type="text"
-                    value={dayMeal.breakfast || ''}
-                    onChange={e => handleMealChange(idx, 'breakfast', e.target.value)}
-                    placeholder="np. Naleśniki"
-                    className="w-full border rounded-xl px-2.5 py-1.5 text-xs focus:outline-none bg-stone-900 text-stone-200"
-                    style={{ borderColor: COLORS.border }}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase text-stone-500 block mb-0.5">Obiad</label>
-                  <input
-                    type="text"
-                    value={dayMeal.lunch || ''}
-                    onChange={e => handleMealChange(idx, 'lunch', e.target.value)}
-                    placeholder="np. Rosół i kotlety"
-                    className="w-full border rounded-xl px-2.5 py-1.5 text-xs focus:outline-none font-semibold bg-stone-900 text-amber-300"
-                    style={{ borderColor: COLORS.border }}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase text-stone-500 block mb-0.5">Kolacja</label>
-                  <input
-                    type="text"
-                    value={dayMeal.dinner || ''}
-                    onChange={e => handleMealChange(idx, 'dinner', e.target.value)}
-                    placeholder="np. Kanapki"
-                    className="w-full border rounded-xl px-2.5 py-1.5 text-xs focus:outline-none bg-stone-900 text-stone-200"
-                    style={{ borderColor: COLORS.border }}
-                  />
-                </div>
+                {['breakfast', 'lunch', 'dinner'].map((type, i) => (
+                  <div key={type}>
+                    <label className="text-[10px] font-bold uppercase text-stone-500 block mb-0.5">{['Śniadanie', 'Obiad', 'Kolacja'][i]}</label>
+                    <input type="text" value={dm[type] || ''} onChange={e => onUpdateMeal(mondayAnchor, { ...weekMeals, [idx]: { ...dm, [type]: e.target.value } })} placeholder="np. Naleśniki" className="w-full border border-stone-700 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none bg-stone-900 text-stone-200" />
+                  </div>
+                ))}
               </div>
             </div>
           );
@@ -1376,98 +770,48 @@ function MealsView({ meals, onUpdateMeal }) {
   );
 }
 
-
-function SettingsView({ familyInfo, profile, data, onUpdateSettings, onAddPerson, onEditPerson, onDeletePerson, onExport, onImport, isCloudConnected, onSignOut, onSelectProfile }) {
-  const enableMeals = data.settings?.enableMeals ?? true;
-  const enableWall = data.settings?.enableWall ?? true;
-
-  const handleCurrentUserChange = (e) => {
-    const val = e.target.value;
-    onSelectProfile(val === 'null' ? null : val);
-  };
-
+function SettingsView({ family, profile, settings, onUpdateSettings, people, onAddPerson, onEditPerson, onDeletePerson, onSignOut }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeIn">
       <div className="flex items-center justify-between px-1">
-        <div>
-          <h2 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-2xl font-bold">Opcje i Ustawienia</h2>
-          <p className="text-xs text-stone-400">Zarządzaj swoją rodziną i aplikacją</p>
+        <div><h2 style={{ fontFamily: 'Fraunces' }} className="text-2xl font-bold text-stone-100">Ustawienia</h2></div>
+        <button onClick={onSignOut} className="px-3 py-1.5 bg-stone-800 rounded-xl border border-stone-700 text-xs font-bold flex items-center gap-2 hover:bg-red-900/30 hover:text-red-400 transition"><LogOut size={14} /> Wyloguj</button>
+      </div>
+
+      <div className="bg-[#1E1E22] border border-emerald-900/50 rounded-2xl p-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Wifi size={20} className="text-emerald-400" />
+          <div><div className="text-sm font-bold text-emerald-400">Połączono z chmurą</div><div className="text-xs text-stone-400">Synchronizacja działa.</div></div>
         </div>
       </div>
 
-      {/* Stan połączenia z chmurą */}
-      <div style={{ background: COLORS.surface, borderColor: isCloudConnected ? COLORS.success : COLORS.warn }} className="border rounded-2xl p-4 flex items-center gap-3">
-        {isCloudConnected ? <Wifi size={20} className="text-emerald-400" /> : <WifiOff size={20} className="text-red-400" />}
+      <div className="bg-[#1E1E22] border border-[#33333C] rounded-2xl p-4 space-y-4">
+        <h3 className="text-sm font-bold border-b border-[#33333C] pb-2 flex items-center gap-2 text-stone-100"><Users size={16} className="text-amber-400" /> Twoja Rodzina</h3>
         <div>
-          <div className="text-sm font-bold">{isCloudConnected ? 'Zsynchronizowano z chmurą' : 'Tryb Offline'}</div>
-          <div className="text-xs text-stone-400">
-            {isCloudConnected ? 'Zmiany są natychmiast widoczne u wszystkich domowników.' : 'Brak połączenia z siecią.'}
-          </div>
+          <label className="text-xs font-semibold mb-1 block text-stone-400">Nazwa Rodziny</label>
+          <input type="text" value={family?.name || ''} readOnly className="w-full border border-[#33333C] rounded-xl px-3 py-2 text-sm bg-stone-900 text-stone-400 cursor-not-allowed" />
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block text-stone-400">Kod dołączenia dla innych</label>
+          <div className="text-lg font-mono font-bold tracking-widest text-amber-400 bg-amber-900/20 px-4 py-2 rounded-xl inline-block border border-amber-900/50">{family?.join_code}</div>
+          <p className="text-[10px] text-stone-500 mt-1">Podaj ten kod innym domownikom, by dołączyli do tej rodziny na swoich telefonach.</p>
         </div>
       </div>
 
-      {/* Kod dołączania */}
-      {isCloudConnected && familyInfo && (
-        <div className="border border-stone-800 bg-stone-900/50 rounded-2xl p-4 shadow-2xs">
-          <h3 className="text-sm font-bold border-b border-stone-800 pb-2 mb-3 flex items-center gap-2 text-stone-200">
-            <Key size={16} className="text-amber-400" /> Kod Twojej Rodziny
-          </h3>
-          <p className="text-xs text-stone-400 mb-3">Zaproś domowników. Niech wpiszą ten kod po zalogowaniu na swoim telefonie:</p>
-          <div className="flex items-center justify-between bg-black/40 px-4 py-3 rounded-xl border border-stone-800">
-            <span className="font-mono text-2xl tracking-widest font-bold text-amber-400">{familyInfo.join_code}</span>
-            <button onClick={() => navigator.clipboard.writeText(familyInfo.join_code)} className="p-2 bg-stone-800 hover:bg-stone-700 rounded-lg text-stone-300"><Copy size={18} /></button>
-          </div>
-        </div>
-      )}
-
-      {/* Sekcja: Personalizacja */}
-      <div style={{ background: COLORS.surface, borderColor: COLORS.border }} className="border rounded-2xl p-4 space-y-4 shadow-2xs">
-        <h3 className="text-sm font-bold border-b pb-2 flex items-center gap-2" style={{ borderColor: COLORS.border, color: COLORS.ink }}>
-          <Smile size={16} className="text-amber-400" /> Twój Profil w Rodzinie
-        </h3>
-
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: COLORS.inkSoft }}>
-            Kim jesteś? (Prywatne na tym telefonie)
-          </label>
-          <select
-            value={profile?.person_id || 'null'}
-            onChange={handleCurrentUserChange}
-            className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none bg-stone-900 text-stone-100 cursor-pointer"
-            style={{ borderColor: COLORS.border }}
-          >
-            <option value="null">-- Wybierz swój profil --</option>
-            {data.people.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <p className="text-[10px] text-stone-500 mt-1">Wybranie profilu ułatwia przypisywanie zadań. Ustawienie zapisuje się tylko u Ciebie.</p>
-        </div>
-      </div>
-
-      {/* Sekcja: Rodzina */}
       <div className="space-y-3 mt-4">
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: COLORS.ink }}>
-            <Users size={16} className="text-amber-400" /> Członkowie Rodziny
-          </h3>
-          <button onClick={onAddPerson} style={{ background: COLORS.accent, color: '#121214' }} className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs hover:opacity-90">
-            <Plus size={14} /> Dodaj osobę
-          </button>
+          <h3 className="text-sm font-bold text-stone-100">Członkowie Rodziny</h3>
+          <button onClick={onAddPerson} className="px-3 py-1.5 bg-amber-500 text-stone-950 rounded-xl text-xs font-bold flex items-center gap-1"><Plus size={14} /> Dodaj</button>
         </div>
         <div className="grid grid-cols-1 gap-2">
-          {data.people.map(p => (
-            <div key={p.id} style={{ background: COLORS.surface, borderColor: COLORS.border }} className="border rounded-2xl p-3.5 flex items-center justify-between shadow-2xs">
+          {people.map(p => (
+            <div key={p.id} className="bg-[#1E1E22] border border-[#33333C] rounded-2xl p-3.5 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Chip person={p} size="lg" />
-                <div>
-                  <div className="text-sm font-bold flex items-center gap-1" style={{ color: COLORS.ink }}>
-                    {p.name} {profile?.person_id === p.id && <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 rounded">To Ty</span>}
-                  </div>
-                </div>
+                <div><div className="text-sm font-bold text-stone-100 flex items-center gap-2">{p.name} {profile?.person_id === p.id && <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 rounded">To Ty</span>}</div></div>
               </div>
               <div className="flex gap-1">
-                <button onClick={() => onEditPerson(p)} className="p-2 text-stone-500 hover:text-stone-200 bg-stone-800 rounded-lg"><Pencil size={15} /></button>
+                <button onClick={() => onEditPerson(p)} className="p-2 text-stone-500 bg-stone-800 rounded-lg"><Pencil size={15} /></button>
                 <button onClick={() => onDeletePerson(p.id)} className="p-2 text-stone-500 hover:text-red-400 bg-stone-800 rounded-lg"><Trash2 size={15} /></button>
               </div>
             </div>
@@ -1475,54 +819,24 @@ function SettingsView({ familyInfo, profile, data, onUpdateSettings, onAddPerson
         </div>
       </div>
 
-      {/* Sekcja: Moduły */}
-      <div style={{ background: COLORS.surface, borderColor: COLORS.border }} className="border rounded-2xl p-4 space-y-4 shadow-2xs">
-        <h3 className="text-sm font-bold border-b pb-2 flex items-center gap-2" style={{ borderColor: COLORS.border, color: COLORS.ink }}>
-          <LayoutGrid size={16} className="text-amber-400" /> Moduły i funkcje
-        </h3>
-
+      <div className="bg-[#1E1E22] border border-[#33333C] rounded-2xl p-4 space-y-4">
+        <h3 className="text-sm font-bold border-b border-[#33333C] pb-2 text-stone-100">Moduły</h3>
         <div className="flex items-center justify-between py-1">
-          <div>
-            <div className="text-sm font-semibold" style={{ color: COLORS.ink }}>Tablica Wiadomości</div>
-            <div className="text-xs text-stone-400">Dedykowana sekcja na wiadomości domowników.</div>
-          </div>
-          <button onClick={() => onUpdateSettings({ ...data.settings, enableWall: !enableWall })} className="p-1 transition">
-            {enableWall ? (
-              <ToggleRight size={32} className="text-amber-400" />
-            ) : (
-              <ToggleLeft size={32} className="text-stone-600" />
-            )}
-          </button>
+          <div><div className="text-sm font-semibold">Tablica</div><div className="text-xs text-stone-400">Dedykowana sekcja na wiadomości.</div></div>
+          <button onClick={() => onUpdateSettings({ ...settings, enableWall: !settings.enableWall })}>{settings.enableWall ? <ToggleRight size={32} className="text-amber-400" /> : <ToggleLeft size={32} className="text-stone-600" />}</button>
         </div>
-
         <div className="flex items-center justify-between py-1">
-          <div>
-            <div className="text-sm font-semibold" style={{ color: COLORS.ink }}>Planer Posiłków</div>
-            <div className="text-xs text-stone-400">Włącz lub wyłącz zakładkę planowania posiłków.</div>
-          </div>
-          <button onClick={() => onUpdateSettings({ ...data.settings, enableMeals: !enableMeals })} className="p-1 transition">
-            {enableMeals ? (
-              <ToggleRight size={32} className="text-amber-400" />
-            ) : (
-              <ToggleLeft size={32} className="text-stone-600" />
-            )}
-          </button>
+          <div><div className="text-sm font-semibold">Posiłki</div><div className="text-xs text-stone-400">Jadłospis.</div></div>
+          <button onClick={() => onUpdateSettings({ ...settings, enableMeals: !settings.enableMeals })}>{settings.enableMeals ? <ToggleRight size={32} className="text-amber-400" /> : <ToggleLeft size={32} className="text-stone-600" />}</button>
         </div>
-      </div>
-
-      <button onClick={onSignOut} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-stone-800 text-red-400 hover:bg-red-950/20 text-sm font-semibold transition mt-8">
-        <LogOut size={16} /> Wyloguj się z konta
-      </button>
-
-      <div className="mt-8 mb-4 text-center text-stone-600 text-[10px] font-mono flex flex-col items-center justify-center gap-1">
-        <div className="flex items-center gap-1"><Info size={12} /> Rodzinny Planer</div>
-        <div>Wersja {APP_VERSION}</div>
       </div>
     </div>
   );
 }
 
-function AuthScreen({ onAuth, supabaseClient }) {
+/* --- AUTH & ONBOARDING VIEWS --- */
+
+function AuthScreen({ supabase, onAuthSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -1534,166 +848,180 @@ function AuthScreen({ onAuth, supabaseClient }) {
     setLoading(true); setError(null);
     try {
       if (isLogin) {
-        const { data, error: err } = await supabaseClient.auth.signInWithPassword({ email, password });
-        if (err) throw err;
-        if (data.session) onAuth(data.session);
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
       } else {
-        const { data, error: err } = await supabaseClient.auth.signUp({ email, password });
-        if (err) throw err;
-        if (data.session) onAuth(data.session);
-        else {
-           const { data: loginData } = await supabaseClient.auth.signInWithPassword({ email, password });
-           if (loginData?.session) onAuth(loginData.session);
-           else setError("Konto utworzone. Zaloguj się.");
-        }
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
       }
     } catch (err) {
-      setError(err.message === 'Invalid login credentials' ? 'Nieprawidłowy email lub hasło.' : err.message);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[#121214] text-stone-200">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="text-center">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-4"><Sparkles size={24} /></div>
-          <h1 className="text-2xl font-bold font-serif text-stone-100">Rodzinny Planer</h1>
-          <p className="text-sm text-stone-400 mt-1">Uporządkuj życie swojego domu</p>
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#121214] text-stone-100 animate-fadeIn">
+      <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-6 shadow-lg shadow-amber-900/20"><Sparkles size={32} /></div>
+      <h1 style={{ fontFamily: 'Fraunces' }} className="text-3xl font-bold mb-2">Rodzinny Planer</h1>
+      <p className="text-sm text-stone-400 mb-8 text-center max-w-xs">Współdziel kalendarz i obowiązki z całą rodziną w jednym miejscu.</p>
+      
+      <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 bg-[#1E1E22] p-6 rounded-3xl border border-[#33333C] shadow-2xl">
+        <h2 className="text-lg font-bold mb-4">{isLogin ? 'Zaloguj się' : 'Utwórz darmowe konto'}</h2>
+        {error && <div className="bg-red-950/50 border border-red-900 text-red-300 text-xs p-3 rounded-xl">{error}</div>}
+        <div><label className="text-xs font-semibold mb-1 block text-stone-400">Adres e-mail</label><input type="email" required value={email} onChange={e=>setEmail(e.target.value)} className={inputStyle} /></div>
+        <div><label className="text-xs font-semibold mb-1 block text-stone-400">Hasło (min. 6 znaków)</label><input type="password" required minLength={6} value={password} onChange={e=>setPassword(e.target.value)} className={inputStyle} /></div>
+        <button type="submit" disabled={loading} className="w-full bg-amber-500 text-stone-950 font-bold py-3.5 rounded-xl hover:bg-amber-400 transition mt-2 disabled:opacity-50">
+          {loading ? 'Ładowanie...' : (isLogin ? 'Zaloguj' : 'Zarejestruj się')}
+        </button>
+        <div className="text-center mt-4">
+          <button type="button" onClick={() => setIsLogin(!isLogin)} className="text-xs text-stone-400 hover:text-amber-400 transition">{isLogin ? 'Nie masz konta? Zarejestruj się' : 'Masz już konto? Zaloguj się'}</button>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4 bg-stone-900/50 p-6 rounded-2xl border border-stone-800 shadow-xl">
-          {error && <div className="p-3 bg-red-950/50 border border-red-900 text-red-300 text-xs rounded-xl">{error}</div>}
-          <div><label className="text-xs font-semibold mb-1 block text-stone-400">Adres E-mail</label><input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={inputStyle} /></div>
-          <div><label className="text-xs font-semibold mb-1 block text-stone-400">Hasło</label><input type="password" required value={password} onChange={e => setPassword(e.target.value)} className={inputStyle} minLength={6} /></div>
-          <button type="submit" disabled={loading} className="w-full bg-amber-400 text-stone-950 font-bold py-2.5 rounded-xl shadow-md hover:bg-amber-300 transition">
-            {loading ? 'Ładowanie...' : (isLogin ? 'Zaloguj się' : 'Utwórz konto')}
-          </button>
-        </form>
-        <div className="text-center">
-          <button onClick={() => { setIsLogin(!isLogin); setError(null); }} type="button" className="text-sm text-stone-400 hover:text-amber-400 transition">
-            {isLogin ? 'Nie masz konta? Utwórz je tutaj.' : 'Masz już konto? Zaloguj się.'}
-          </button>
-        </div>
-      </div>
+      </form>
     </div>
   );
 }
 
-function OnboardingScreen({ session, supabaseClient, onFamilySet }) {
-  const [tab, setTab] = useState('join');
+function FamilyOnboarding({ supabase, session, onFamilyJoined }) {
+  const [mode, setMode] = useState('choose'); // choose, create, join
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const genCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+
   const handleCreate = async () => {
     if (!name.trim()) return;
     setLoading(true); setError(null);
+    const joinCode = genCode();
     try {
-      const joinCode = generateCode();
-      const { data: family, error: famErr } = await supabaseClient.from('families').insert({ name: name.trim(), join_code: joinCode }).select().single();
-      if (famErr) throw famErr;
+      // 1. Create family
+      const { data: fam, error: err1 } = await supabase.from('families').insert({ name: name.trim(), join_code: joinCode }).select().single();
+      if (err1) throw err1;
+      
+      // 2. Initialize empty family_state
+      const { error: err2 } = await supabase.from('family_state').insert({ family_id: fam.id, data: emptyData() });
+      if (err2) throw err2;
 
-      const { error: stateErr } = await supabaseClient.from('family_state').insert({ family_id: family.id, data: emptyData() });
-      if (stateErr) throw stateErr;
+      // 3. Link profile
+      const { error: err3 } = await supabase.from('profiles').upsert({ id: session.user.id, family_id: fam.id, person_id: null });
+      if (err3) throw err3;
 
-      const { error: profErr } = await supabaseClient.from('profiles').update({ family_id: family.id }).eq('id', session.user.id);
-      if (profErr) throw profErr;
-
-      onFamilySet(family.id);
-    } catch (err) { setError(err.message); } finally { setLoading(false); }
+      onFamilyJoined(fam, { id: session.user.id, family_id: fam.id, person_id: null });
+    } catch(err) { setError(err.message); setLoading(false); }
   };
 
   const handleJoin = async () => {
     if (!code.trim()) return;
     setLoading(true); setError(null);
     try {
-      const { data: family, error: famErr } = await supabaseClient.from('families').select('*').eq('join_code', code.trim().toUpperCase()).single();
-      if (famErr || !family) throw new Error("Nie znaleziono rodziny o tym kodzie.");
+      const { data: fam, error: err1 } = await supabase.from('families').select('*').eq('join_code', code.trim().toUpperCase()).single();
+      if (err1 || !fam) throw new Error('Nie znaleziono rodziny z takim kodem.');
 
-      const { error: profErr } = await supabaseClient.from('profiles').update({ family_id: family.id }).eq('id', session.user.id);
-      if (profErr) throw profErr;
+      const { error: err2 } = await supabase.from('profiles').upsert({ id: session.user.id, family_id: fam.id, person_id: null });
+      if (err2) throw err2;
 
-      onFamilySet(family.id);
-    } catch (err) { setError(err.message); } finally { setLoading(false); }
+      onFamilyJoined(fam, { id: session.user.id, family_id: fam.id, person_id: null });
+    } catch(err) { setError(err.message); setLoading(false); }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[#121214] text-stone-200">
-      <div className="w-full max-w-sm space-y-6 bg-stone-900/50 p-6 rounded-3xl border border-stone-800 shadow-xl">
-        <h2 className="text-xl font-bold font-serif text-center">Witaj w Planerze!</h2>
-        <div className="flex p-1 bg-stone-950 rounded-xl border border-stone-800">
-          <button onClick={() => setTab('join')} className={`flex-1 py-2 text-sm font-semibold rounded-lg transition ${tab === 'join' ? 'bg-stone-800 text-stone-100' : 'text-stone-500'}`}>Dołącz</button>
-          <button onClick={() => setTab('create')} className={`flex-1 py-2 text-sm font-semibold rounded-lg transition ${tab === 'create' ? 'bg-stone-800 text-stone-100' : 'text-stone-500'}`}>Nowa rodzina</button>
+  if (mode === 'choose') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#121214] text-stone-100 animate-fadeIn">
+        <h2 style={{ fontFamily: 'Fraunces' }} className="text-3xl font-bold mb-8 text-center">Dołącz do Rodziny</h2>
+        <div className="w-full max-w-sm space-y-4">
+          <button onClick={() => setMode('join')} className="w-full bg-[#1E1E22] border border-[#33333C] p-6 rounded-3xl flex flex-col items-center gap-3 hover:border-amber-500/50 transition">
+            <div className="w-12 h-12 bg-stone-800 rounded-full flex items-center justify-center text-amber-400"><Users size={24} /></div>
+            <span className="font-bold text-lg">Mam kod od domownika</span>
+            <span className="text-xs text-stone-400 text-center">Ktoś z Twojej rodziny założył już kalendarz i udostępnił Ci 6-znakowy kod.</span>
+          </button>
+          <button onClick={() => setMode('create')} className="w-full bg-[#1E1E22] border border-[#33333C] p-6 rounded-3xl flex flex-col items-center gap-3 hover:border-amber-500/50 transition">
+            <div className="w-12 h-12 bg-stone-800 rounded-full flex items-center justify-center text-amber-400"><Plus size={24} /></div>
+            <span className="font-bold text-lg">Załóż nową rodzinę</span>
+            <span className="text-xs text-stone-400 text-center">Jesteś tu pierwszy? Załóż wirtualny dom i wygeneruj kod dla pozostałych.</span>
+          </button>
+          <button onClick={async () => await supabase.auth.signOut()} className="w-full py-4 text-xs font-semibold text-stone-500">Wyloguj mnie</button>
         </div>
-        
-        {error && <div className="p-3 bg-red-950/50 border border-red-900 text-red-300 text-xs rounded-xl">{error}</div>}
-
-        {tab === 'join' ? (
-          <div className="space-y-4">
-            <div><label className="text-xs font-semibold mb-1 block text-stone-400">Kod dostępu od domownika</label><input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="np. A8F9K2" className={`${inputStyle} uppercase font-mono tracking-widest text-center text-xl`} maxLength={6} /></div>
-            <button onClick={handleJoin} disabled={loading || code.length < 5} className="w-full bg-amber-400 text-stone-950 font-bold py-3 rounded-xl disabled:opacity-50 transition">Dołącz do rodziny</button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div><label className="text-xs font-semibold mb-1 block text-stone-400">Nazwa Twojej Rodziny</label><input value={name} onChange={e => setName(e.target.value)} placeholder="np. Rodzina Kowalskich" className={inputStyle} /></div>
-            <button onClick={handleCreate} disabled={loading || name.length < 2} className="w-full bg-amber-400 text-stone-950 font-bold py-3 rounded-xl disabled:opacity-50 transition">Utwórz rodzinę</button>
-          </div>
-        )}
       </div>
-    </div>
-  );
-}
-
-function ProfileSelectionScreen({ session, familyData, supabaseClient, onProfileSelected }) {
-  const [loading, setLoading] = useState(false);
-
-  const selectPerson = async (personId) => {
-    setLoading(true);
-    if (supabaseClient) {
-        await supabaseClient.from('profiles').update({ person_id: personId }).eq('id', session.user.id);
-    }
-    onProfileSelected(personId);
-    setLoading(false);
-  };
-
-  const handleAddNewDummy = async () => {
-      alert("Poproś założyciela rodziny o dodanie Twojego profilu w zakładce Opcje, a następnie wróć tutaj i odśwież stronę.");
+    );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[#121214] text-stone-200">
-      <div className="w-full max-w-sm space-y-6 bg-stone-900/50 p-6 rounded-3xl border border-stone-800 shadow-xl text-center">
-        <h2 className="text-xl font-bold font-serif">Kim jesteś?</h2>
-        <p className="text-xs text-stone-400">Wybierz swój profil z listy, aby aplikacja mogła spersonalizować widok.</p>
-        <div className="space-y-2 mt-4">
-          {familyData?.people?.length > 0 ? (
-            familyData.people.map(p => (
-              <button key={p.id} onClick={() => selectPerson(p.id)} disabled={loading} className="w-full flex items-center justify-between p-3 rounded-xl border border-stone-700 bg-stone-800 hover:bg-stone-700 transition">
-                <div className="flex items-center gap-3"><Chip person={p} size="lg" /><span className="font-semibold text-stone-100">{p.name}</span></div>
-                <ChevronRight size={18} className="text-stone-500" />
-              </button>
-            ))
-          ) : (
-            <div className="text-sm text-amber-400 p-4 border border-amber-900 bg-amber-950/20 rounded-xl">Brak awatarów. Stwórz go w Opcjach (jeśli masz dostęp) lub poproś twórcę rodziny.</div>
-          )}
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#121214] text-stone-100 animate-fadeIn">
+      <button onClick={() => setMode('choose')} className="mb-6 p-2 rounded-full bg-stone-900 text-stone-400 self-start"><ChevronLeft size={24} /></button>
+      <form onSubmit={e => { e.preventDefault(); mode === 'create' ? handleCreate() : handleJoin(); }} className="w-full max-w-sm space-y-4 bg-[#1E1E22] p-6 rounded-3xl border border-[#33333C] shadow-2xl">
+        <h2 className="text-xl font-bold mb-4">{mode === 'create' ? 'Nazwij swoją rodzinę' : 'Podaj kod dostępu'}</h2>
+        {error && <div className="bg-red-950/50 border border-red-900 text-red-300 text-xs p-3 rounded-xl">{error}</div>}
+        
+        {mode === 'create' ? (
+          <div><label className="text-xs font-semibold mb-1 block text-stone-400">Nazwa wyświetlana</label><input autoFocus required value={name} onChange={e=>setName(e.target.value)} placeholder="np. Rodzina Kowalskich" className={inputStyle} /></div>
+        ) : (
+          <div><label className="text-xs font-semibold mb-1 block text-stone-400">Kod 6-znakowy</label><input autoFocus required value={code} onChange={e=>setCode(e.target.value)} placeholder="np. A8F9K2" className={`${inputStyle} uppercase font-mono text-center tracking-widest text-lg`} maxLength={6} /></div>
+        )}
+
+        <button type="submit" disabled={loading} className="w-full bg-amber-500 text-stone-950 font-bold py-3.5 rounded-xl hover:bg-amber-400 transition mt-4 disabled:opacity-50">
+          {loading ? 'Ładowanie...' : 'Dalej'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function ProfileSelection({ supabase, profile, data, onProfileSelected }) {
+  const [selectedId, setSelectedId] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleSelect = async () => {
+    if (!selectedId) return;
+    setLoading(true);
+    try {
+      await supabase.from('profiles').update({ person_id: selectedId }).eq('id', profile.id);
+      onProfileSelected(selectedId);
+    } catch(err) { console.error(err); setLoading(false); }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#121214] text-stone-100 animate-fadeIn">
+      <div className="w-full max-w-sm bg-[#1E1E22] p-6 rounded-3xl border border-[#33333C] shadow-2xl">
+        <h2 style={{ fontFamily: 'Fraunces' }} className="text-2xl font-bold mb-2">Kim jesteś?</h2>
+        <p className="text-xs text-stone-400 mb-6">Wybierz swój profil z poniższej listy, aby aplikacja mogła Cię rozpoznawać.</p>
+        
+        <div className="space-y-2 mb-6 max-h-64 overflow-y-auto pr-2">
+          {data?.people?.map(p => (
+            <button key={p.id} onClick={() => setSelectedId(p.id)} className={`w-full p-4 rounded-2xl flex items-center gap-4 transition border ${selectedId === p.id ? 'bg-amber-500/10 border-amber-500' : 'bg-stone-900 border-stone-800 hover:bg-stone-800'}`}>
+              <Chip person={p} size="lg" />
+              <span className="font-bold text-sm">{p.name}</span>
+              {selectedId === p.id && <Check size={20} className="ml-auto text-amber-500" />}
+            </button>
+          ))}
         </div>
-        <p className="text-[10px] text-stone-500 pt-4 cursor-pointer hover:text-stone-300 transition" onClick={handleAddNewDummy}>Brak Twojego profilu? Kliknij tutaj.</p>
+        
+        <button onClick={handleSelect} disabled={!selectedId || loading} className="w-full bg-amber-500 text-stone-950 font-bold py-3.5 rounded-xl hover:bg-amber-400 transition disabled:opacity-50 flex items-center justify-center gap-2">
+          Wejdź do aplikacji <ArrowRight size={18} />
+        </button>
       </div>
     </div>
   );
 }
 
 
+/* --- MAIN APP --- */
+
 export default function App() {
   const [supabaseClient, setSupabaseClient] = useState(null);
+  
+  // Auth state
   const [session, setSession] = useState(null);
+  const [family, setFamily] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [familyInfo, setFamilyInfo] = useState(null);
+  
+  // App state
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   
+  // UI state
   const [tab, setTab] = useState('today');
   const [modal, setModal] = useState(null);
   const [modalPayload, setModalPayload] = useState(null);
@@ -1703,468 +1031,209 @@ export default function App() {
   const [editingPerson, setEditingPerson] = useState(null);
   const [toast, setToast] = useState(null);
 
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  };
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
-  // Safe Supabase Client initialization & Auth Listener
+  // Init Supabase safely
   useEffect(() => {
-    let mounted = true;
-    const initSupabase = async () => {
-      if (!supabaseUrl || !supabaseAnonKey) {
-        if (mounted) setLoading(false);
-        return;
-      }
-      let client = null;
-      try {
-        const { createClient } = await import(/* @vite-ignore */ '@supabase/supabase-js');
-        client = createClient(supabaseUrl, supabaseAnonKey);
-      } catch (e) {
-        await new Promise((resolve) => {
-          if (window.supabase) resolve();
-          const script = document.createElement('script');
-          script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-          script.onload = resolve;
-          document.head.appendChild(script);
-        });
+    let client = null;
+    if (supabaseUrl && supabaseAnonKey) {
+      if (window.supabase && window.supabase.createClient) {
         client = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
-      }
-
-      if (mounted && client) {
         setSupabaseClient(client);
-        
-        client.auth.getSession().then(({ data: { session: currentSession } }) => {
-          if (mounted) setSession(currentSession);
-        });
-
-        client.auth.onAuthStateChange((_event, currentSession) => {
-          if (mounted) {
-            setSession(currentSession);
-            if (!currentSession) { 
-              setProfile(null); setFamilyInfo(null); setData(null); setLoading(false); 
-            }
-          }
-        });
+      } else {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+        script.async = true;
+        script.onload = () => setSupabaseClient(window.supabase.createClient(supabaseUrl, supabaseAnonKey));
+        document.body.appendChild(script);
       }
-    };
-    initSupabase();
-    return () => { mounted = false; };
+    }
   }, []);
 
-  // Fetching Data Logic
+  // Auth Listener
   useEffect(() => {
-    if (!session || !supabaseClient) return;
+    if (!supabaseClient) return;
     
+    supabaseClient.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (!session) setLoading(false);
+    });
+
+    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (!session) { setFamily(null); setProfile(null); setData(null); setLoading(false); }
+    });
+    return () => subscription.unsubscribe();
+  }, [supabaseClient]);
+
+  // Load Profile & Family
+  useEffect(() => {
+    if (!supabaseClient || !session) return;
+    
+    async function loadUserMeta() {
+      try {
+        const { data: prof } = await supabaseClient.from('profiles').select('*').eq('id', session.user.id).single();
+        if (prof) {
+          setProfile(prof);
+          if (prof.family_id) {
+            const { data: fam } = await supabaseClient.from('families').select('*').eq('id', prof.family_id).single();
+            setFamily(fam);
+          }
+        }
+      } catch(e) { console.warn(e); }
+    }
+    loadUserMeta();
+  }, [supabaseClient, session]);
+
+  // Load Data & Realtime Sync
+  useEffect(() => {
     let isMounted = true;
     let channel = null;
 
-    const loadCoreData = async () => {
+    async function fetchFamilyData() {
+      if (!supabaseClient || !family || !profile) return;
+      
       try {
-        if (isMounted) setLoading(true);
-
-        let { data: prof, error: profErr } = await supabaseClient.from('profiles').select('*').eq('id', session.user.id).single();
-        if (profErr && profErr.code === 'PGRST116') {
-          const { data: newProf } = await supabaseClient.from('profiles').insert({ id: session.user.id }).select().single();
-          prof = newProf;
+        const { data: stateRow, error } = await supabaseClient.from('family_state').select('data').eq('family_id', family.id).single();
+        
+        if (error && error.code === 'PGRST116') {
+          const init = emptyData();
+          await supabaseClient.from('family_state').insert({ family_id: family.id, data: init });
+          if (isMounted) setData(init);
+        } else if (stateRow) {
+          if (isMounted) setData(stateRow.data);
         }
-        if (!isMounted) return;
-        setProfile(prof);
 
-        if (prof?.family_id) {
-          const { data: fam } = await supabaseClient.from('families').select('*').eq('id', prof.family_id).single();
-          if (isMounted) setFamilyInfo(fam);
+        // NAPRAWIONY KANAŁ REALTIME (nasłuchuje bez względu na rodzaj operacji UPDATE/INSERT)
+        channel = supabaseClient
+          .channel(`public:family_state:${family.id}`)
+          .on('postgres_changes', { 
+            event: '*', 
+            schema: 'public', 
+            table: 'family_state', 
+            filter: `family_id=eq.${family.id}` 
+          }, (payload) => {
+            if (isMounted && payload.new && payload.new.data) {
+              setData(payload.new.data);
+              showToast("Zaktualizowano dane od domownika! 🔄");
+            }
+          })
+          .subscribe();
 
-          let { data: stateRow, error: stateErr } = await supabaseClient.from('family_state').select('data').eq('family_id', prof.family_id).single();
-          if (stateErr && stateErr.code === 'PGRST116') {
-             const initData = emptyData();
-             await supabaseClient.from('family_state').insert({ family_id: prof.family_id, data: initData });
-             if (isMounted) setData(initData);
-          } else {
-             if (isMounted) setData(stateRow?.data || emptyData());
-          }
-
-          channel = supabaseClient.channel(`family_${prof.family_id}`)
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'family_state', filter: `family_id=eq.${prof.family_id}` }, 
-              (payload) => { 
-                if (isMounted) {
-                  setData(payload.new.data); 
-                  showToast("Zaktualizowano dane od domownika! 🔄");
-                }
-              }
-            ).subscribe();
-        } else {
-          if (isMounted) setData(null);
-        }
-      } catch (err) {
-        console.error("Load error:", err);
-      } finally {
-        if (isMounted) setLoading(false);
+      } catch(err) {
+        console.warn("Błąd ładowania danych:", err);
       }
-    };
+      if (isMounted) setLoading(false);
+    }
 
-    loadCoreData();
-    return () => { isMounted = false; if (channel && supabaseClient) supabaseClient.removeChannel(channel); };
-  }, [session, supabaseClient, profile?.family_id]);
+    if (family && profile) fetchFamilyData();
+
+    return () => {
+      isMounted = false;
+      if (channel && supabaseClient) supabaseClient.removeChannel(channel);
+    };
+  }, [supabaseClient, family, profile]);
 
   const persist = useCallback(async (next) => {
     setData(next);
-    storage.set(next);
-
-    if (supabaseClient && profile?.family_id) {
-      try {
-        await supabaseClient
-          .from('family_state')
-          .update({ data: next, updated_at: new Date().toISOString() })
-          .eq('family_id', profile.family_id);
-      } catch (e) {
-        console.warn("Chmura Supabase niedostępna - zapisano lokalnie", e);
-      }
+    if (supabaseClient && family) {
+      try { await supabaseClient.from('family_state').upsert({ family_id: family.id, data: next, updated_at: new Date().toISOString() }); }
+      catch (e) { console.warn(e); }
     }
-  }, [supabaseClient, profile?.family_id]);
+  }, [supabaseClient, family]);
 
-  const handleSignOut = async () => { if (supabaseClient) await supabaseClient.auth.signOut(); };
 
-  const handleSelectProfile = async (personId) => {
-    if (supabaseClient && session) {
-      await supabaseClient.from('profiles').update({ person_id: personId }).eq('id', session.user.id);
-    }
-    setProfile({ ...profile, person_id: personId });
-    showToast("Zapisano Twój profil domownika!");
-  };
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return <div className="p-10 text-stone-200 bg-[#121214] min-h-screen text-sm text-center pt-20">Skonfiguruj połączenie z Supabase (VITE_SUPABASE_URL i KEY), by włączyć live sync.</div>;
-  }
+  // Routing / Render State
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#121214] text-stone-100 font-mono text-sm">Ładowanie...</div>;
+  if (!supabaseClient) return <div className="min-h-screen flex items-center justify-center bg-[#121214] text-red-400 p-6 text-center">Brak połączenia z bazą (Brak kluczy .env).</div>;
   
-  if (loading && !data) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#121214] text-stone-400 font-mono text-xs gap-3">
-         <RefreshCw size={24} className="animate-spin text-amber-500" />
-         Pobieranie danych rodziny...
-      </div>
-    );
-  }
+  if (!session) return <AuthScreen supabase={supabaseClient} />;
+  if (!family) return <FamilyOnboarding supabase={supabaseClient} session={session} onFamilyJoined={(fam, prof) => { setFamily(fam); setProfile(prof); }} />;
+  if (!data) return <div className="min-h-screen flex flex-col items-center justify-center bg-[#121214] text-stone-100 font-mono text-sm gap-4">Pobieranie danych rodziny... <RefreshCw size={20} className="animate-spin text-amber-500" /></div>;
+  if (!profile?.person_id) return <ProfileSelection supabase={supabaseClient} profile={profile} data={data} onProfileSelected={pid => setProfile({...profile, person_id: pid})} />;
+
+  // User is fully authenticated, in a family, and picked an avatar.
+  const currentUserId = profile.person_id;
+
+  // PRYWATNE NOTATKI - Filtruje tylko te przypisane do currentUserId
+  const visibleNotes = data.notes.filter(n => n.personId === currentUserId);
+
+  // Handlers
+  const upsertEvent = ev => { const noteId = modalPayload?.noteId; const nextNotes = noteId ? data.notes.filter(n => n.id !== noteId) : data.notes; const exists = data.events.some(e => e.id === ev.id); persist({ ...data, events: exists ? data.events.map(e => e.id === ev.id ? ev : e) : [...data.events, ev], notes: nextNotes }); showToast("Zapisano wydarzenie"); };
+  const upsertTask = t => { const noteId = modalPayload?.noteId; const nextNotes = noteId ? data.notes.filter(n => n.id !== noteId) : data.notes; const exists = data.tasks.some(x => x.id === t.id); persist({ ...data, tasks: exists ? data.tasks.map(x => x.id === t.id ? t : x) : [...data.tasks, t], notes: nextNotes }); showToast("Zapisano zadanie"); };
+  const upsertNote = n => { const exists = data.notes.some(x => x.id === n.id); persist({ ...data, notes: exists ? data.notes.map(x => x.id === n.id ? n : x) : [...data.notes, n] }); showToast("Zapisano notatkę"); };
+  const addWallMessage = msg => { persist({ ...data, wall: [msg, ...(data.wall || [])] }); showToast("Wysłano na tablicę"); };
+  const deleteWallMessage = id => { persist({ ...data, wall: (data.wall || []).filter(w => w.id !== id) }); };
+  const togglePinWallMessage = id => { persist({ ...data, wall: (data.wall || []).map(w => w.id === id ? { ...w, isPinned: !w.isPinned } : w) }); };
+  const upsertPerson = p => { const exists = data.people.some(x => x.id === p.id); persist({ ...data, people: exists ? data.people.map(x => x.id === p.id ? p : x) : [...data.people, p] }); showToast("Zapisano osobę"); };
+  const updateMeal = (mondayKey, weekMeals) => persist({ ...data, meals: { ...(data.meals || {}), [mondayKey]: weekMeals } });
+  const updateSettings = newSettings => persist({ ...data, settings: newSettings });
+  const deletePerson = id => { if (confirm("Usunąć tę osobę?")) persist({ ...data, people: data.people.filter(p => p.id !== id) }); };
+  const deleteEvent = id => persist({ ...data, events: data.events.filter(e => e.id !== id) });
+  const deleteTask = id => persist({ ...data, tasks: data.tasks.filter(t => t.id !== id) });
+  const deleteNote = id => persist({ ...data, notes: data.notes.filter(n => n.id !== id) });
   
-  if (!session) return <AuthScreen onAuth={setSession} supabaseClient={supabaseClient} />;
-  
-  if (!profile?.family_id) return <OnboardingScreen session={session} supabaseClient={supabaseClient} onFamilySet={(fid) => setProfile({ ...profile, family_id: fid })} />;
-  
-  if (!data) return <div className="min-h-screen flex items-center justify-center bg-[#121214] text-stone-400 font-mono text-xs">Przygotowywanie danych rodziny...</div>;
-  
-  if (!profile?.person_id && data.people?.length > 0) {
-    return <ProfileSelectionScreen session={session} familyData={data} supabaseClient={supabaseClient} onProfileSelected={handleSelectProfile} />;
-  }
-
-  const currentUserId = profile?.person_id;
-  const currentPerson = (data.people || []).find(p => p.id === currentUserId);
-  
-  // Zmiana: Filtrujemy notatki tak, aby pokazywały się TYLKO te z Twoim ID.
-  const visibleNotes = currentUserId 
-    ? data.notes.filter(n => n.personId === currentUserId)
-    : [];
-
-  const upsertEvent = ev => {
-    const noteId = modalPayload?.noteId;
-    const nextNotes = noteId ? data.notes.filter(n => n.id !== noteId) : data.notes;
-    const exists = data.events.some(e => e.id === ev.id);
-    const nextEvents = exists ? data.events.map(e => e.id === ev.id ? ev : e) : [...data.events, ev];
-    persist({ ...data, events: nextEvents, notes: nextNotes });
-    showToast(exists ? "Zaktualizowano wydarzenie" : "Dodano wydarzenie");
-  };
-
-  const upsertTask = t => {
-    const noteId = modalPayload?.noteId;
-    const nextNotes = noteId ? data.notes.filter(n => n.id !== noteId) : data.notes;
-    const exists = data.tasks.some(x => x.id === t.id);
-    const nextTasks = exists ? data.tasks.map(x => x.id === t.id ? t : x) : [...data.tasks, t];
-    persist({ ...data, tasks: nextTasks, notes: nextNotes });
-    showToast(exists ? "Zaktualizowano zadanie" : "Dodano zadanie");
-  };
-
-  const upsertNote = n => {
-    const exists = data.notes.some(x => x.id === n.id);
-    const nextNotes = exists ? data.notes.map(x => x.id === n.id ? n : x) : [...data.notes, n];
-    persist({ ...data, notes: nextNotes });
-    showToast("Zapisano notatkę");
-  };
-
-  const addWallMessage = msg => {
-    const nextWall = [msg, ...(data.wall || [])];
-    persist({ ...data, wall: nextWall });
-    showToast("Dodano wiadomość na tablicy");
-  };
-
-  const deleteWallMessage = id => {
-    const nextWall = (data.wall || []).filter(w => w.id !== id);
-    persist({ ...data, wall: nextWall });
-    showToast("Usunięto wiadomość");
-  };
-
-  const togglePinWallMessage = id => {
-    const nextWall = (data.wall || []).map(w => w.id === id ? { ...w, isPinned: !w.isPinned } : w);
-    persist({ ...data, wall: nextWall });
-  };
-
-  const upsertPerson = p => {
-    const exists = data.people.some(x => x.id === p.id);
-    const nextPeople = exists ? data.people.map(x => x.id === p.id ? p : x) : [...data.people, p];
-    persist({ ...data, people: nextPeople });
-    
-    if (!exists && !currentUserId && nextPeople.length === 1) {
-       handleSelectProfile(p.id);
-    } else {
-       showToast("Zapisano profil");
-    }
-  };
-
-  const updateMeal = (mondayKey, weekMeals) => {
-    const nextMeals = {
-      ...(data.meals || {}),
-      [mondayKey]: weekMeals
-    };
-    persist({ ...data, meals: nextMeals });
-  };
-
-  const updateSettings = newSettings => {
-    persist({ ...data, settings: newSettings });
-    showToast("Zapisano ustawienia");
-  };
-
-  const deletePerson = id => {
-    if (confirm("Czy na pewno usunąć tę osobę? Wydarzenia i zadania z nią powiązane mogą zostać usierocone.")) {
-      if (profile?.person_id === id) handleSelectProfile(null); 
-      persist({ ...data, people: data.people.filter(p => p.id !== id) });
-      showToast("Usunięto profil");
-    }
-  };
-
-  const deleteEvent = id => {
-    persist({ ...data, events: data.events.filter(e => e.id !== id) });
-    showToast("Usunięto wydarzenie");
-  };
-
-  const deleteTask = id => {
-    persist({ ...data, tasks: data.tasks.filter(t => t.id !== id) });
-    showToast("Usunięto zadanie");
-  };
-
-  const deleteNote = id => {
-    persist({ ...data, notes: data.notes.filter(n => n.id !== id) });
-    showToast("Usunięto notatkę");
-  };
-
   const toggleTask = (task) => {
-    const freq = task.recurrence?.freq || 'none';
-    const key = getPeriodKey(freq, todayStr());
-    const isDone = !!(task.completions && task.completions[key]);
-    const nextCompletions = { ...(task.completions || {}) };
-    if (isDone) delete nextCompletions[key]; else nextCompletions[key] = true;
-    const nextTasks = data.tasks.map(t => t.id === task.id ? { ...t, completions: nextCompletions } : t);
-    persist({ ...data, tasks: nextTasks });
+    const freq = task.recurrence?.freq || 'none'; const key = getPeriodKey(freq, todayStr()); const isDone = !!(task.completions && task.completions[key]);
+    const nextCompletions = { ...(task.completions || {}) }; if (isDone) delete nextCompletions[key]; else nextCompletions[key] = true;
+    persist({ ...data, tasks: data.tasks.map(t => t.id === task.id ? { ...t, completions: nextCompletions } : t) });
   };
-
-  const toggleNoteItem = (noteId, itemId) => {
-    const nextNotes = data.notes.map(n => {
-      if (n.id !== noteId) return n;
-      return { ...n, items: (n.items || []).map(i => i.id === itemId ? { ...i, done: !i.done } : i) };
-    });
-    persist({ ...data, notes: nextNotes });
-  };
-
+  const toggleNoteItem = (noteId, itemId) => persist({ ...data, notes: data.notes.map(n => n.id === noteId ? { ...n, items: (n.items || []).map(i => i.id === itemId ? { ...i, done: !i.done } : i) } : n) });
   const toggleSubItem = (parentId, itemId, type) => {
-    if (type === 'task') {
-      const nextTasks = data.tasks.map(t => {
-        if (t.id !== parentId) return t;
-        return { ...t, items: (t.items || []).map(i => i.id === itemId ? { ...i, done: !i.done } : i) };
-      });
-      persist({ ...data, tasks: nextTasks });
-      if (detailTask && detailTask.id === parentId) {
-        setDetailTask(prev => ({
-          ...prev,
-          items: (prev.items || []).map(i => i.id === itemId ? { ...i, done: !i.done } : i)
-        }));
-      }
-    } else if (type === 'event') {
-      const nextEvents = data.events.map(e => {
-        if (e.id !== parentId) return e;
-        return { ...e, items: (e.items || []).map(i => i.id === itemId ? { ...i, done: !i.done } : i) };
-      });
-      persist({ ...data, events: nextEvents });
-      if (detailEvent && detailEvent.id === parentId) {
-        setDetailEvent(prev => ({
-          ...prev,
-          items: (prev.items || []).map(i => i.id === itemId ? { ...i, done: !i.done } : i)
-        }));
-      }
-    }
+    if (type === 'task') { persist({ ...data, tasks: data.tasks.map(t => t.id === parentId ? { ...t, items: (t.items || []).map(i => i.id === itemId ? { ...i, done: !i.done } : i) } : t) }); if (detailTask?.id === parentId) setDetailTask(p => ({ ...p, items: p.items.map(i => i.id === itemId ? { ...i, done: !i.done } : i) })); } 
+    else if (type === 'event') { persist({ ...data, events: data.events.map(e => e.id === parentId ? { ...e, items: (e.items || []).map(i => i.id === itemId ? { ...i, done: !i.done } : i) } : e) }); if (detailEvent?.id === parentId) setDetailEvent(p => ({ ...p, items: p.items.map(i => i.id === itemId ? { ...i, done: !i.done } : i) })); }
   };
 
   const openAddEvent = (dateStr) => { setAddEventDate(dateStr || todayStr()); setModalPayload(null); setModal('event'); };
   const openAddTask = (dateStr) => { setModalPayload(null); setModal('task'); };
-
-  const openConvertNote = (note, type) => {
-    setModalPayload({ initial: { note: note.text || '', items: note.items || [] }, noteId: note.id });
-    if (type === 'event') setAddEventDate(todayStr());
-    setModal(type);
-  };
-
-  const openEditEvent = (ev) => { setDetailEvent(null); setModalPayload({ editItem: ev }); setAddEventDate(ev.date); setModal('event'); };
-  const openEditTask = (t) => { setDetailTask(null); setModalPayload({ editItem: t }); setModal('task'); };
-  const openEditNote = (n) => { setModalPayload({ editItem: n }); setModal('note'); };
-  const openEditPerson = (p) => { setEditingPerson(p); setModal('person'); };
-
+  const openConvertNote = (note, type) => { setModalPayload({ initial: { note: note.text || '', items: note.items || [] }, noteId: note.id }); if (type === 'event') setAddEventDate(todayStr()); setModal(type); };
+  const openEditEvent = ev => { setDetailEvent(null); setModalPayload({ editItem: ev }); setAddEventDate(ev.date); setModal('event'); };
+  const openEditTask = t => { setDetailTask(null); setModalPayload({ editItem: t }); setModal('task'); };
+  const openEditNote = n => { setModalPayload({ editItem: n }); setModal('note'); };
+  const openEditPerson = p => { setEditingPerson(p); setModal('person'); };
   const closeModal = () => { setModal(null); setModalPayload(null); setEditingPerson(null); };
 
-  const exportBackup = () => {
-    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data, null, 2))}`;
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", jsonString);
-    downloadAnchor.setAttribute("download", `rodzinny_planer_kopia_${todayStr()}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-  };
-
-  const importBackup = (e) => {
-    const fileReader = new FileReader();
-    if (e.target.files && e.target.files[0]) {
-      fileReader.readAsText(e.target.files[0], "UTF-8");
-      fileReader.onload = (event) => {
-        try {
-          const parsed = JSON.parse(event.target.result);
-          if (parsed.people && parsed.events) {
-            persist(parsed);
-            showToast("Pomyślnie wczytano kopię zapasową!");
-          } else {
-            alert("Nieprawidłowy plik kopii zapasowej.");
-          }
-        } catch (err) {
-          alert("Błąd odczytu pliku.");
-        }
-      };
-    }
-  };
-
-  const enableMeals = data.settings?.enableMeals ?? true;
-  const enableWall = data.settings?.enableWall ?? true;
+  const handleSignOut = async () => { if(confirm('Czy na pewno chcesz się wylogować?')) await supabaseClient.auth.signOut(); };
 
   const TABS = [
     { id: 'today', label: 'Dziś', icon: Clock },
     { id: 'calendar', label: 'Kalendarz', icon: Calendar },
     { id: 'tasks', label: 'Zadania', icon: CheckSquare },
     { id: 'notes', label: 'Notatki', icon: StickyNote },
-    ...(enableWall ? [{ id: 'wall', label: 'Tablica', icon: MessageSquare }] : []),
-    ...(enableMeals ? [{ id: 'meals', label: 'Posiłki', icon: Utensils }] : []),
+    ...(data.settings?.enableWall ? [{ id: 'wall', label: 'Tablica', icon: MessageSquare }] : []),
+    ...(data.settings?.enableMeals ? [{ id: 'meals', label: 'Posiłki', icon: Utensils }] : []),
   ];
 
   return (
     <div style={{ background: COLORS.bg, fontFamily: 'Inter, sans-serif' }} className="min-h-screen flex flex-col text-stone-100">
       <style>{FONT_IMPORT}</style>
 
-      {/* Toast Alert */}
-      {toast && (
-        <div className="fixed top-[max(env(safe-area-inset-top),1rem)] left-1/2 -translate-x-1/2 z-50 bg-stone-800 text-stone-100 text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl border border-stone-700 flex items-center gap-2 animate-bounce mt-2">
-          <Sparkles size={14} className="text-amber-400" />
-          {toast}
-        </div>
-      )}
+      {toast && <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-stone-800 text-stone-100 text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl border border-stone-700 flex items-center gap-2 animate-bounce"><Sparkles size={14} className="text-amber-400" />{toast}</div>}
 
-      {/* Globalny Header */}
-      <header className="flex items-center justify-between px-5 pt-[max(env(safe-area-inset-top),1.5rem)] pb-4 sticky top-0 z-30 bg-[#121214]/85 backdrop-blur-md border-b border-stone-800/50">
+      <header className="flex items-center justify-between px-5 pt-6 pb-4 sticky top-0 z-30 bg-[#121214]/85 backdrop-blur-md border-b border-stone-800/50">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
-            <Sparkles size={18} />
-          </div>
-          <h1 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-xl font-bold truncate">
-            {familyInfo?.name || 'Rodzinny Planer'}
-          </h1>
+          <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0"><Sparkles size={18} /></div>
+          <h1 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-xl font-bold truncate">{family.name}</h1>
         </div>
-        
-        <div className="flex items-center gap-2">
-           {currentPerson && (
-             <div className="flex items-center gap-2 bg-stone-900 rounded-full pl-2 pr-1 py-1 border border-stone-800 shadow-sm hidden sm:flex">
-               <span className="text-xs font-semibold text-stone-300 px-1">{currentPerson?.name}</span>
-               <Chip person={currentPerson} size="sm" />
-             </div>
-           )}
-           <button 
-             onClick={() => setTab('settings')} 
-             className={`p-2 rounded-full transition border shadow-sm ${tab === 'settings' ? 'bg-amber-500/10 border-amber-500/50 text-amber-400' : 'bg-stone-900 border-stone-800 text-stone-300 hover:bg-stone-800'}`}
-           >
-             <Settings size={20} />
-           </button>
-        </div>
+        <button onClick={() => setTab('settings')} className={`p-2 rounded-full transition border shadow-sm ${tab === 'settings' ? 'bg-amber-500/10 border-amber-500/50 text-amber-400' : 'bg-stone-900 border-stone-800 text-stone-300 hover:bg-stone-800'}`}><Settings size={20} /></button>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-32 max-w-2xl mx-auto w-full">
-        {tab === 'today' && (
-          <TodayView 
-            data={data} 
-            onOpenEvent={setDetailEvent} 
-            onOpenTask={setDetailTask} 
-            onOpenAddEvent={openAddEvent}
-            onOpenAddTask={openAddTask}
-            onToggleTask={toggleTask}
-          />
-        )}
+      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-24 max-w-2xl mx-auto w-full">
+        {tab === 'today' && <TodayView data={data} onOpenEvent={setDetailEvent} onOpenTask={setDetailTask} onOpenAddEvent={openAddEvent} onOpenAddTask={openAddTask} onToggleTask={toggleTask} />}
         {tab === 'calendar' && <CalendarView data={data} onOpenAdd={openAddEvent} onOpenEvent={setDetailEvent} />}
-        {tab === 'tasks' && (
-          <TasksView 
-            data={data} 
-            onToggleTask={toggleTask} 
-            onDeleteTask={deleteTask} 
-            onOpenTask={setDetailTask} 
-            onOpenAddTask={openAddTask}
-          />
-        )}
-        {tab === 'notes' && (
-          <NotesView 
-            notes={visibleNotes} 
-            onDelete={deleteNote} 
-            onConvert={openConvertNote} 
-            onEdit={openEditNote} 
-            onToggleItem={toggleNoteItem} 
-            onOpenAddNote={() => setModal('note')}
-          />
-        )}
-        {tab === 'wall' && enableWall && (
-          <WallView 
-            wall={data.wall} 
-            people={data.people} 
-            onDeleteWallMessage={deleteWallMessage} 
-            onTogglePinWallMessage={togglePinWallMessage}
-            onOpenAddWall={() => setModal('wall')}
-          />
-        )}
-        {tab === 'meals' && enableMeals && <MealsView meals={data.meals} onUpdateMeal={updateMeal} />}
-        
-        {tab === 'settings' && (
-          <SettingsView 
-            familyInfo={familyInfo}
-            profile={profile}
-            data={data} 
-            onUpdateSettings={updateSettings}
-            onAddPerson={() => setModal('person')}
-            onEditPerson={openEditPerson}
-            onDeletePerson={deletePerson}
-            onExport={exportBackup}
-            onImport={importBackup}
-            isCloudConnected={!!supabaseClient}
-            onSignOut={handleSignOut}
-            onSelectProfile={handleSelectProfile}
-          />
-        )}
+        {tab === 'tasks' && <TasksView data={data} onToggleTask={toggleTask} onDeleteTask={deleteTask} onOpenTask={setDetailTask} onOpenAddTask={openAddTask} />}
+        {tab === 'notes' && <NotesView notes={visibleNotes} onDelete={deleteNote} onConvert={openConvertNote} onEdit={openEditNote} onToggleItem={toggleNoteItem} onOpenAddNote={() => setModal('note')} />}
+        {tab === 'wall' && data.settings?.enableWall && <WallView wall={data.wall} people={data.people} onDeleteWallMessage={deleteWallMessage} onTogglePinWallMessage={togglePinWallMessage} onOpenAddWall={() => setModal('wall')} />}
+        {tab === 'meals' && data.settings?.enableMeals && <MealsView meals={data.meals} onUpdateMeal={updateMeal} />}
+        {tab === 'settings' && <SettingsView family={family} profile={profile} settings={data.settings} onUpdateSettings={updateSettings} people={data.people} onAddPerson={() => setModal('person')} onEditPerson={openEditPerson} onDeletePerson={deletePerson} onSignOut={handleSignOut} />}
       </main>
 
-      {/* Navigation Bar */}
-      <nav style={{ background: COLORS.surface, borderColor: COLORS.border }} className="border-t fixed bottom-0 left-0 right-0 z-40 shadow-xl pb-[max(env(safe-area-inset-bottom),0.5rem)]">
+      <nav style={{ background: COLORS.surface, borderColor: COLORS.border }} className="border-t fixed bottom-0 left-0 right-0 z-40 shadow-xl pb-safe">
         <div className="max-w-md mx-auto flex items-center justify-around overflow-x-auto no-scrollbar">
           {TABS.map(({ id, label, icon: Icon }) => {
             const active = tab === id;
             return (
-              <button key={id} onClick={() => setTab(id)} className="flex-1 min-w-[60px] flex flex-col items-center gap-1.5 pt-3 pb-1 transition">
+              <button key={id} onClick={() => setTab(id)} className="flex-1 min-w-[60px] flex flex-col items-center gap-1.5 py-3 transition">
                 <Icon size={20} color={active ? COLORS.accent : COLORS.inkSoft} strokeWidth={active ? 2.5 : 2} />
                 <span style={{ color: active ? COLORS.accent : COLORS.inkSoft, fontWeight: active ? 700 : 500 }} className="text-[10px] tracking-wide">{label}</span>
               </button>
@@ -2173,34 +1242,14 @@ export default function App() {
         </div>
       </nav>
 
-      {/* Modals */}
       {modal === 'event' && <AddEventModal people={data.people} currentUserId={currentUserId} initialDate={addEventDate} initial={modalPayload?.initial} editItem={modalPayload?.editItem} onClose={closeModal} onSave={upsertEvent} />}
       {modal === 'task' && <AddTaskModal people={data.people} currentUserId={currentUserId} initial={modalPayload?.initial} editItem={modalPayload?.editItem} onClose={closeModal} onSave={upsertTask} />}
       {modal === 'note' && <NoteModal editItem={modalPayload?.editItem} currentUserId={currentUserId} onClose={closeModal} onSave={upsertNote} />}
       {modal === 'wall' && <AddWallMessageModal people={data.people} currentUserId={currentUserId} onClose={closeModal} onSave={addWallMessage} />}
       {modal === 'person' && <PersonModal editPerson={editingPerson} existingCount={data.people.length} onClose={closeModal} onSave={upsertPerson} />}
 
-      {detailEvent && (
-        <EventDetailModal 
-          event={detailEvent} 
-          people={data.people} 
-          onClose={() => setDetailEvent(null)} 
-          onEdit={openEditEvent} 
-          onDelete={deleteEvent} 
-          onToggleSubItem={toggleSubItem}
-        />
-      )}
-      {detailTask && (
-        <TaskDetailModal
-          task={data.tasks.find(t => t.id === detailTask.id) || detailTask}
-          people={data.people}
-          onClose={() => setDetailTask(null)}
-          onToggle={toggleTask}
-          onDelete={deleteTask}
-          onEdit={openEditTask}
-          onToggleSubItem={toggleSubItem}
-        />
-      )}
+      {detailEvent && <EventDetailModal event={detailEvent} people={data.people} onClose={() => setDetailEvent(null)} onEdit={openEditEvent} onDelete={deleteEvent} onToggleSubItem={toggleSubItem} />}
+      {detailTask && <TaskDetailModal task={data.tasks.find(t => t.id === detailTask.id) || detailTask} people={data.people} onClose={() => setDetailTask(null)} onToggle={toggleTask} onDelete={deleteTask} onEdit={openEditTask} onToggleSubItem={toggleSubItem} />}
     </div>
   );
 }
