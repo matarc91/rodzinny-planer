@@ -87,6 +87,12 @@ const createMockSupabase = () => {
         }
         return { data: null, error: { message: 'Brak aktywnej sesji' } };
       },
+      async resetPasswordForEmail(email) {
+        if (!email || !email.includes('@')) {
+          return { data: null, error: { message: 'Wprowadź poprawny adres e-mail.' } };
+        }
+        return { data: {}, error: null };
+      },
     },
     from(table) {
       return {
