@@ -1859,9 +1859,10 @@ export default function App() {
   const currentUserId = profile?.person_id;
   const currentPerson = (data.people || []).find(p => p.id === currentUserId);
   
+  // Zmiana: Filtrujemy notatki tak, aby pokazywały się TYLKO te z Twoim ID.
   const visibleNotes = currentUserId 
-    ? data.notes.filter(n => !n.personId || n.personId === currentUserId)
-    : data.notes;
+    ? data.notes.filter(n => n.personId === currentUserId)
+    : [];
 
   const upsertEvent = ev => {
     const noteId = modalPayload?.noteId;
