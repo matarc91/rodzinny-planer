@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getSupabaseClient } from './supabase.js';
+import { addLog, getLogs, clearLogs, subscribeLogs } from './logger.js';
 import { 
   Calendar, CheckSquare, StickyNote, Users, Plus, X, Check, 
   ChevronLeft, ChevronRight, Repeat, Clock, Trash2, AlertCircle, 
   Pencil, Bell, BellOff, Utensils, Sparkles, Settings, ToggleLeft, ToggleRight,
-  Pin, MessageSquare, Info, RefreshCw, Wifi, LogOut, ArrowRight, Key, Mail
+  Pin, MessageSquare, Info, RefreshCw, Wifi, LogOut, ArrowRight, Key, Mail,
+  Terminal, Copy
 } from 'lucide-react';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');`;
@@ -760,45 +762,198 @@ function MealsView({ meals, onUpdateMeal }) {
   );
 }
 
+function AppLogsSection() {
+  const [logs, setLogs] = useState(getLogs());
+  const [filter, setFilter] = useState('all');
+  const [expandedLogId, setExpandedLogId] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    return subscribeLogs((newLogs) => setLogs(newLogs));
+  }, []);
+
+  const filteredLogs = logs.filter(l => filter === 'all' || l.type === filter);
+
+  const handleCopyLogs = () => {
+    const text = JSON.stringify(logs, null, 2);
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="bg-[#1E1E22] border border-[#33333C] rounded-2xl p-4 space-y-3">
+      <div className="flex items-center justify-between border-b border-[#33333C] pb-2">
+        <h3 className="text-sm font-bold flex items-center gap-2 text-stone-100">
+          <Terminal size={16} className="text-amber-400" /> Logi Aplikacji i Diagnostyka ({logs.length})
+        </h3>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleCopyLogs}
+            className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-semibold rounded-lg transition flex items-center gap-1"
+          >
+            <Copy size={12} /> {copied ? 'Skopiowano!' : 'Kopiuj logi'}
+          </button>
+          <button
+            type="button"
+            onClick={() => clearLogs()}
+            className="px-2.5 py-1 bg-stone-800 hover:bg-red-950/60 text-stone-400 hover:text-red-300 text-xs font-semibold rounded-lg transition"
+          >
+            Wyczyść
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+        <button
+          type="button"
+          onClick={() => setFilter('all')}
+          className={`px-2.5 py-1 rounded-lg transition font-medium ${filter === 'all' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-stone-900 text-stone-400 hover:text-stone-200'}`}
+        >
+          Wszystkie ({logs.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilter('error')}
+          className={`px-2.5 py-1 rounded-lg transition font-medium ${filter === 'error' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-stone-900 text-stone-400 hover:text-stone-200'}`}
+        >
+          Błędy ({logs.filter(l => l.type === 'error').length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilter('warn')}
+          className={`px-2.5 py-1 rounded-lg transition font-medium ${filter === 'warn' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-stone-900 text-stone-400 hover:text-stone-200'}`}
+        >
+          Ostrzeżenia ({logs.filter(l => l.type === 'warn').length})
+        </button>
+      </div>
+
+      {filteredLogs.length === 0 ? (
+        <div className="text-xs text-stone-500 py-3 text-center italic">Brak zarejestrowanych zdarzeń w tej sesji.</div>
+      ) : (
+        <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1 text-xs font-mono">
+          {filteredLogs.map(log => (
+            <div key={log.id} className="bg-stone-900/80 p-2.5 rounded-xl border border-stone-800/80 space-y-1">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] text-stone-500 font-sans">{log.timestamp}</span>
+                  <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded font-bold font-sans ${
+                    log.type === 'error' ? 'bg-red-950 text-red-400 border border-red-900' :
+                    log.type === 'warn' ? 'bg-amber-950 text-amber-300 border border-amber-900' :
+                    log.type === 'success' ? 'bg-emerald-950 text-emerald-300 border border-emerald-900' :
+                    'bg-stone-800 text-stone-300'
+                  }`}>
+                    {log.type}
+                  </span>
+                  <span className="text-stone-200 break-all font-sans text-xs">{log.message}</span>
+                </div>
+                {log.details && (
+                  <button
+                    type="button"
+                    onClick={() => setExpandedLogId(expandedLogId === log.id ? null : log.id)}
+                    className="text-[10px] text-amber-400 hover:underline shrink-0 font-sans"
+                  >
+                    {expandedLogId === log.id ? 'Ukryj' : 'Szczegóły'}
+                  </button>
+                )}
+              </div>
+              {expandedLogId === log.id && log.details && (
+                <pre className="text-[10px] text-stone-400 bg-black/40 p-2 rounded-lg overflow-x-auto whitespace-pre-wrap border border-stone-800 mt-1">
+                  {log.details}
+                </pre>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsView({ family, profile, settings, onUpdateSettings, people, onAddPerson, onEditPerson, onDeletePerson, onSignOut, supabase, showToast, onDeleteFamily }) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [pwdLoading, setPwdLoading] = useState(false);
   const [pwdMessage, setPwdMessage] = useState(null);
+  const [notifErrorDetails, setNotifErrorDetails] = useState(null);
   const [notifPermission, setNotifPermission] = useState(() => (
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported'
   ));
 
   const handleEnableNotifications = async () => {
+    setNotifErrorDetails(null);
+    addLog('info', 'Kliknięto przycisk włączania / testu powiadomień');
+
     if (!('Notification' in window)) {
-      alert('Twoja przeglądarka lub urządzenie nie obsługuje powiadomień.');
+      const msg = 'Twoja przeglądarka lub urządzenie nie obsługuje Notification API.';
+      addLog('error', msg);
+      setNotifErrorDetails(msg);
+      alert(msg);
       return;
     }
+
     try {
+      addLog('info', `Obecny status uprawnień powiadomień: ${Notification.permission}`);
+
+      let swRegistered = false;
       if ('serviceWorker' in navigator) {
-        await navigator.serviceWorker.register('/sw.js');
+        try {
+          addLog('info', 'Rejestrowanie Service Workera (/sw.js)...');
+          const reg = await navigator.serviceWorker.register('/sw.js');
+          addLog('success', 'Service Worker zarejestrowany pomyślnie!', { scope: reg.scope });
+          swRegistered = true;
+        } catch (swErr) {
+          addLog('warn', `Rejestracja Service Workera zgłosiła błąd: ${swErr.name} - ${swErr.message}`, swErr);
+        }
+      } else {
+        addLog('warn', 'Przeglądarka nie wspiera navigator.serviceWorker');
       }
+
+      addLog('info', 'Wywoływanie Notification.requestPermission()...');
       const perm = await Notification.requestPermission();
+      addLog('info', `Wynik zapytania o uprawnienia: ${perm}`);
       setNotifPermission(perm);
+
       if (perm === 'granted') {
+        addLog('success', 'Użytkownik przyznał zgodę na powiadomienia!');
         if (showToast) showToast('Powiadomienia zostały włączone! 🔔');
-        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          const reg = await navigator.serviceWorker.ready;
-          reg.showNotification('Rodzinny Planer 🔔', {
-            body: 'Powiadomienia w telefonie działają prawidłowo!',
-            icon: '/favicon.svg'
-          });
+
+        if (swRegistered && 'serviceWorker' in navigator) {
+          try {
+            const reg = await navigator.serviceWorker.ready;
+            await reg.showNotification('Rodzinny Planer 🔔', {
+              body: 'Powiadomienia w telefonie działają prawidłowo!',
+              icon: '/favicon.svg'
+            });
+            addLog('success', 'Wysłano testowe powiadomienie przez Service Worker.');
+          } catch (notifErr) {
+            addLog('warn', `Błąd reg.showNotification: ${notifErr.message}`, notifErr);
+            new Notification('Rodzinny Planer 🔔', {
+              body: 'Powiadomienia w telefonie działają prawidłowo!',
+              icon: '/favicon.svg'
+            });
+            addLog('success', 'Wysłano testowe powiadomienie przez standardowy Notification API.');
+          }
         } else {
           new Notification('Rodzinny Planer 🔔', {
             body: 'Powiadomienia w telefonie działają prawidłowo!',
             icon: '/favicon.svg'
           });
+          addLog('success', 'Wysłano testowe powiadomienie przez standardowy Notification API.');
         }
-      } else {
+      } else if (perm === 'denied') {
+        const errStr = 'Zgoda na powiadomienia została zablokowana lub odrzucona w przeglądarce.';
+        addLog('error', errStr);
+        setNotifErrorDetails(errStr + ' Jeśli używasz podglądu w ramce (iframe), otwórz aplikację w osobnej karcie lub zmień uprawnienia w pasku adresu (ikona kłódki).');
         if (showToast) showToast('Odrzucono zgodę na powiadomienia.');
+      } else {
+        addLog('warn', 'Okno wyboru zgody zostało zamknięte.');
       }
     } catch (e) {
-      console.error(e);
+      const errFormatted = `${e.name || 'Error'}: ${e.message || e}`;
+      addLog('error', `Błąd podczas włączania powiadomień: ${errFormatted}`, { stack: e.stack });
+      setNotifErrorDetails(`Błąd: ${errFormatted}. Jeśli przetestowałeś to wewnątrz ramki podglądu, otwórz aplikację bezpośrednio w nowej karcie przeglądarki.`);
       if (showToast) showToast('Błąd podczas włączania powiadomień.');
     }
   };
@@ -943,10 +1098,20 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
             <Bell size={14} /> {notifPermission === 'granted' ? 'Wyślij test' : 'Włącz powiadomienia'}
           </button>
         </div>
+        {notifErrorDetails && (
+          <div className="bg-red-950/50 border border-red-900/60 p-3 rounded-xl text-xs text-red-300 space-y-1">
+            <div className="font-bold flex items-center gap-1 text-red-400">
+              <AlertCircle size={14} /> Wykryty problem z powiadomieniami:
+            </div>
+            <p className="leading-relaxed">{notifErrorDetails}</p>
+          </div>
+        )}
         <p className="text-[11px] text-stone-400 leading-relaxed bg-stone-900/60 p-3 rounded-xl border border-stone-800">
-          <strong>Wskazówka (iOS / Android):</strong> Aby powiadomienia działały jak w tradycyjnej aplikacji, w menu przeglądarki wybierz <span className="text-amber-400 font-medium">"Dodaj do ekranu głównego"</span> / <span className="text-amber-400 font-medium">"Zainstaluj aplikację"</span>.
+          <strong>Wskazówka (iOS / Android / RAMKA):</strong> Jeśli testujesz wewnątrz podglądu, otwórz aplikację w nowej karcie (przycisk w prawym górnym rogu podglądu). Aby powiadomienia działały na telefonie jak zwykła aplikacja, w menu przeglądarki wybierz <span className="text-amber-400 font-medium">"Dodaj do ekranu głównego"</span> / <span className="text-amber-400 font-medium">"Zainstaluj aplikację"</span>.
         </p>
       </div>
+
+      <AppLogsSection />
 
       <div className="bg-[#1E1E22] border border-[#33333C] rounded-2xl p-4 space-y-4">
         <h3 className="text-sm font-bold border-b border-[#33333C] pb-2 text-stone-100">Moduły</h3>
