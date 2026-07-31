@@ -765,6 +765,43 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
   const [confirmPassword, setConfirmPassword] = useState('');
   const [pwdLoading, setPwdLoading] = useState(false);
   const [pwdMessage, setPwdMessage] = useState(null);
+  const [notifPermission, setNotifPermission] = useState(() => (
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported'
+  ));
+
+  const handleEnableNotifications = async () => {
+    if (!('Notification' in window)) {
+      alert('Twoja przeglądarka lub urządzenie nie obsługuje powiadomień.');
+      return;
+    }
+    try {
+      if ('serviceWorker' in navigator) {
+        await navigator.serviceWorker.register('/sw.js');
+      }
+      const perm = await Notification.requestPermission();
+      setNotifPermission(perm);
+      if (perm === 'granted') {
+        if (showToast) showToast('Powiadomienia zostały włączone! 🔔');
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          const reg = await navigator.serviceWorker.ready;
+          reg.showNotification('Rodzinny Planer 🔔', {
+            body: 'Powiadomienia w telefonie działają prawidłowo!',
+            icon: '/favicon.svg'
+          });
+        } else {
+          new Notification('Rodzinny Planer 🔔', {
+            body: 'Powiadomienia w telefonie działają prawidłowo!',
+            icon: '/favicon.svg'
+          });
+        }
+      } else {
+        if (showToast) showToast('Odrzucono zgodę na powiadomienia.');
+      }
+    } catch (e) {
+      console.error(e);
+      if (showToast) showToast('Błąd podczas włączania powiadomień.');
+    }
+  };
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
@@ -881,6 +918,34 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
             {pwdLoading ? 'Zapisywanie...' : 'Zmień hasło'}
           </button>
         </form>
+      </div>
+
+      <div className="bg-[#1E1E22] border border-[#33333C] rounded-2xl p-4 space-y-4">
+        <h3 className="text-sm font-bold border-b border-[#33333C] pb-2 flex items-center gap-2 text-stone-100">
+          <Bell size={16} className="text-amber-400" /> Powiadomienia w telefonie / PWA
+        </h3>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-stone-200">Stan powiadomień Push</div>
+            <div className="text-xs text-stone-400 mt-0.5">
+              {notifPermission === 'granted' && <span className="text-emerald-400 font-medium">✓ Włączone i aktywne</span>}
+              {notifPermission === 'denied' && <span className="text-red-400 font-medium">✕ Zablokowane w przeglądarce</span>}
+              {notifPermission === 'default' && <span className="text-amber-400 font-medium">! Wymagana zgoda</span>}
+              {notifPermission === 'unsupported' && <span className="text-stone-500">Brak obsługi w tej przeglądarce</span>}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleEnableNotifications}
+            disabled={notifPermission === 'unsupported'}
+            className="px-3.5 py-2 bg-amber-500 text-stone-950 rounded-xl text-xs font-bold hover:bg-amber-400 transition flex items-center gap-1.5 disabled:opacity-50 shrink-0"
+          >
+            <Bell size={14} /> {notifPermission === 'granted' ? 'Wyślij test' : 'Włącz powiadomienia'}
+          </button>
+        </div>
+        <p className="text-[11px] text-stone-400 leading-relaxed bg-stone-900/60 p-3 rounded-xl border border-stone-800">
+          <strong>Wskazówka (iOS / Android):</strong> Aby powiadomienia działały jak w tradycyjnej aplikacji, w menu przeglądarki wybierz <span className="text-amber-400 font-medium">"Dodaj do ekranu głównego"</span> / <span className="text-amber-400 font-medium">"Zainstaluj aplikację"</span>.
+        </p>
       </div>
 
       <div className="bg-[#1E1E22] border border-[#33333C] rounded-2xl p-4 space-y-4">
