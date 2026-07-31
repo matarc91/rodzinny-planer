@@ -1715,8 +1715,106 @@ export default function App() {
   }, [supabaseClient, session]);
 
   const dataRef = useRef(null);
+  const sentRemindersRef = useRef(new Set());
+
   useEffect(() => {
     dataRef.current = data;
+  }, [data]);
+
+  // System sprawdzania i wysyłania przypomnień czasowych dla wydarzeń i zadań
+  useEffect(() => {
+    if (!data) return;
+
+    const checkReminders = () => {
+      try {
+        const now = new Date();
+        const today = toDateStr(now);
+        const tomorrow = addDays(today, 1);
+
+        // 1. Sprawdzanie wydarzeń
+        if (Array.isArray(data.events)) {
+          data.events.forEach(ev => {
+            const reminderHours = ev.reminder?.hours ?? ev.reminderHours;
+            if (reminderHours === null || reminderHours === undefined) return;
+
+            [today, tomorrow].forEach(dateStr => {
+              if (occursOnDate(ev, dateStr)) {
+                const timeStr = ev.time || '09:00';
+                const [yh, mh, dh] = dateStr.split('-').map(Number);
+                const [hh, mm] = timeStr.split(':').map(Number);
+                const eventDate = new Date(yh, mh - 1, dh, hh, mm, 0);
+
+                const reminderDate = new Date(eventDate.getTime() - (Number(reminderHours) * 60 * 60 * 1000));
+                const diffMs = now.getTime() - reminderDate.getTime();
+                const key = `event_${ev.id}_${dateStr}_${reminderHours}_${timeStr}`;
+
+                if (diffMs >= 0 && diffMs < 15 * 60 * 1000 && !sentRemindersRef.current.has(key)) {
+                  sentRemindersRef.current.add(key);
+
+                  let labelText = 'O czasie wydarzenia';
+                  if (reminderHours === 1) labelText = 'Za 1 godz.';
+                  else if (reminderHours === 2) labelText = 'Za 2 godz.';
+                  else if (reminderHours === 24) labelText = 'Jutro';
+
+                  const body = reminderHours === 0
+                    ? `Nadszedł czas wydarzenia: "${ev.title}"${ev.time ? ' (' + ev.time + ')' : ''} 🔔`
+                    : `Przypomnienie (${labelText}): "${ev.title}"${ev.time ? ' o ' + ev.time : ''} 🔔`;
+
+                  addLog('info', `Wyzwalanie przypomnienia o wydarzeniu: ${body}`);
+                  sendSystemNotification('Nadchodzące wydarzenie 🔔', body);
+                  showToast(`🔔 ${body}`);
+                }
+              }
+            });
+          });
+        }
+
+        // 2. Sprawdzanie zadań
+        if (Array.isArray(data.tasks)) {
+          data.tasks.forEach(t => {
+            if (isTaskDoneForPeriod(t, today)) return;
+
+            const reminderHours = t.reminder?.hours ?? t.reminderHours;
+            if (reminderHours === null || reminderHours === undefined) return;
+
+            const targetDateStr = t.dueDate || today;
+            [targetDateStr].forEach(dateStr => {
+              const timeStr = t.time || '09:00';
+              const [yh, mh, dh] = dateStr.split('-').map(Number);
+              const [hh, mm] = timeStr.split(':').map(Number);
+              const taskDate = new Date(yh, mh - 1, dh, hh, mm, 0);
+
+              const reminderDate = new Date(taskDate.getTime() - (Number(reminderHours) * 60 * 60 * 1000));
+              const diffMs = now.getTime() - reminderDate.getTime();
+              const key = `task_${t.id}_${dateStr}_${reminderHours}_${timeStr}`;
+
+              if (diffMs >= 0 && diffMs < 15 * 60 * 1000 && !sentRemindersRef.current.has(key)) {
+                sentRemindersRef.current.add(key);
+
+                let labelText = 'Termin zadania';
+                if (reminderHours === 1) labelText = 'Za 1 godz.';
+                else if (reminderHours === 2) labelText = 'Za 2 godz.';
+                else if (reminderHours === 24) labelText = 'Jutro';
+
+                const body = reminderHours === 0
+                  ? `Nadszedł czas na zadanie: "${t.title}"! 📝`
+                  : `Przypomnienie o zadaniu (${labelText}): "${t.title}" 📝`;
+
+                addLog('info', `Wyzwalanie przypomnienia o zadaniu: ${body}`);
+                sendSystemNotification('Przypomnienie o zadaniu 📝', body);
+                showToast(`📝 ${body}`);
+              }
+            });
+          });
+        }
+      } catch (err) {
+        console.warn('Błąd sprawdzania przypomnień:', err);
+      }
+    };
+
+    checkReminders();
+    const interval = setInterval(checkReminders, 20000);
+    return () => clearInterval(interval);
   }, [data]);
 
   const handleRemoteDataUpdate = useCallback((newData) => {
@@ -1907,7 +2005,6 @@ export default function App() {
     persist({ ...data, events: exists ? data.events.map(e => e.id === ev.id ? ev : e) : [...data.events, ev], notes: nextNotes }); 
     if (!exists) {
       showToast("Dodano wydarzenie! 📅");
-      sendSystemNotification('Rodzinny Planer 📅', `Dodano nowe wydarzenie: ${ev.title}${ev.date ? ' (' + ev.date + ')' : ''}`);
     } else {
       showToast("Zaktualizowano wydarzenie 📅");
     }
@@ -1920,7 +2017,6 @@ export default function App() {
     persist({ ...data, tasks: exists ? data.tasks.map(x => x.id === t.id ? t : x) : [...data.tasks, t], notes: nextNotes }); 
     if (!exists) {
       showToast("Dodano zadanie! 📝");
-      sendSystemNotification('Rodzinny Planer 📝', `Dodano nowe zadanie: ${t.title}`);
     } else {
       showToast("Zaktualizowano zadanie 📝");
     }
@@ -1931,7 +2027,6 @@ export default function App() {
     persist({ ...data, notes: exists ? data.notes.map(x => x.id === n.id ? n : x) : [...data.notes, n] }); 
     if (!exists) {
       showToast("Dodano notatkę! 📌");
-      sendSystemNotification('Rodzinny Planer 📌', `Dodano nową notatkę: ${n.title || 'Bez tytułu'}`);
     } else {
       showToast("Zapisano notatkę 📌");
     }
@@ -1940,7 +2035,6 @@ export default function App() {
   const addWallMessage = msg => { 
     persist({ ...data, wall: [msg, ...(data.wall || [])] }); 
     showToast("Wysłano na tablicę 💬"); 
-    sendSystemNotification('Tablica Rodzinna 💬', `Nowa wiadomość: ${msg.text}`);
   };
   const deleteWallMessage = id => { persist({ ...data, wall: (data.wall || []).filter(w => w.id !== id) }); };
   const togglePinWallMessage = id => { persist({ ...data, wall: (data.wall || []).map(w => w.id === id ? { ...w, isPinned: !w.isPinned } : w) }); };
