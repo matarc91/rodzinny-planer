@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronRight, Repeat, Clock, Trash2, AlertCircle, 
   Pencil, Bell, BellOff, Utensils, Sparkles, Settings, ToggleLeft, ToggleRight,
   Pin, MessageSquare, Info, RefreshCw, Wifi, LogOut, ArrowRight, Key, Mail,
-  Terminal, Copy
+  Terminal, Copy, UserX
 } from 'lucide-react';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');`;
@@ -918,7 +918,7 @@ function AppLogsSection() {
   );
 }
 
-function SettingsView({ family, profile, settings, onUpdateSettings, people, onAddPerson, onEditPerson, onDeletePerson, onSignOut, supabase, showToast, onDeleteFamily }) {
+function SettingsView({ family, profile, settings, onUpdateSettings, people, onAddPerson, onEditPerson, onDeletePerson, onSignOut, supabase, showToast, onDeleteFamily, onDeleteUserAccount }) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [pwdLoading, setPwdLoading] = useState(false);
@@ -1214,20 +1214,42 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
         </div>
       </div>
 
-      <div className="bg-[#1E1E22] border border-red-900/40 rounded-2xl p-4 space-y-3">
+      <div className="bg-[#1E1E22] border border-red-900/40 rounded-2xl p-4 space-y-4">
         <h3 className="text-sm font-bold border-b border-red-900/40 pb-2 text-red-400 flex items-center gap-2">
           <Trash2 size={16} /> Strefa niebezpieczna
         </h3>
-        <p className="text-xs text-stone-400 leading-relaxed">
-          Usunięcie rodziny spowoduje skasowanie całego wspólnego kalendarza, zadań, notatek i listy domowników. Nastąpi powrót do ekranu wyboru rodziny.
-        </p>
-        <button 
-          type="button"
-          onClick={onDeleteFamily} 
-          className="w-full py-2.5 bg-red-950/80 border border-red-800/80 text-red-400 hover:bg-red-900 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2"
-        >
-          <Trash2 size={15} /> Usuń rodzinę i zresetuj dane
-        </button>
+
+        <div className="space-y-2">
+          <div className="text-xs font-semibold text-stone-200 flex items-center gap-1.5">
+            <UserX size={14} className="text-red-400" /> Usuwanie konta użytkownika
+          </div>
+          <p className="text-xs text-stone-400 leading-relaxed">
+            Spowoduje wyczyszczenie Twoich prywatnych notatek, odpięcie profilu od członka rodziny oraz wylogowanie z aplikacji.
+          </p>
+          <button 
+            type="button"
+            onClick={onDeleteUserAccount} 
+            className="w-full py-2.5 bg-red-950/60 border border-red-800/60 text-red-300 hover:bg-red-900 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2"
+          >
+            <UserX size={15} /> Usuń moje konto i odepnij od rodziny
+          </button>
+        </div>
+
+        <div className="space-y-2 pt-3 border-t border-red-900/30">
+          <div className="text-xs font-semibold text-stone-200 flex items-center gap-1.5">
+            <Trash2 size={14} className="text-red-400" /> Usuwanie całej rodziny
+          </div>
+          <p className="text-xs text-stone-400 leading-relaxed">
+            Usunięcie rodziny spowoduje skasowanie całego wspólnego kalendarza, zadań, notatek i całej listy domowników z bazy.
+          </p>
+          <button 
+            type="button"
+            onClick={onDeleteFamily} 
+            className="w-full py-2.5 bg-red-950/90 border border-red-800/90 text-red-400 hover:bg-red-900 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2"
+          >
+            <Trash2 size={15} /> Usuń całą rodzinę i zresetuj dane
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -2041,7 +2063,67 @@ export default function App() {
   const upsertPerson = p => { const exists = data.people.some(x => x.id === p.id); persist({ ...data, people: exists ? data.people.map(x => x.id === p.id ? p : x) : [...data.people, p] }); showToast("Zapisano osobę"); };
   const updateMeal = (mondayKey, weekMeals) => persist({ ...data, meals: { ...(data.meals || {}), [mondayKey]: weekMeals } });
   const updateSettings = newSettings => persist({ ...data, settings: newSettings });
-  const deletePerson = id => { if (confirm("Usunąć tę osobę?")) persist({ ...data, people: data.people.filter(p => p.id !== id) }); };
+  const deletePerson = async (id) => {
+    const person = data.people.find(p => p.id === id);
+    const personName = person ? person.name : "tę osobę";
+    if (!confirm(`Czy na pewno chcesz usunąć członka rodziny "${personName}"?\n\nOsoba zostanie usunięta z listy domowników, jej prywatne notatki wyczyszczone, a połączone konto odpięte.`)) return;
+
+    const nextPeople = data.people.filter(p => p.id !== id);
+    const nextNotes = (data.notes || []).filter(n => n.personId !== id);
+    persist({ ...data, people: nextPeople, notes: nextNotes });
+
+    if (supabaseClient) {
+      try {
+        await supabaseClient.from('profiles').update({ person_id: null }).eq('person_id', id);
+      } catch (e) {
+        console.warn('Błąd odpinania profilu w Supabase:', e);
+      }
+    }
+
+    if (id === currentUserId) {
+      setProfile(prev => prev ? { ...prev, person_id: null } : null);
+      showToast(`Odpięto i usunięto profil ${personName}. Wybierz nowy profil.`);
+    } else {
+      showToast(`Usunięto członka rodziny: ${personName}`);
+    }
+  };
+
+  const deleteUserAccount = async () => {
+    if (!confirm("CZY NA PEWNO CHCESZ USUNĄĆ SWOJE KONTO UŻYTKOWNIKA?\n\n- Twoje prywatne notatki zostaną wyczyszczone z bazy danych.\n- Twój profil zostanie odpięty od członka rodziny.\n- Nastąpi wylogowanie z aplikacji.")) return;
+
+    try {
+      // 1. Wyczyszczenie prywatnych notatek użytkownika z bazy danych rodziny
+      if (data) {
+        const nextNotes = (data.notes || []).filter(n => n.personId !== currentUserId);
+        await persist({ ...data, notes: nextNotes });
+      }
+
+      // 2. Czyszczenie wpisu w tabeli profiles w Supabase
+      if (supabaseClient && profile?.id) {
+        await supabaseClient.from('profiles').update({
+          family_id: null,
+          person_id: null
+        }).eq('id', profile.id);
+      }
+
+      // 3. Wylogowanie użytkownika z Supabase Auth
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
+
+      // 4. Resetowanie stanu lokalnego
+      setFamily(null);
+      setProfile(null);
+      setData(null);
+      setSession(null);
+      setTab('today');
+      showToast("Konto użytkownika zostało usunięte i odpięte od rodziny.");
+    } catch (err) {
+      console.error("Błąd podczas usuwania konta użytkownika:", err);
+      showToast("Wystąpił błąd podczas usuwania konta.");
+    }
+  };
+
   const deleteEvent = id => persist({ ...data, events: data.events.filter(e => e.id !== id) });
   const deleteTask = id => persist({ ...data, tasks: data.tasks.filter(t => t.id !== id) });
   const deleteNote = id => persist({ ...data, notes: data.notes.filter(n => n.id !== id) });
@@ -2120,7 +2202,7 @@ export default function App() {
         {tab === 'notes' && <NotesView notes={visibleNotes} onDelete={deleteNote} onConvert={openConvertNote} onEdit={openEditNote} onToggleItem={toggleNoteItem} onOpenAddNote={() => setModal('note')} />}
         {tab === 'wall' && data.settings?.enableWall && <WallView wall={data.wall} people={data.people} onDeleteWallMessage={deleteWallMessage} onTogglePinWallMessage={togglePinWallMessage} onOpenAddWall={() => setModal('wall')} />}
         {tab === 'meals' && data.settings?.enableMeals && <MealsView meals={data.meals} onUpdateMeal={updateMeal} />}
-        {tab === 'settings' && <SettingsView family={family} profile={profile} settings={data.settings} onUpdateSettings={updateSettings} people={data.people} onAddPerson={() => setModal('person')} onEditPerson={openEditPerson} onDeletePerson={deletePerson} onSignOut={handleSignOut} supabase={supabaseClient} showToast={showToast} onDeleteFamily={deleteFamily} />}
+        {tab === 'settings' && <SettingsView family={family} profile={profile} settings={data.settings} onUpdateSettings={updateSettings} people={data.people} onAddPerson={() => setModal('person')} onEditPerson={openEditPerson} onDeletePerson={deletePerson} onSignOut={handleSignOut} supabase={supabaseClient} showToast={showToast} onDeleteFamily={deleteFamily} onDeleteUserAccount={deleteUserAccount} />}
         
         <PoweredByFooter className="mt-12 mb-4" />
       </main>
