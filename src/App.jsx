@@ -1257,6 +1257,36 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
 
 /* --- AUTH & ONBOARDING VIEWS --- */
 
+function AppLogo({ className = "w-8 h-8 rounded-xl", iconSize = 18 }) {
+  const [logoSrc, setLogoSrc] = useState('/logo.png');
+  const [imgError, setImgError] = useState(false);
+
+  const handleError = () => {
+    if (logoSrc === '/logo.png') {
+      setLogoSrc('/logo.svg');
+    } else {
+      setImgError(true);
+    }
+  };
+
+  if (!imgError) {
+    return (
+      <img 
+        src={logoSrc} 
+        alt="Logo" 
+        onError={handleError}
+        className={`${className} object-cover shrink-0 overflow-hidden`}
+      />
+    );
+  }
+
+  return (
+    <div className={`${className} bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0`}>
+      <Sparkles size={iconSize} />
+    </div>
+  );
+}
+
 function PoweredByFooter({ className = "" }) {
   return (
     <footer className={`mt-8 text-center text-xs text-stone-500 flex items-center justify-center gap-1.5 ${className}`}>
@@ -1419,9 +1449,7 @@ function AuthScreen({ supabase }) {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#121214] text-stone-100 animate-fadeIn">
-      <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-6 shadow-lg shadow-amber-900/20">
-        <Sparkles size={32} />
-      </div>
+      <AppLogo className="w-16 h-16 rounded-2xl shadow-lg shadow-amber-900/20 mb-6" iconSize={32} />
       <h1 style={{ fontFamily: 'Fraunces' }} className="text-3xl font-bold mb-2">Rodzinny Planer</h1>
       <p className="text-sm text-stone-400 mb-8 text-center max-w-xs">Współdziel kalendarz i obowiązki z całą rodziną w jednym miejscu.</p>
       
@@ -2189,7 +2217,7 @@ export default function App() {
 
       <header className="flex items-center justify-between px-5 pt-6 pb-4 sticky top-0 z-30 bg-[#121214]/85 backdrop-blur-md border-b border-stone-800/50">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0"><Sparkles size={18} /></div>
+          <AppLogo className="w-8 h-8 rounded-xl" iconSize={18} />
           <h1 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-xl font-bold truncate">{family.name}</h1>
         </div>
         <button onClick={() => setTab('settings')} className={`p-2 rounded-full transition border shadow-sm ${tab === 'settings' ? 'bg-amber-500/10 border-amber-500/50 text-amber-400' : 'bg-stone-900 border-stone-800 text-stone-300 hover:bg-stone-800'}`}><Settings size={20} /></button>
