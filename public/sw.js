@@ -22,9 +22,12 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body || 'Nowe wydarzenie lub zadanie w planerze.',
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
-    vibrate: [100, 50, 100],
+    icon: data.icon || '/icon-192.png',
+    badge: data.badge || '/badge.png',
+    tag: data.tag || 'rodzinny-planer-notification',
+    renotify: true,
+    requireInteraction: false,
+    vibrate: [200, 100, 200, 100, 200],
     data: {
       url: data.url || '/'
     },

@@ -896,15 +896,38 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
     try {
       addLog('info', `Obecny status uprawnień powiadomień: ${Notification.permission}`);
 
-      let swRegistered = false;
+      let swReg = null;
       if ('serviceWorker' in navigator) {
         try {
           addLog('info', 'Rejestrowanie Service Workera (/sw.js)...');
-          const reg = await navigator.serviceWorker.register('/sw.js');
-          addLog('success', 'Service Worker zarejestrowany pomyślnie!', { scope: reg.scope });
-          swRegistered = true;
+          swReg = await navigator.serviceWorker.register('/sw.js');
+          addLog('success', 'Service Worker (/sw.js) zarejestrowany pomyślnie!', { scope: swReg.scope });
         } catch (swErr) {
-          addLog('warn', `Rejestracja Service Workera zgłosiła błąd: ${swErr.name} - ${swErr.message}`, swErr);
+          addLog('warn', `Rejestracja /sw.js nie powiodła się: ${swErr.name} - ${swErr.message}. Próba utworzenia awaryjnego (Inline Blob) Service Workera...`);
+          try {
+            const inlineSwCode = `
+              self.addEventListener('install', () => self.skipWaiting());
+              self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+              self.addEventListener('push', (e) => {
+                let data = { title: 'Rodzinny Planer', body: 'Masz nowe powiadomienie!' };
+                if (e.data) { try { data = e.data.json(); } catch { data.body = e.data.text(); } }
+                e.waitUntil(self.registration.showNotification(data.title || 'Rodzinny Planer', { body: data.body, icon: '/favicon.svg' }));
+              });
+              self.addEventListener('notificationclick', (e) => {
+                e.notification.close();
+                e.waitUntil(self.clients.matchAll({ type: 'window' }).then((clients) => {
+                  for (const client of clients) { if ('focus' in client) return client.focus(); }
+                  if (self.clients.openWindow) return self.clients.openWindow('/');
+                }));
+              });
+            `;
+            const blob = new Blob([inlineSwCode], { type: 'application/javascript' });
+            const blobUrl = URL.createObjectURL(blob);
+            swReg = await navigator.serviceWorker.register(blobUrl);
+            addLog('success', 'Awaryjny Inline Service Worker zarejestrowany!', { scope: swReg.scope });
+          } catch (blobErr) {
+            addLog('warn', `Rejestracja awaryjnego Service Workera również się nie powiodła: ${blobErr.message}`);
+          }
         }
       } else {
         addLog('warn', 'Przeglądarka nie wspiera navigator.serviceWorker');
@@ -919,33 +942,52 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
         addLog('success', 'Użytkownik przyznał zgodę na powiadomienia!');
         if (showToast) showToast('Powiadomienia zostały włączone! 🔔');
 
-        if (swRegistered && 'serviceWorker' in navigator) {
-          try {
-            const reg = await navigator.serviceWorker.ready;
-            await reg.showNotification('Rodzinny Planer 🔔', {
-              body: 'Powiadomienia w telefonie działają prawidłowo!',
-              icon: '/favicon.svg'
-            });
-            addLog('success', 'Wysłano testowe powiadomienie przez Service Worker.');
-          } catch (notifErr) {
-            addLog('warn', `Błąd reg.showNotification: ${notifErr.message}`, notifErr);
-            new Notification('Rodzinny Planer 🔔', {
-              body: 'Powiadomienia w telefonie działają prawidłowo!',
-              icon: '/favicon.svg'
-            });
-            addLog('success', 'Wysłano testowe powiadomienie przez standardowy Notification API.');
+        // Spróbujmy znaleźć aktywną rejestrację SW do wysłania powiadomienia
+        if ('serviceWorker' in navigator) {
+          if (!swReg) {
+            swReg = await navigator.serviceWorker.getRegistration().catch(() => null);
           }
-        } else {
+          if (!swReg && navigator.serviceWorker.ready) {
+            swReg = await navigator.serviceWorker.ready.catch(() => null);
+          }
+        }
+
+        if (swReg && typeof swReg.showNotification === 'function') {
+          try {
+            await swReg.showNotification('Rodzinny Planer 🔔', {
+              body: 'Powiadomienia w telefonie działają prawidłowo!',
+              icon: '/icon-192.png',
+              badge: '/badge.png',
+              tag: 'rodzinny-planer-test',
+              renotify: true,
+              vibrate: [200, 100, 200, 100, 200],
+              actions: [
+                { action: 'open', title: 'Otwórz planer' }
+              ]
+            });
+            addLog('success', 'Wysłano testowe powiadomienie przez Service Worker!');
+            return;
+          } catch (showErr) {
+            addLog('warn', `Błąd podczas wywołania swReg.showNotification: ${showErr.message}`);
+          }
+        }
+
+        // Jeśli brak SW (lub błąd w showNotification), spróbuj klasycznego Notification(...)
+        try {
           new Notification('Rodzinny Planer 🔔', {
             body: 'Powiadomienia w telefonie działają prawidłowo!',
             icon: '/favicon.svg'
           });
           addLog('success', 'Wysłano testowe powiadomienie przez standardowy Notification API.');
+        } catch (notifErr) {
+          addLog('error', `Android wymaga aktywnego Service Workera. Wykryty błąd: ${notifErr.message}`);
+          setNotifErrorDetails('Na telefonach z Androidem przeglądarka wymaga aktywnego Service Workera do wyświetlania powiadomień. Przyczyną błędu jest brak pliku /sw.js na Twoim serwerze (błąd 404). Wykonaj ponowny build (npm run build) i upewnij się, że plik dist/sw.js trafił na serwer planer-rodzinny.syncup.pl/sw.js.');
         }
+
       } else if (perm === 'denied') {
         const errStr = 'Zgoda na powiadomienia została zablokowana lub odrzucona w przeglądarce.';
         addLog('error', errStr);
-        setNotifErrorDetails(errStr + ' Jeśli używasz podglądu w ramce (iframe), otwórz aplikację w osobnej karcie lub zmień uprawnienia w pasku adresu (ikona kłódki).');
+        setNotifErrorDetails(errStr + ' Otwórz ustawienia strony w telefonie i włącz uprawnienia dla powiadomień.');
         if (showToast) showToast('Odrzucono zgodę na powiadomienia.');
       } else {
         addLog('warn', 'Okno wyboru zgody zostało zamknięte.');
@@ -953,7 +995,7 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
     } catch (e) {
       const errFormatted = `${e.name || 'Error'}: ${e.message || e}`;
       addLog('error', `Błąd podczas włączania powiadomień: ${errFormatted}`, { stack: e.stack });
-      setNotifErrorDetails(`Błąd: ${errFormatted}. Jeśli przetestowałeś to wewnątrz ramki podglądu, otwórz aplikację bezpośrednio w nowej karcie przeglądarki.`);
+      setNotifErrorDetails(`Błąd: ${errFormatted}.`);
       if (showToast) showToast('Błąd podczas włączania powiadomień.');
     }
   };
