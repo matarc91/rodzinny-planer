@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabaseClient } from './supabase.js';
 import { addLog, getLogs, clearLogs, subscribeLogs } from './logger.js';
 import { 
@@ -44,6 +44,53 @@ function addDays(dateStr, n) { const d = parseDate(dateStr); d.setDate(d.getDate
 function addMonths(dateStr, n) { const d = parseDate(dateStr); d.setMonth(d.getMonth() + n); return toDateStr(d); }
 function uid(prefix) { return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); }
 function reminderLabel(hours) { const opt = REMINDER_OPTIONS.find(o => o.hours === hours); return opt ? opt.label : 'Brak'; }
+
+async function sendSystemNotification(title, body, extraOptions = {}) {
+  try {
+    addLog('info', `Próba wysłania powiadomienia systemowego: "${title}" - "${body}"`);
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      addLog('warn', 'Notification API jest niedostępne.');
+      return false;
+    }
+    if (Notification.permission !== 'granted') {
+      addLog('warn', `Brak uprawnień do powiadomień systemowych. Status: ${Notification.permission}`);
+      return false;
+    }
+
+    const options = {
+      body,
+      icon: '/icon-192.png',
+      badge: '/badge.png',
+      vibrate: [200, 100, 200, 100, 200],
+      renotify: true,
+      tag: 'rodzinny-planer-' + Date.now(),
+      ...extraOptions
+    };
+
+    if ('serviceWorker' in navigator) {
+      try {
+        let reg = await navigator.serviceWorker.getRegistration();
+        if (!reg && navigator.serviceWorker.ready) {
+          reg = await navigator.serviceWorker.ready;
+        }
+        if (reg && typeof reg.showNotification === 'function') {
+          await reg.showNotification(title, options);
+          addLog('success', `Wysłano powiadomienie przez Service Worker: "${title}"`);
+          return true;
+        }
+      } catch (swErr) {
+        addLog('warn', `Błąd wywołania Service Worker showNotification: ${swErr.message}`);
+      }
+    }
+
+    new Notification(title, options);
+    addLog('success', `Wysłano powiadomienie przez Notification API: "${title}"`);
+    return true;
+  } catch (e) {
+    addLog('error', `Nie udało się wysłać powiadomienia: ${e.message}`);
+    return false;
+  }
+}
 
 function occursOnDate(event, dateStr) {
   if (dateStr < event.date) return false;
@@ -1667,12 +1714,85 @@ export default function App() {
     loadUserMeta();
   }, [supabaseClient, session]);
 
-  // Load Data & Realtime Sync
+  const dataRef = useRef(null);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+
+  const handleRemoteDataUpdate = useCallback((newData) => {
+    if (!newData) return;
+    const oldData = dataRef.current;
+
+    if (!oldData) {
+      setData(newData);
+      dataRef.current = newData;
+      return;
+    }
+
+    if (JSON.stringify(oldData) === JSON.stringify(newData)) return;
+
+    // Detekcja elementów dodanych przez innych domowników
+    const oldEventIds = new Set((oldData.events || []).map(e => e.id));
+    const addedEvents = (newData.events || []).filter(e => !oldEventIds.has(e.id));
+
+    const oldTaskIds = new Set((oldData.tasks || []).map(t => t.id));
+    const addedTasks = (newData.tasks || []).filter(t => !oldTaskIds.has(t.id));
+
+    const oldWallIds = new Set((oldData.wall || []).map(m => m.id));
+    const addedWall = (newData.wall || []).filter(m => !oldWallIds.has(m.id));
+
+    const oldNoteIds = new Set((oldData.notes || []).map(n => n.id));
+    const addedNotes = (newData.notes || []).filter(n => !oldNoteIds.has(n.id));
+
+    setData(newData);
+    dataRef.current = newData;
+
+    let hasNotified = false;
+
+    if (addedEvents.length > 0) {
+      addedEvents.forEach(ev => {
+        showToast(`Współdomownik dodał wydarzenie: "${ev.title}" 📅`);
+        sendSystemNotification('Nowe wydarzenie w planerze! 📅', `${ev.title}${ev.date ? ' (' + ev.date + ')' : ''}`);
+      });
+      hasNotified = true;
+    }
+
+    if (addedTasks.length > 0) {
+      addedTasks.forEach(t => {
+        showToast(`Współdomownik dodał zadanie: "${t.title}" 📝`);
+        sendSystemNotification('Nowe zadanie w planerze! 📝', t.title);
+      });
+      hasNotified = true;
+    }
+
+    if (addedWall.length > 0) {
+      addedWall.forEach(m => {
+        showToast(`Nowa wiadomość na tablicy: "${m.text}" 💬`);
+        sendSystemNotification('Tablica rodzinna 💬', m.text);
+      });
+      hasNotified = true;
+    }
+
+    if (addedNotes.length > 0) {
+      addedNotes.forEach(n => {
+        showToast(`Współdomownik dodał notatkę: "${n.title || 'Bez tytułu'}" 📌`);
+        sendSystemNotification('Nowa notatka! 📌', n.title || 'Bez tytułu');
+      });
+      hasNotified = true;
+    }
+
+    if (!hasNotified) {
+      showToast("Zaktualizowano dane od domownika! 🔄");
+    }
+  }, []);
+
+  // Load Data, Realtime Sync & Polling Fallback
   useEffect(() => {
     let isMounted = true;
     let channel = null;
+    let pollInterval = null;
 
-    async function fetchFamilyData() {
+    async function fetchAndSync() {
       if (!supabaseClient || !family || !profile) return;
       
       try {
@@ -1681,12 +1801,18 @@ export default function App() {
         if (error && error.code === 'PGRST116') {
           const init = emptyData();
           await supabaseClient.from('family_state').insert({ family_id: family.id, data: init });
-          if (isMounted) setData(init);
-        } else if (stateRow) {
-          if (isMounted) setData(stateRow.data);
+          if (isMounted) {
+            setData(init);
+            dataRef.current = init;
+          }
+        } else if (stateRow && stateRow.data) {
+          if (isMounted) {
+            setData(stateRow.data);
+            dataRef.current = stateRow.data;
+          }
         }
 
-        // NAPRAWIONY KANAŁ REALTIME (nasłuchuje bez względu na rodzaj operacji UPDATE/INSERT)
+        // 1. Kanał Realtime Supabase (WebSocket)
         channel = supabaseClient
           .channel(`public:family_state:${family.id}`)
           .on('postgres_changes', { 
@@ -1696,11 +1822,23 @@ export default function App() {
             filter: `family_id=eq.${family.id}` 
           }, (payload) => {
             if (isMounted && payload.new && payload.new.data) {
-              setData(payload.new.data);
-              showToast("Zaktualizowano dane od domownika! 🔄");
+              handleRemoteDataUpdate(payload.new.data);
             }
           })
           .subscribe();
+
+        // 2. Backup Polling (co 6 sekund) dla 100% niezawodności w czasie rzeczywistym
+        pollInterval = setInterval(async () => {
+          if (!isMounted) return;
+          try {
+            const { data: row } = await supabaseClient.from('family_state').select('data').eq('family_id', family.id).single();
+            if (isMounted && row && row.data) {
+              handleRemoteDataUpdate(row.data);
+            }
+          } catch {
+            // Bezgłośny błąd sieci
+          }
+        }, 6000);
 
       } catch(err) {
         console.warn("Błąd ładowania danych:", err);
@@ -1708,19 +1846,28 @@ export default function App() {
       if (isMounted) setLoading(false);
     }
 
-    if (family && profile) fetchFamilyData();
+    if (family && profile) fetchAndSync();
 
     return () => {
       isMounted = false;
       if (channel && supabaseClient) supabaseClient.removeChannel(channel);
+      if (pollInterval) clearInterval(pollInterval);
     };
-  }, [supabaseClient, family, profile]);
+  }, [supabaseClient, family, profile, handleRemoteDataUpdate]);
 
   const persist = useCallback(async (next) => {
     setData(next);
+    dataRef.current = next; // Kluczowe: zapobiega powtórnemu powiadomieniu u autora zmiany
     if (supabaseClient && family) {
-      try { await supabaseClient.from('family_state').upsert({ family_id: family.id, data: next, updated_at: new Date().toISOString() }); }
-      catch (e) { console.warn(e); }
+      try {
+        await supabaseClient.from('family_state').upsert({
+          family_id: family.id,
+          data: next,
+          updated_at: new Date().toISOString()
+        });
+      } catch (e) {
+        console.warn(e);
+      }
     }
   }, [supabaseClient, family]);
 
@@ -1753,10 +1900,48 @@ export default function App() {
   const visibleNotes = data.notes.filter(n => n.personId === currentUserId);
 
   // Handlers
-  const upsertEvent = ev => { const noteId = modalPayload?.noteId; const nextNotes = noteId ? data.notes.filter(n => n.id !== noteId) : data.notes; const exists = data.events.some(e => e.id === ev.id); persist({ ...data, events: exists ? data.events.map(e => e.id === ev.id ? ev : e) : [...data.events, ev], notes: nextNotes }); showToast("Zapisano wydarzenie"); };
-  const upsertTask = t => { const noteId = modalPayload?.noteId; const nextNotes = noteId ? data.notes.filter(n => n.id !== noteId) : data.notes; const exists = data.tasks.some(x => x.id === t.id); persist({ ...data, tasks: exists ? data.tasks.map(x => x.id === t.id ? t : x) : [...data.tasks, t], notes: nextNotes }); showToast("Zapisano zadanie"); };
-  const upsertNote = n => { const exists = data.notes.some(x => x.id === n.id); persist({ ...data, notes: exists ? data.notes.map(x => x.id === n.id ? n : x) : [...data.notes, n] }); showToast("Zapisano notatkę"); };
-  const addWallMessage = msg => { persist({ ...data, wall: [msg, ...(data.wall || [])] }); showToast("Wysłano na tablicę"); };
+  const upsertEvent = ev => { 
+    const noteId = modalPayload?.noteId; 
+    const nextNotes = noteId ? data.notes.filter(n => n.id !== noteId) : data.notes; 
+    const exists = data.events.some(e => e.id === ev.id); 
+    persist({ ...data, events: exists ? data.events.map(e => e.id === ev.id ? ev : e) : [...data.events, ev], notes: nextNotes }); 
+    if (!exists) {
+      showToast("Dodano wydarzenie! 📅");
+      sendSystemNotification('Rodzinny Planer 📅', `Dodano nowe wydarzenie: ${ev.title}${ev.date ? ' (' + ev.date + ')' : ''}`);
+    } else {
+      showToast("Zaktualizowano wydarzenie 📅");
+    }
+  };
+
+  const upsertTask = t => { 
+    const noteId = modalPayload?.noteId; 
+    const nextNotes = noteId ? data.notes.filter(n => n.id !== noteId) : data.notes; 
+    const exists = data.tasks.some(x => x.id === t.id); 
+    persist({ ...data, tasks: exists ? data.tasks.map(x => x.id === t.id ? t : x) : [...data.tasks, t], notes: nextNotes }); 
+    if (!exists) {
+      showToast("Dodano zadanie! 📝");
+      sendSystemNotification('Rodzinny Planer 📝', `Dodano nowe zadanie: ${t.title}`);
+    } else {
+      showToast("Zaktualizowano zadanie 📝");
+    }
+  };
+
+  const upsertNote = n => { 
+    const exists = data.notes.some(x => x.id === n.id); 
+    persist({ ...data, notes: exists ? data.notes.map(x => x.id === n.id ? n : x) : [...data.notes, n] }); 
+    if (!exists) {
+      showToast("Dodano notatkę! 📌");
+      sendSystemNotification('Rodzinny Planer 📌', `Dodano nową notatkę: ${n.title || 'Bez tytułu'}`);
+    } else {
+      showToast("Zapisano notatkę 📌");
+    }
+  };
+
+  const addWallMessage = msg => { 
+    persist({ ...data, wall: [msg, ...(data.wall || [])] }); 
+    showToast("Wysłano na tablicę 💬"); 
+    sendSystemNotification('Tablica Rodzinna 💬', `Nowa wiadomość: ${msg.text}`);
+  };
   const deleteWallMessage = id => { persist({ ...data, wall: (data.wall || []).filter(w => w.id !== id) }); };
   const togglePinWallMessage = id => { persist({ ...data, wall: (data.wall || []).map(w => w.id === id ? { ...w, isPinned: !w.isPinned } : w) }); };
   const upsertPerson = p => { const exists = data.people.some(x => x.id === p.id); persist({ ...data, people: exists ? data.people.map(x => x.id === p.id ? p : x) : [...data.people, p] }); showToast("Zapisano osobę"); };
