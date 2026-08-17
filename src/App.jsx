@@ -2,11 +2,17 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabaseClient } from './supabase.js';
 import { addLog, getLogs, clearLogs, subscribeLogs } from './logger.js';
 import { 
+  subscribeToPushNotifications, 
+  unsubscribeFromPushNotifications, 
+  checkPushSubscription, 
+  recordFamilyNotification 
+} from './pushManager.js';
+import { 
   Calendar, CheckSquare, StickyNote, Users, Plus, X, Check, 
   ChevronLeft, ChevronRight, Repeat, Clock, Trash2, AlertCircle, 
   Pencil, Bell, BellOff, Utensils, Sparkles, Settings, ToggleLeft, ToggleRight,
   Pin, MessageSquare, Info, RefreshCw, Wifi, LogOut, ArrowRight, Key, Mail,
-  Terminal, Copy, UserX
+  Terminal, Copy, UserX, Smartphone, CheckCircle, HelpCircle, Code
 } from 'lucide-react';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');`;
@@ -924,126 +930,72 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
   const [pwdLoading, setPwdLoading] = useState(false);
   const [pwdMessage, setPwdMessage] = useState(null);
   const [notifErrorDetails, setNotifErrorDetails] = useState(null);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [showSqlGuide, setShowSqlGuide] = useState(false);
   const [notifPermission, setNotifPermission] = useState(() => (
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported'
   ));
 
+  // Sprawdzanie statusu subskrypcji Web Push przy wejściu do Ustawień
+  useEffect(() => {
+    async function checkSub() {
+      const res = await checkPushSubscription();
+      setPushSubscribed(res.subscribed);
+    }
+    checkSub();
+  }, []);
+
   const handleEnableNotifications = async () => {
     setNotifErrorDetails(null);
-    addLog('info', 'Kliknięto przycisk włączania / testu powiadomień');
-
-    if (!('Notification' in window)) {
-      const msg = 'Twoja przeglądarka lub urządzenie nie obsługuje Notification API.';
-      addLog('error', msg);
-      setNotifErrorDetails(msg);
-      alert(msg);
-      return;
-    }
+    setNotifLoading(true);
+    addLog('info', 'Uruchomiono konfigurację powiadomień Web Push...');
 
     try {
-      addLog('info', `Obecny status uprawnień powiadomień: ${Notification.permission}`);
+      // 1. Zarejestruj subskrypcję i wyślij token do Supabase
+      const sub = await subscribeToPushNotifications(supabase, profile, family?.id);
+      
+      setNotifPermission(typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'granted');
+      setPushSubscribed(!!sub);
+      
+      showToast('Powiadomienia Web Push w tle zostały aktywowane! 🔔');
+      addLog('success', 'Pomyślnie włączono i zsynchronizowano Web Push.');
+    } catch (e) {
+      const errFormatted = `${e.name || 'Błąd'}: ${e.message || e}`;
+      addLog('error', `Błąd podczas włączania Web Push: ${errFormatted}`);
+      setNotifErrorDetails(e.message || 'Wystąpił problem z rejestracją powiadomień.');
+      showToast('Nie udało się włączyć powiadomień.');
+    } finally {
+      setNotifLoading(false);
+    }
+  };
 
-      let swReg = null;
-      if ('serviceWorker' in navigator) {
-        try {
-          addLog('info', 'Rejestrowanie Service Workera (/sw.js)...');
-          swReg = await navigator.serviceWorker.register('/sw.js');
-          addLog('success', 'Service Worker (/sw.js) zarejestrowany pomyślnie!', { scope: swReg.scope });
-        } catch (swErr) {
-          addLog('warn', `Rejestracja /sw.js nie powiodła się: ${swErr.name} - ${swErr.message}. Próba utworzenia awaryjnego (Inline Blob) Service Workera...`);
-          try {
-            const inlineSwCode = `
-              self.addEventListener('install', () => self.skipWaiting());
-              self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
-              self.addEventListener('push', (e) => {
-                let data = { title: 'Rodzinny Planer', body: 'Masz nowe powiadomienie!' };
-                if (e.data) { try { data = e.data.json(); } catch { data.body = e.data.text(); } }
-                e.waitUntil(self.registration.showNotification(data.title || 'Rodzinny Planer', { body: data.body, icon: '/favicon.svg' }));
-              });
-              self.addEventListener('notificationclick', (e) => {
-                e.notification.close();
-                e.waitUntil(self.clients.matchAll({ type: 'window' }).then((clients) => {
-                  for (const client of clients) { if ('focus' in client) return client.focus(); }
-                  if (self.clients.openWindow) return self.clients.openWindow('/');
-                }));
-              });
-            `;
-            const blob = new Blob([inlineSwCode], { type: 'application/javascript' });
-            const blobUrl = URL.createObjectURL(blob);
-            swReg = await navigator.serviceWorker.register(blobUrl);
-            addLog('success', 'Awaryjny Inline Service Worker zarejestrowany!', { scope: swReg.scope });
-          } catch (blobErr) {
-            addLog('warn', `Rejestracja awaryjnego Service Workera również się nie powiodła: ${blobErr.message}`);
-          }
-        }
+  const handleSendTestNotification = async () => {
+    try {
+      addLog('info', 'Wysyłanie testowego powiadomienia...');
+      const success = await sendSystemNotification('Rodzinny Planer 🔔', 'Test powiadomień systemowych działa prawidłowo!');
+      if (success) {
+        showToast('Wysłano test powiadomienia! 🔔');
       } else {
-        addLog('warn', 'Przeglądarka nie wspiera navigator.serviceWorker');
-      }
-
-      addLog('info', 'Wywoływanie Notification.requestPermission()...');
-      const perm = await Notification.requestPermission();
-      addLog('info', `Wynik zapytania o uprawnienia: ${perm}`);
-      setNotifPermission(perm);
-
-      if (perm === 'granted') {
-        addLog('success', 'Użytkownik przyznał zgodę na powiadomienia!');
-        if (showToast) showToast('Powiadomienia zostały włączone! 🔔');
-
-        // Spróbujmy znaleźć aktywną rejestrację SW do wysłania powiadomienia
-        if ('serviceWorker' in navigator) {
-          if (!swReg) {
-            swReg = await navigator.serviceWorker.getRegistration().catch(() => null);
-          }
-          if (!swReg && navigator.serviceWorker.ready) {
-            swReg = await navigator.serviceWorker.ready.catch(() => null);
-          }
-        }
-
-        if (swReg && typeof swReg.showNotification === 'function') {
-          try {
-            await swReg.showNotification('Rodzinny Planer 🔔', {
-              body: 'Powiadomienia w telefonie działają prawidłowo!',
-              icon: '/icon-192.png',
-              badge: '/badge.png',
-              tag: 'rodzinny-planer-test',
-              renotify: true,
-              vibrate: [200, 100, 200, 100, 200],
-              actions: [
-                { action: 'open', title: 'Otwórz planer' }
-              ]
-            });
-            addLog('success', 'Wysłano testowe powiadomienie przez Service Worker!');
-            return;
-          } catch (showErr) {
-            addLog('warn', `Błąd podczas wywołania swReg.showNotification: ${showErr.message}`);
-          }
-        }
-
-        // Jeśli brak SW (lub błąd w showNotification), spróbuj klasycznego Notification(...)
-        try {
-          new Notification('Rodzinny Planer 🔔', {
-            body: 'Powiadomienia w telefonie działają prawidłowo!',
-            icon: '/favicon.svg'
-          });
-          addLog('success', 'Wysłano testowe powiadomienie przez standardowy Notification API.');
-        } catch (notifErr) {
-          addLog('error', `Android wymaga aktywnego Service Workera. Wykryty błąd: ${notifErr.message}`);
-          setNotifErrorDetails('Na telefonach z Androidem przeglądarka wymaga aktywnego Service Workera do wyświetlania powiadomień. Przyczyną błędu jest brak pliku /sw.js na Twoim serwerze (błąd 404). Wykonaj ponowny build (npm run build) i upewnij się, że plik dist/sw.js trafił na serwer planer-rodzinny.syncup.pl/sw.js.');
-        }
-
-      } else if (perm === 'denied') {
-        const errStr = 'Zgoda na powiadomienia została zablokowana lub odrzucona w przeglądarce.';
-        addLog('error', errStr);
-        setNotifErrorDetails(errStr + ' Otwórz ustawienia strony w telefonie i włącz uprawnienia dla powiadomień.');
-        if (showToast) showToast('Odrzucono zgodę na powiadomienia.');
-      } else {
-        addLog('warn', 'Okno wyboru zgody zostało zamknięte.');
+        setNotifErrorDetails('Sprawdź, czy Twoja przeglądarka ma uprawnienia systemowe do wysyłania powiadomień.');
       }
     } catch (e) {
-      const errFormatted = `${e.name || 'Error'}: ${e.message || e}`;
-      addLog('error', `Błąd podczas włączania powiadomień: ${errFormatted}`, { stack: e.stack });
-      setNotifErrorDetails(`Błąd: ${errFormatted}.`);
-      if (showToast) showToast('Błąd podczas włączania powiadomień.');
+      addLog('error', `Błąd testu powiadomień: ${e.message}`);
+      setNotifErrorDetails(e.message);
+    }
+  };
+
+  const handleDisableNotifications = async () => {
+    if (!confirm('Czy na pewno chcesz wyłączyć powiadomienia Push na tym urządzeniu?')) return;
+    setNotifLoading(true);
+    try {
+      await unsubscribeFromPushNotifications(supabase, profile);
+      setPushSubscribed(false);
+      showToast('Wyłączono powiadomienia Push na tym urządzeniu.');
+    } catch (e) {
+      showToast('Błąd wyłączania powiadomień: ' + e.message);
+    } finally {
+      setNotifLoading(false);
     }
   };
 
@@ -1164,29 +1116,75 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
         </form>
       </div>
 
+      {/* SEKCJA POWIADOMIEŃ WEB PUSH */}
       <div className="bg-[#1E1E22] border border-[#33333C] rounded-2xl p-4 space-y-4">
-        <h3 className="text-sm font-bold border-b border-[#33333C] pb-2 flex items-center gap-2 text-stone-100">
-          <Bell size={16} className="text-amber-400" /> Powiadomienia w telefonie / PWA
-        </h3>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-semibold text-stone-200">Stan powiadomień Push</div>
-            <div className="text-xs text-stone-400 mt-0.5">
-              {notifPermission === 'granted' && <span className="text-emerald-400 font-medium">✓ Włączone i aktywne</span>}
-              {notifPermission === 'denied' && <span className="text-red-400 font-medium">✕ Zablokowane w przeglądarce</span>}
-              {notifPermission === 'default' && <span className="text-amber-400 font-medium">! Wymagana zgoda</span>}
-              {notifPermission === 'unsupported' && <span className="text-stone-500">Brak obsługi w tej przeglądarce</span>}
+        <div className="flex items-center justify-between border-b border-[#33333C] pb-2">
+          <h3 className="text-sm font-bold flex items-center gap-2 text-stone-100">
+            <Bell size={16} className="text-amber-400" /> Powiadomienia w tle (Web Push)
+          </h3>
+          <button 
+            type="button" 
+            onClick={() => setShowSqlGuide(!showSqlGuide)}
+            className="text-[11px] text-amber-400 hover:underline flex items-center gap-1"
+          >
+            <HelpCircle size={13} /> Instrukcja chmury
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div className="bg-stone-900/80 p-3 rounded-xl border border-stone-800 space-y-1">
+            <div className="text-stone-400 font-medium">Uprawnienia systemowe</div>
+            <div className="font-semibold flex items-center gap-1.5">
+              {notifPermission === 'granted' && <><CheckCircle size={14} className="text-emerald-400" /> <span className="text-emerald-400">Zezwolono</span></>}
+              {notifPermission === 'denied' && <><X size={14} className="text-red-400" /> <span className="text-red-400">Zablokowane</span></>}
+              {notifPermission === 'default' && <><AlertCircle size={14} className="text-amber-400" /> <span className="text-amber-400">Wymaga zgody</span></>}
+              {notifPermission === 'unsupported' && <span className="text-stone-500">Brak wsparcia</span>}
             </div>
           </div>
+
+          <div className="bg-stone-900/80 p-3 rounded-xl border border-stone-800 space-y-1">
+            <div className="text-stone-400 font-medium">Subskrypcja Push (w tle)</div>
+            <div className="font-semibold flex items-center gap-1.5">
+              {pushSubscribed ? (
+                <><CheckCircle size={14} className="text-emerald-400" /> <span className="text-emerald-400">Aktywna w chmurze</span></>
+              ) : (
+                <><AlertCircle size={14} className="text-amber-400" /> <span className="text-amber-400">Niepołączona</span></>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 pt-1">
           <button
             type="button"
             onClick={handleEnableNotifications}
-            disabled={notifPermission === 'unsupported'}
-            className="px-3.5 py-2 bg-amber-500 text-stone-950 rounded-xl text-xs font-bold hover:bg-amber-400 transition flex items-center gap-1.5 disabled:opacity-50 shrink-0"
+            disabled={notifLoading || notifPermission === 'unsupported'}
+            className="flex-1 py-2.5 px-4 bg-amber-500 text-stone-950 rounded-xl text-xs font-bold hover:bg-amber-400 transition flex items-center justify-center gap-1.5 disabled:opacity-50 min-w-[160px]"
           >
-            <Bell size={14} /> {notifPermission === 'granted' ? 'Wyślij test' : 'Włącz powiadomienia'}
+            <Smartphone size={14} /> {notifLoading ? 'Aktywowanie...' : pushSubscribed ? 'Odśwież Web Push' : 'Włącz Web Push w tle'}
           </button>
+
+          <button
+            type="button"
+            onClick={handleSendTestNotification}
+            className="py-2.5 px-3 bg-stone-800 text-stone-200 border border-stone-700 rounded-xl text-xs font-bold hover:bg-stone-700 transition flex items-center justify-center gap-1.5"
+          >
+            <Bell size={14} /> Test
+          </button>
+
+          {pushSubscribed && (
+            <button
+              type="button"
+              onClick={handleDisableNotifications}
+              disabled={notifLoading}
+              className="py-2.5 px-3 bg-stone-900 text-red-400 border border-red-900/40 rounded-xl text-xs font-semibold hover:bg-red-950/40 transition"
+              title="Wyłącz na tym telefonie"
+            >
+              Wyłącz
+            </button>
+          )}
         </div>
+
         {notifErrorDetails && (
           <div className="bg-red-950/50 border border-red-900/60 p-3 rounded-xl text-xs text-red-300 space-y-1">
             <div className="font-bold flex items-center gap-1 text-red-400">
@@ -1195,8 +1193,20 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
             <p className="leading-relaxed">{notifErrorDetails}</p>
           </div>
         )}
+
+        {showSqlGuide && (
+          <div className="bg-stone-900 p-4 rounded-xl border border-amber-500/30 text-xs text-stone-300 space-y-3">
+            <div className="font-bold text-amber-400 flex items-center gap-1.5">
+              <Code size={15} /> Jak działa Web Push przy zamkniętej aplikacji?
+            </div>
+            <p className="text-stone-300 leading-relaxed text-[11px]">
+              Gdy zamykasz aplikację, Twój telefon rejestruje token subskrypcji w tabeli <code className="bg-stone-800 px-1 py-0.5 rounded text-amber-300">push_subscriptions</code> w Supabase. Aby serwer Supabase sam wysyłał powiadomienia o terminach i wydarzeniach, uruchom plik <code className="bg-stone-800 px-1 py-0.5 rounded text-amber-300">supabase_notifications_setup.sql</code> w SQL Editorze w Supabase.
+            </p>
+          </div>
+        )}
+
         <p className="text-[11px] text-stone-400 leading-relaxed bg-stone-900/60 p-3 rounded-xl border border-stone-800">
-          <strong>Wskazówka (iOS / Android / RAMKA):</strong> Jeśli testujesz wewnątrz podglądu, otwórz aplikację w nowej karcie (przycisk w prawym górnym rogu podglądu). Aby powiadomienia działały na telefonie jak zwykła aplikacja, w menu przeglądarki wybierz <span className="text-amber-400 font-medium">"Dodaj do ekranu głównego"</span> / <span className="text-amber-400 font-medium">"Zainstaluj aplikację"</span>.
+          <strong>Wskazówka (Działanie jak aplikacja ze sklepu):</strong> Na telefonie (Android / iPhone) w menu przeglądarki wybierz <span className="text-amber-400 font-medium">"Dodaj do ekranu głównego"</span> / <span className="text-amber-400 font-medium">"Zainstaluj aplikację"</span>. Dzięki temu system operacyjny traktuje aplikację jako PWA i nie ubija powiadomień w tle.
         </p>
       </div>
 
@@ -2055,6 +2065,14 @@ export default function App() {
     persist({ ...data, events: exists ? data.events.map(e => e.id === ev.id ? ev : e) : [...data.events, ev], notes: nextNotes }); 
     if (!exists) {
       showToast("Dodano wydarzenie! 📅");
+      if (family?.id && supabaseClient) {
+        recordFamilyNotification(supabaseClient, {
+          familyId: family.id,
+          title: 'Nowe wydarzenie w kalendarzu 📅',
+          body: `${ev.title}${ev.time ? ` (${ev.time})` : ''}`,
+          type: 'event'
+        });
+      }
     } else {
       showToast("Zaktualizowano wydarzenie 📅");
     }
@@ -2067,6 +2085,14 @@ export default function App() {
     persist({ ...data, tasks: exists ? data.tasks.map(x => x.id === t.id ? t : x) : [...data.tasks, t], notes: nextNotes }); 
     if (!exists) {
       showToast("Dodano zadanie! 📝");
+      if (family?.id && supabaseClient) {
+        recordFamilyNotification(supabaseClient, {
+          familyId: family.id,
+          title: 'Nowe zadanie dla rodziny 📝',
+          body: `${t.title}`,
+          type: 'task'
+        });
+      }
     } else {
       showToast("Zaktualizowano zadanie 📝");
     }
@@ -2085,6 +2111,15 @@ export default function App() {
   const addWallMessage = msg => { 
     persist({ ...data, wall: [msg, ...(data.wall || [])] }); 
     showToast("Wysłano na tablicę 💬"); 
+    if (family?.id && supabaseClient) {
+      const author = data?.people?.find(p => p.id === msg.authorId)?.name || 'Ktoś';
+      recordFamilyNotification(supabaseClient, {
+        familyId: family.id,
+        title: `${author} napisał(a) na Tablicy 💬`,
+        body: msg.text,
+        type: 'wall_message'
+      });
+    }
   };
   const deleteWallMessage = id => { persist({ ...data, wall: (data.wall || []).filter(w => w.id !== id) }); };
   const togglePinWallMessage = id => { persist({ ...data, wall: (data.wall || []).map(w => w.id === id ? { ...w, isPinned: !w.isPinned } : w) }); };
