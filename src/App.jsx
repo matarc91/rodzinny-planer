@@ -972,12 +972,27 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
 
   const handleSendTestNotification = async () => {
     try {
-      addLog('info', 'Wysyłanie testowego powiadomienia...');
-      const success = await sendSystemNotification('Rodzinny Planer 🔔', 'Test powiadomień systemowych działa prawidłowo!');
-      if (success) {
-        showToast('Wysłano test powiadomienia! 🔔');
-      } else {
-        setNotifErrorDetails('Sprawdź, czy Twoja przeglądarka ma uprawnienia systemowe do wysyłania powiadomień.');
+      addLog('info', 'Wysyłanie testowego powiadomienia przez chmurę...');
+      showToast('Wysyłanie powiadomienia testowego... 🔔');
+
+      // 1. Lokalne powiadomienie
+      await sendSystemNotification('Rodzinny Planer 🔔', 'Test powiadomień systemowych!');
+
+      // 2. Wysłanie powiadomienia przez funkcję chmurową Edge Function send-push
+      if (supabase && family?.id) {
+        const { data, error } = await supabase.functions.invoke('send-push', {
+          body: {
+            family_id: family.id,
+            title: 'Test z Chmury (Web Push) 🔔',
+            body: 'Powiadomienia w tle z Supabase działają prawidłowo!',
+          },
+        });
+        if (error) {
+          addLog('warn', `Edge function zwróciła: ${error.message}`);
+        } else {
+          addLog('success', 'Wysłano żądanie Push do chmury Supabase!', data);
+          showToast('Wysłano sygnał Push przez chmurę! 🔔');
+        }
       }
     } catch (e) {
       addLog('error', `Błąd testu powiadomień: ${e.message}`);
