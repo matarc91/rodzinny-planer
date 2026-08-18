@@ -1790,25 +1790,48 @@ export default function App() {
   }, [supabaseClient, session]);
 
   const dataRef = useRef(null);
+  const profileRef = useRef(profile);
   const sentRemindersRef = useRef(new Set());
 
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
 
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
+
+  // Pomocnicza funkcja inteligentnego dostarczania powiadomień:
+  // - Jeśli aplikacja jest na 1. planie (!document.hidden): TYLKO wewnątrz-aplikacyjny Toast
+  // - Jeśli karta/aplikacja jest w tle (document.hidden): Powiadomienie systemowe (sendSystemNotification)
+  const deliverNotification = useCallback((title, body, toastMsg) => {
+    const isBackground = typeof document !== 'undefined' && document.hidden;
+    if (isBackground) {
+      sendSystemNotification(title, body);
+    } else {
+      showToast(toastMsg || (body ? `${title}: ${body}` : title));
+    }
+  }, []);
+
   // System sprawdzania i wysyłania przypomnień czasowych dla wydarzeń i zadań
+  // Uwzględnia TYLKO wydarzenia i zadania przypisane do bieżącego użytkownika (currentPersonId)
   useEffect(() => {
     if (!data) return;
 
     const checkReminders = () => {
       try {
+        const currentPersonId = profileRef.current?.person_id;
+        if (!currentPersonId) return;
+
         const now = new Date();
         const today = toDateStr(now);
         const tomorrow = addDays(today, 1);
 
-        // 1. Sprawdzanie wydarzeń
+        // 1. Sprawdzanie wydarzeń (tylko przypisane do bieżącego profilu)
         if (Array.isArray(data.events)) {
           data.events.forEach(ev => {
+            if (!ev.personIds?.includes(currentPersonId)) return;
+
             const reminderHours = ev.reminder?.hours ?? ev.reminderHours;
             if (reminderHours === null || reminderHours === undefined) return;
 
@@ -1836,17 +1859,17 @@ export default function App() {
                     : `Przypomnienie (${labelText}): "${ev.title}"${ev.time ? ' o ' + ev.time : ''} 🔔`;
 
                   addLog('info', `Wyzwalanie przypomnienia o wydarzeniu: ${body}`);
-                  sendSystemNotification('Nadchodzące wydarzenie 🔔', body);
-                  showToast(`🔔 ${body}`);
+                  deliverNotification('Nadchodzące wydarzenie 🔔', body, `🔔 ${body}`);
                 }
               }
             });
           });
         }
 
-        // 2. Sprawdzanie zadań
+        // 2. Sprawdzanie zadań (tylko przypisane do bieżącego profilu)
         if (Array.isArray(data.tasks)) {
           data.tasks.forEach(t => {
+            if (!t.personIds?.includes(currentPersonId)) return;
             if (isTaskDoneForPeriod(t, today)) return;
 
             const reminderHours = t.reminder?.hours ?? t.reminderHours;
@@ -1876,8 +1899,7 @@ export default function App() {
                   : `Przypomnienie o zadaniu (${labelText}): "${t.title}" 📝`;
 
                 addLog('info', `Wyzwalanie przypomnienia o zadaniu: ${body}`);
-                sendSystemNotification('Przypomnienie o zadaniu 📝', body);
-                showToast(`📝 ${body}`);
+                deliverNotification('Przypomnienie o zadaniu 📝', body, `📝 ${body}`);
               }
             });
           });
@@ -1890,8 +1912,10 @@ export default function App() {
     checkReminders();
     const interval = setInterval(checkReminders, 20000);
     return () => clearInterval(interval);
-  }, [data]);
+  }, [data, deliverNotification]);
 
+  // Zaawansowana detekcja zmian (DODANE, ZMODYFIKOWANE, USUNIĘTE)
+  // z precyzyjnym podziałem na odbiorców (Tablica = cała rodzina, Zadania/Wydarzenia = przypisani domownicy)
   const handleRemoteDataUpdate = useCallback((newData) => {
     if (!newData) return;
     const oldData = dataRef.current;
@@ -1904,60 +1928,171 @@ export default function App() {
 
     if (JSON.stringify(oldData) === JSON.stringify(newData)) return;
 
-    // Detekcja elementów dodanych przez innych domowników
-    const oldEventIds = new Set((oldData.events || []).map(e => e.id));
-    const addedEvents = (newData.events || []).filter(e => !oldEventIds.has(e.id));
+    const currentPersonId = profileRef.current?.person_id;
 
-    const oldTaskIds = new Set((oldData.tasks || []).map(t => t.id));
-    const addedTasks = (newData.tasks || []).filter(t => !oldTaskIds.has(t.id));
+    // Słowniki starych i nowych elementów
+    const oldEventsMap = new Map((oldData.events || []).map(e => [e.id, e]));
+    const newEventsMap = new Map((newData.events || []).map(e => [e.id, e]));
 
-    const oldWallIds = new Set((oldData.wall || []).map(m => m.id));
-    const addedWall = (newData.wall || []).filter(m => !oldWallIds.has(m.id));
+    const oldTasksMap = new Map((oldData.tasks || []).map(t => [t.id, t]));
+    const newTasksMap = new Map((newData.tasks || []).map(t => [t.id, t]));
 
-    const oldNoteIds = new Set((oldData.notes || []).map(n => n.id));
-    const addedNotes = (newData.notes || []).filter(n => !oldNoteIds.has(n.id));
+    const oldWallMap = new Map((oldData.wall || []).map(w => [w.id, w]));
+    const newWallMap = new Map((newData.wall || []).map(w => [w.id, w]));
 
     setData(newData);
     dataRef.current = newData;
 
     let hasNotified = false;
 
-    if (addedEvents.length > 0) {
-      addedEvents.forEach(ev => {
-        showToast(`Współdomownik dodał wydarzenie: "${ev.title}" 📅`);
-        sendSystemNotification('Nowe wydarzenie w planerze! 📅', `${ev.title}${ev.date ? ' (' + ev.date + ')' : ''}`);
-      });
-      hasNotified = true;
-    }
+    // -------------------------------------------------------------------------
+    // 1. TABLICA (WALL) - Wirtualna lodówka dla CAŁEJ rodziny
+    // -------------------------------------------------------------------------
+    // A. Nowe wiadomości na lodówce
+    (newData.wall || []).forEach(newMsg => {
+      if (!oldWallMap.has(newMsg.id)) {
+        deliverNotification(
+          'Wiadomość na lodówce 💬',
+          newMsg.text,
+          `Nowa wiadomość na lodówce: "${newMsg.text}" 💬`
+        );
+        hasNotified = true;
+      }
+    });
 
-    if (addedTasks.length > 0) {
-      addedTasks.forEach(t => {
-        showToast(`Współdomownik dodał zadanie: "${t.title}" 📝`);
-        sendSystemNotification('Nowe zadanie w planerze! 📝', t.title);
-      });
-      hasNotified = true;
-    }
+    // B. Zmodyfikowane wpisy na lodówce (np. edycja lub przypięcie/odpięcie)
+    (newData.wall || []).forEach(newMsg => {
+      const oldMsg = oldWallMap.get(newMsg.id);
+      if (oldMsg && JSON.stringify(oldMsg) !== JSON.stringify(newMsg)) {
+        if (oldMsg.isPinned !== newMsg.isPinned) {
+          const pinText = newMsg.isPinned ? 'Przypięto wpis na lodówce 📌' : 'Odepnięto wpis z lodówki 📌';
+          deliverNotification('Tablica rodzinna 📌', pinText, pinText);
+        } else {
+          deliverNotification(
+            'Zmieniono wiadomość na lodówce 💬',
+            newMsg.text,
+            `Zmieniono wpis na lodówce: "${newMsg.text}" 💬`
+          );
+        }
+        hasNotified = true;
+      }
+    });
 
-    if (addedWall.length > 0) {
-      addedWall.forEach(m => {
-        showToast(`Nowa wiadomość na tablicy: "${m.text}" 💬`);
-        sendSystemNotification('Tablica rodzinna 💬', m.text);
-      });
-      hasNotified = true;
-    }
+    // C. Usunięte wpisy z lodówki
+    (oldData.wall || []).forEach(oldMsg => {
+      if (!newWallMap.has(oldMsg.id)) {
+        deliverNotification(
+          'Tablica rodzinna 🗑️',
+          'Usunięto wiadomość z lodówki',
+          'Usunięto wpis z lodówki 🗑️'
+        );
+        hasNotified = true;
+      }
+    });
 
-    if (addedNotes.length > 0) {
-      addedNotes.forEach(n => {
-        showToast(`Współdomownik dodał notatkę: "${n.title || 'Bez tytułu'}" 📌`);
-        sendSystemNotification('Nowa notatka! 📌', n.title || 'Bez tytułu');
+    // -------------------------------------------------------------------------
+    // 2. WYDARZENIA & ZADANIA - TYLKO gdy currentUserId znajduje się w personIds
+    // -------------------------------------------------------------------------
+    if (currentPersonId) {
+      // --- WYDARZENIA (EVENTS) ---
+      // A. Nowo dodane wydarzenia
+      (newData.events || []).forEach(newEv => {
+        if (!oldEventsMap.has(newEv.id)) {
+          if (newEv.personIds?.includes(currentPersonId)) {
+            const timeInfo = newEv.time ? ` (${newEv.time})` : '';
+            deliverNotification(
+              'Nowe wydarzenie 📅',
+              `Współdomownik dodał wydarzenie: "${newEv.title}"${timeInfo}`,
+              `Nowe wydarzenie: "${newEv.title}" 📅`
+            );
+            hasNotified = true;
+          }
+        }
       });
-      hasNotified = true;
+
+      // B. Zmodyfikowane wydarzenia
+      (newData.events || []).forEach(newEv => {
+        const oldEv = oldEventsMap.get(newEv.id);
+        if (oldEv && JSON.stringify(oldEv) !== JSON.stringify(newEv)) {
+          const wasAssigned = oldEv.personIds?.includes(currentPersonId);
+          const isAssigned = newEv.personIds?.includes(currentPersonId);
+          if (wasAssigned || isAssigned) {
+            deliverNotification(
+              'Zaktualizowano wydarzenie 📅',
+              `Ktoś edytował wydarzenie: "${newEv.title}"`,
+              `Ktoś edytował wydarzenie: "${newEv.title}" 📅`
+            );
+            hasNotified = true;
+          }
+        }
+      });
+
+      // C. Usunięte / Anulowane wydarzenia
+      (oldData.events || []).forEach(oldEv => {
+        if (!newEventsMap.has(oldEv.id)) {
+          if (oldEv.personIds?.includes(currentPersonId)) {
+            deliverNotification(
+              'Anulowano wydarzenie 📅',
+              `Usunięto wydarzenie: "${oldEv.title}"`,
+              `Anulowano wydarzenie: "${oldEv.title}" 🗑️`
+            );
+            hasNotified = true;
+          }
+        }
+      });
+
+      // --- ZADANIA (TASKS) ---
+      // A. Nowo dodane zadania
+      (newData.tasks || []).forEach(newTask => {
+        if (!oldTasksMap.has(newTask.id)) {
+          if (newTask.personIds?.includes(currentPersonId)) {
+            deliverNotification(
+              'Nowe zadanie 📝',
+              `Współdomownik przypisał Ci zadanie: "${newTask.title}"`,
+              `Nowe zadanie: "${newTask.title}" 📝`
+            );
+            hasNotified = true;
+          }
+        }
+      });
+
+      // B. Zmodyfikowane zadania (edycja lub zmiana statusu wykonania)
+      (newData.tasks || []).forEach(newTask => {
+        const oldTask = oldTasksMap.get(newTask.id);
+        if (oldTask && JSON.stringify(oldTask) !== JSON.stringify(newTask)) {
+          const wasAssigned = oldTask.personIds?.includes(currentPersonId);
+          const isAssigned = newTask.personIds?.includes(currentPersonId);
+          if (wasAssigned || isAssigned) {
+            const completionsChanged = JSON.stringify(oldTask.completions) !== JSON.stringify(newTask.completions);
+            const msg = completionsChanged
+              ? `Zaktualizowano status zadania: "${newTask.title}"`
+              : `Ktoś edytował zadanie: "${newTask.title}"`;
+            deliverNotification('Zadanie rodzinne 📝', msg, `${msg} 📝`);
+            hasNotified = true;
+          }
+        }
+      });
+
+      // C. Usunięte / Anulowane zadania
+      (oldData.tasks || []).forEach(oldTask => {
+        if (!newTasksMap.has(oldTask.id)) {
+          if (oldTask.personIds?.includes(currentPersonId)) {
+            deliverNotification(
+              'Anulowano zadanie 📝',
+              `Usunięto zadanie: "${oldTask.title}"`,
+              `Anulowano zadanie: "${oldTask.title}" 🗑️`
+            );
+            hasNotified = true;
+          }
+        }
+      });
     }
 
     if (!hasNotified) {
-      showToast("Zaktualizowano dane od domownika! 🔄");
+      // Jeśli zmiana dotyczyła posiłków lub elementów nieprzypisanych do nas, delikatna informacja
+      showToast('Zsynchronizowano zmiany od domownika 🔄');
     }
-  }, []);
+  }, [deliverNotification]);
 
   // Load Data, Realtime Sync & Polling Fallback
   useEffect(() => {
