@@ -101,11 +101,39 @@ async function sendSystemNotification(title, body, extraOptions = {}) {
 function occursOnDate(event, dateStr) {
   if (dateStr < event.date) return false;
   const freq = event.recurrence?.freq || 'none';
-  if (freq === 'none') return dateStr === event.date;
+  if (freq === 'none') {
+    if (event.endDate && event.endDate >= event.date) {
+      return dateStr >= event.date && dateStr <= event.endDate;
+    }
+    return dateStr === event.date;
+  }
   if (freq === 'daily') return true;
   if (freq === 'weekly') return weekdayIdx(dateStr) === weekdayIdx(event.date);
   if (freq === 'monthly') return dayOfMonth(dateStr) === dayOfMonth(event.date);
   return false;
+}
+
+function getEventBadgeBackground(ev, people, isSelected = false) {
+  const pIds = ev.personIds || [];
+  const assigned = pIds.map(id => people.find(p => p.id === id)).filter(Boolean);
+  
+  if (assigned.length === 0) {
+    return isSelected ? '#121214' : COLORS.inkSoft;
+  }
+  
+  if (assigned.length === 1) {
+    return assigned[0].color || COLORS.accent;
+  }
+
+  // Wieloosobowy event - płynny gradient z kolorów wszystkich przypisanych osób
+  const colors = assigned.map(p => p.color || COLORS.accent);
+  if (colors.length === 2) {
+    return `linear-gradient(90deg, ${colors[0]} 0%, ${colors[1]} 100%)`;
+  }
+  
+  const step = 100 / (colors.length - 1);
+  const colorStops = colors.map((c, idx) => `${c} ${Math.round(idx * step)}%`).join(', ');
+  return `linear-gradient(90deg, ${colorStops})`;
 }
 
 function getPeriodKey(freq, dateStr) {
@@ -261,6 +289,7 @@ function AddEventModal({ people, currentUserId, initialDate, initial, editItem, 
   const isEdit = !!editItem;
   const [title, setTitle] = useState(editItem?.title || '');
   const [date, setDate] = useState(editItem?.date || initialDate);
+  const [endDate, setEndDate] = useState(editItem?.endDate || '');
   const [time, setTime] = useState(editItem?.time || '');
   const [personIds, setPersonIds] = useState(editItem?.personIds || (currentUserId ? [currentUserId] : []));
   const [freq, setFreq] = useState(editItem?.recurrence?.freq || 'none');
@@ -270,17 +299,58 @@ function AddEventModal({ people, currentUserId, initialDate, initial, editItem, 
 
   const save = () => {
     if (!title.trim()) return;
-    onSave({ id: editItem?.id || uid('ev'), title: title.trim(), date, time, personIds, recurrence: { freq }, note: note.trim(), items, reminder: reminderHours === null ? null : { hours: reminderHours } });
+    const finalEndDate = (endDate && endDate >= date) ? endDate : null;
+    onSave({ 
+      id: editItem?.id || uid('ev'), 
+      title: title.trim(), 
+      date, 
+      endDate: finalEndDate,
+      time, 
+      personIds, 
+      recurrence: { freq }, 
+      note: note.trim(), 
+      items, 
+      reminder: reminderHours === null ? null : { hours: reminderHours } 
+    });
     onClose();
   };
 
   return (
     <ModalShell title={isEdit ? 'Edytuj wydarzenie' : 'Nowe wydarzenie'} onClose={onClose}>
       <div className="space-y-4">
-        <div><label className="text-xs font-semibold mb-1 block text-stone-400">Tytuł wydarzenia</label><input autoFocus value={title} onChange={e => setTitle(e.target.value)} placeholder="np. Dentysta" style={{ borderColor: COLORS.border }} className={inputStyle} /></div>
+        <div><label className="text-xs font-semibold mb-1 block text-stone-400">Tytuł wydarzenia</label><input autoFocus value={title} onChange={e => setTitle(e.target.value)} placeholder="np. Wyjazd w góry, Dentysta" style={{ borderColor: COLORS.border }} className={inputStyle} /></div>
         <div className="grid grid-cols-2 gap-2">
-          <div><label className="text-xs font-semibold mb-1 block text-stone-400">Data</label><input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ borderColor: COLORS.border }} className={inputStyle} /></div>
-          <div><label className="text-xs font-semibold mb-1 block text-stone-400">Godzina</label><input type="time" value={time} onChange={e => setTime(e.target.value)} style={{ borderColor: COLORS.border }} className={inputStyle} /></div>
+          <div>
+            <label className="text-xs font-semibold mb-1 block text-stone-400">Data rozpoczęcia</label>
+            <input 
+              type="date" 
+              value={date} 
+              onChange={e => {
+                const newDate = e.target.value;
+                setDate(newDate);
+                if (endDate && newDate > endDate) setEndDate('');
+              }} 
+              style={{ borderColor: COLORS.border }} 
+              className={inputStyle} 
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold mb-1 block text-stone-400">
+              Data zakończenia <span className="text-[10px] text-stone-500 font-normal">(wyjazd)</span>
+            </label>
+            <input 
+              type="date" 
+              value={endDate} 
+              min={date} 
+              onChange={e => setEndDate(e.target.value)} 
+              style={{ borderColor: COLORS.border }} 
+              className={inputStyle} 
+            />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block text-stone-400">Godzina (opcjonalnie)</label>
+          <input type="time" value={time} onChange={e => setTime(e.target.value)} style={{ borderColor: COLORS.border }} className={inputStyle} />
         </div>
         <div><label className="text-xs font-semibold mb-1.5 block text-stone-400">Przypisane osoby</label><PersonPicker people={people} selected={personIds} onToggle={id => setPersonIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])} /></div>
         <div><label className="text-xs font-semibold mb-1.5 block text-stone-400">Powtarzanie</label><RecurrencePicker value={freq} onChange={setFreq} /></div>
@@ -398,14 +468,25 @@ function AddWallMessageModal({ people, currentUserId, onClose, onSave }) {
 }
 
 function EventDetailModal({ event, people, onClose, onEdit, onDelete, onToggleSubItem }) {
+  const isMultiDay = (!event.recurrence?.freq || event.recurrence.freq === 'none') && event.endDate && event.endDate > event.date;
   return (
     <ModalShell title="Szczegóły wydarzenia" onClose={onClose}>
       <div className="space-y-4">
         <div>
           <h4 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-xl font-bold">{event.title}</h4>
           <div className="flex items-center gap-2 flex-wrap text-xs mt-1 font-mono text-stone-400">
-            <span>📅 {event.date} {event.time ? `· ⏰ ${event.time}` : ''}</span>
-            {event.recurrence?.freq !== 'none' && <span className="flex items-center gap-1 bg-amber-900/40 text-amber-300 px-2 py-0.5 rounded"><Repeat size={12} /> {RECURRENCE_LABELS[event.recurrence.freq]}</span>}
+            {isMultiDay ? (
+              <span className="text-amber-300 font-semibold bg-amber-900/30 px-2 py-0.5 rounded border border-amber-900/50">
+                📅 {event.date} – {event.endDate} {event.time ? `· ⏰ ${event.time}` : ''}
+              </span>
+            ) : (
+              <span>📅 {event.date} {event.time ? `· ⏰ ${event.time}` : ''}</span>
+            )}
+            {event.recurrence?.freq && event.recurrence.freq !== 'none' && (
+              <span className="flex items-center gap-1 bg-amber-900/40 text-amber-300 px-2 py-0.5 rounded">
+                <Repeat size={12} /> {RECURRENCE_LABELS[event.recurrence.freq]}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 text-xs text-stone-400">
@@ -521,16 +602,28 @@ function TodayView({ data, onOpenEvent, onOpenTask, onOpenAddEvent, onOpenAddTas
       <Section title="Plan wydarzeń na dziś">
         {events.length === 0 ? <EmptyState text="Brak wydarzeń na dziś" icon={Calendar} /> : (
           <div className="space-y-2">
-            {events.map(ev => (
-              <div key={ev.id} onClick={() => onOpenEvent(ev)} style={{ background: COLORS.surface, borderColor: COLORS.border }} className="w-full border rounded-2xl p-3.5 text-left shadow-2xs cursor-pointer">
-                <div className="flex items-center gap-2.5">
-                  {ev.time ? <span style={{ fontFamily: 'IBM Plex Mono', color: COLORS.accent, background: '#2B261D' }} className="text-xs px-2 py-0.5 rounded-md font-semibold shrink-0">{ev.time}</span> : <span className="text-xs text-stone-500 font-mono shrink-0">Cały dzień</span>}
-                  <span className="text-sm font-semibold flex-1 truncate">{ev.title}</span>
+            {events.map(ev => {
+              const isMultiDay = (!ev.recurrence?.freq || ev.recurrence.freq === 'none') && ev.endDate && ev.endDate > ev.date;
+              return (
+                <div key={ev.id} onClick={() => onOpenEvent(ev)} style={{ background: COLORS.surface, borderColor: COLORS.border }} className="w-full border rounded-2xl p-3.5 text-left shadow-2xs cursor-pointer">
+                  <div className="flex items-center gap-2.5">
+                    {ev.time ? (
+                      <span style={{ fontFamily: 'IBM Plex Mono', color: COLORS.accent, background: '#2B261D' }} className="text-xs px-2 py-0.5 rounded-md font-semibold shrink-0 font-mono">{ev.time}</span>
+                    ) : (
+                      <span className="text-xs text-stone-500 font-mono shrink-0">Cały dzień</span>
+                    )}
+                    <span className="text-sm font-semibold flex-1 truncate">{ev.title}</span>
+                    {isMultiDay && (
+                      <span className="text-[10px] bg-amber-900/30 text-amber-300 px-2 py-0.5 rounded font-mono font-medium border border-amber-900/40">
+                        {ev.date} – {ev.endDate}
+                      </span>
+                    )}
+                  </div>
+                  {ev.note && <div className="text-xs mt-1.5 line-clamp-1 text-stone-400">{ev.note}</div>}
+                  <PersonRow people={data.people} personIds={ev.personIds} />
                 </div>
-                {ev.note && <div className="text-xs mt-1.5 line-clamp-1 text-stone-400">{ev.note}</div>}
-                <PersonRow people={data.people} personIds={ev.personIds} />
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Section>
@@ -589,11 +682,76 @@ function CalendarView({ data, onOpenAdd, onOpenEvent }) {
             if (!dateStr) return <div key={i} className="aspect-square" />;
             const isToday = dateStr === todayStr();
             const isSelected = dateStr === selectedDay;
-            const evs = data.events.filter(ev => occursOnDate(ev, dateStr));
+            const evs = data.events.filter(ev => occursOnDate(ev, dateStr) && (personFilter === 'all' || ev.personIds?.includes(personFilter)));
+            const cellWeekday = (parseDate(dateStr).getDay() + 6) % 7;
+
             return (
-              <button key={dateStr} onClick={() => setSelectedDay(dateStr)} style={{ background: isSelected ? COLORS.accent : isToday ? COLORS.accentSoft : 'transparent', color: isSelected ? '#121214' : COLORS.ink, borderColor: isToday && !isSelected ? COLORS.accent : 'transparent' }} className={`aspect-square rounded-xl flex flex-col items-center justify-between p-1 relative text-xs border ${isSelected ? 'shadow-md font-bold' : ''}`}>
-                <span className={`font-semibold ${isToday ? 'underline font-bold' : ''}`}>{dayOfMonth(dateStr)}</span>
-                {evs.length > 0 && <div className="flex gap-0.5 justify-center flex-wrap max-w-full">{evs.slice(0, 3).map((ev, idx) => { const p = data.people.find(pp => ev.personIds?.[0] === pp.id); return <span key={idx} style={{ background: isSelected ? '#121214' : (p ? p.color : COLORS.inkSoft) }} className="w-1.5 h-1.5 rounded-full" />; })}</div>}
+              <button 
+                key={dateStr} 
+                onClick={() => setSelectedDay(dateStr)} 
+                style={{ 
+                  background: isSelected ? COLORS.accent : isToday ? COLORS.accentSoft : 'transparent', 
+                  color: isSelected ? '#121214' : COLORS.ink, 
+                  borderColor: isToday && !isSelected ? COLORS.accent : 'transparent' 
+                }} 
+                className={`aspect-square rounded-xl flex flex-col items-center justify-between p-1 relative text-xs border overflow-hidden ${isSelected ? 'shadow-md font-bold' : ''}`}
+              >
+                <span className={`font-semibold z-10 ${isToday ? 'underline font-bold' : ''}`}>{dayOfMonth(dateStr)}</span>
+                
+                {evs.length > 0 && (
+                  <div className="w-full flex flex-col gap-0.5 mt-auto pt-0.5 z-0">
+                    {evs.slice(0, 3).map((ev) => {
+                      const isMultiDay = (!ev.recurrence?.freq || ev.recurrence.freq === 'none') && Boolean(ev.endDate) && ev.endDate > ev.date;
+                      const bg = getEventBadgeBackground(ev, data.people, isSelected);
+
+                      if (!isMultiDay) {
+                        // Pojedyncze wydarzenie: zaokrąglona pigułka (jednokolorowa lub z dynamicznym gradientem)
+                        return (
+                          <div key={ev.id} className="w-full flex justify-center items-center">
+                            <span 
+                              style={{ background: bg }} 
+                              className="h-1.5 w-3.5 rounded-full shadow-2xs block" 
+                              title={ev.title}
+                            />
+                          </div>
+                        );
+                      }
+
+                      // Wydarzenie wielodniowe: pasek przechodzący poziomo przez dni
+                      const isFirstDay = dateStr === ev.date || cellWeekday === 0;
+                      const isLastDay = dateStr === ev.endDate || cellWeekday === 6;
+
+                      let roundingClass = 'rounded-none';
+                      let marginClass = '-mx-1 w-[calc(100%+8px)]';
+
+                      if (isFirstDay && isLastDay) {
+                        roundingClass = 'rounded-full';
+                        marginClass = 'mx-0.5 w-[calc(100%-4px)]';
+                      } else if (isFirstDay) {
+                        roundingClass = 'rounded-l-full rounded-r-none';
+                        marginClass = 'ml-0.5 -mr-1 w-[calc(100%+2px)]';
+                      } else if (isLastDay) {
+                        roundingClass = 'rounded-r-full rounded-l-none';
+                        marginClass = '-ml-1 mr-0.5 w-[calc(100%+2px)]';
+                      }
+
+                      return (
+                        <div key={ev.id} className="w-full overflow-visible flex items-center justify-center">
+                          <span 
+                            style={{ background: bg }} 
+                            className={`h-1.5 block shadow-2xs ${roundingClass} ${marginClass}`}
+                            title={`${ev.title} (${ev.date} – ${ev.endDate})`}
+                          />
+                        </div>
+                      );
+                    })}
+                    {evs.length > 3 && (
+                      <span className="text-[8px] font-mono leading-none text-stone-400 self-center">
+                        +{evs.length - 3}
+                      </span>
+                    )}
+                  </div>
+                )}
               </button>
             );
           })}
@@ -603,16 +761,30 @@ function CalendarView({ data, onOpenAdd, onOpenEvent }) {
       <Section title={parseDate(selectedDay).toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })} action={<button onClick={() => onOpenAdd(selectedDay)} style={{ background: COLORS.accent, color: '#121214' }} className="rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1"><Plus size={14} /> Dodaj</button>}>
         {dayEvents.length === 0 ? <EmptyState text="Brak wydarzeń w tym dniu" /> : (
           <div className="space-y-2">
-            {dayEvents.sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99')).map(ev => (
-              <div key={ev.id} onClick={() => onOpenEvent(ev)} className="w-full border rounded-2xl p-3.5 text-left bg-[#1E1E22] border-[#33333C] cursor-pointer">
-                <div className="flex items-center gap-2.5">
-                  {ev.time ? <span style={{ color: COLORS.accent, background: '#2B261D' }} className="text-xs px-2 py-0.5 rounded-md font-semibold font-mono">{ev.time}</span> : <span className="text-xs text-stone-500 font-mono">Cały dzień</span>}
-                  <span className="text-sm font-semibold flex-1 truncate">{ev.title}</span>
-                  {ev.recurrence?.freq !== 'none' && <Repeat size={14} className="text-stone-500" />}
+            {dayEvents.sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99')).map(ev => {
+              const isMultiDay = (!ev.recurrence?.freq || ev.recurrence.freq === 'none') && ev.endDate && ev.endDate > ev.date;
+              return (
+                <div key={ev.id} onClick={() => onOpenEvent(ev)} className="w-full border rounded-2xl p-3.5 text-left bg-[#1E1E22] border-[#33333C] cursor-pointer">
+                  <div className="flex items-center gap-2.5">
+                    {ev.time ? (
+                      <span style={{ color: COLORS.accent, background: '#2B261D' }} className="text-xs px-2 py-0.5 rounded-md font-semibold font-mono">{ev.time}</span>
+                    ) : (
+                      <span className="text-xs text-stone-500 font-mono">Cały dzień</span>
+                    )}
+                    <span className="text-sm font-semibold flex-1 truncate">{ev.title}</span>
+                    {isMultiDay && (
+                      <span className="text-[10px] bg-amber-900/30 text-amber-300 px-2 py-0.5 rounded font-mono font-medium border border-amber-900/40">
+                        {ev.date} – {ev.endDate}
+                      </span>
+                    )}
+                    {ev.recurrence?.freq && ev.recurrence.freq !== 'none' && (
+                      <Repeat size={14} className="text-stone-500" />
+                    )}
+                  </div>
+                  <PersonRow people={data.people} personIds={ev.personIds} />
                 </div>
-                <PersonRow people={data.people} personIds={ev.personIds} />
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Section>
