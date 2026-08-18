@@ -1,4 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { 
+  format, parseISO, addDays, startOfWeek, addMonths, 
+  getDay, getDate, startOfMonth, endOfMonth, eachDayOfInterval 
+} from 'date-fns';
 import { getSupabaseClient } from './supabase.js';
 import { addLog, getLogs, clearLogs, subscribeLogs } from './logger.js';
 import { 
@@ -39,15 +43,14 @@ const REMINDER_OPTIONS = [
 ];
 const RECURRENCE_LABELS = { none: 'Jednorazowo', daily: 'Codziennie', weekly: 'Co tydzień', monthly: 'Co miesiąc' };
 
-function pad(n) { return n < 10 ? '0' + n : '' + n; }
-function toDateStr(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
-function todayStr() { return toDateStr(new Date()); }
-function parseDate(s) { if (!s) return new Date(); const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
-function weekdayIdx(dateStr) { return (parseDate(dateStr).getDay() + 6) % 7; }
-function dayOfMonth(dateStr) { return parseDate(dateStr).getDate(); }
-function getMonday(dateStr) { const d = parseDate(dateStr); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return toDateStr(d); }
-function addDays(dateStr, n) { const d = parseDate(dateStr); d.setDate(d.getDate() + n); return toDateStr(d); }
-function addMonths(dateStr, n) { const d = parseDate(dateStr); d.setMonth(d.getMonth() + n); return toDateStr(d); }
+const toDateStr = (d) => (d ? format(typeof d === 'string' ? parseISO(d) : d, 'yyyy-MM-dd') : '');
+const todayStr = () => format(new Date(), 'yyyy-MM-dd');
+const parseDate = (s) => (s ? (typeof s === 'string' ? parseISO(s) : s) : new Date());
+const weekdayIdx = (dateStr) => (getDay(parseDate(dateStr)) + 6) % 7;
+const dayOfMonth = (dateStr) => getDate(parseDate(dateStr));
+const getMonday = (dateStr) => format(startOfWeek(parseDate(dateStr), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+const addDaysStr = (dateStr, n) => format(addDays(parseDate(dateStr), n), 'yyyy-MM-dd');
+const addMonthsStr = (dateStr, n) => format(addMonths(parseDate(dateStr), n), 'yyyy-MM-dd');
 function uid(prefix) { return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); }
 function reminderLabel(hours) { const opt = REMINDER_OPTIONS.find(o => o.hours === hours); return opt ? opt.label : 'Brak'; }
 
@@ -150,6 +153,7 @@ function isTaskDoneForPeriod(task, dateStr) {
 
 function emptyData() {
   return { 
+    lastUpdatedAt: Date.now(),
     people: [
       { id: 'p_1', name: 'Mama', color: '#F65D79', emoji: '👩' },
       { id: 'p_2', name: 'Tata', color: '#5B8FF9', emoji: '👨' }
@@ -652,20 +656,58 @@ function CalendarView({ data, onOpenAdd, onOpenEvent }) {
   const [selectedDay, setSelectedDay] = useState(todayStr());
   const [personFilter, setPersonFilter] = useState('all');
 
-  const d = parseDate(monthAnchor);
-  const year = d.getFullYear(), month = d.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const startOffset = (new Date(year, month, 1).getDay() + 6) % 7;
-  
-  const cells = Array(startOffset).fill(null).concat(Array.from({length: daysInMonth}, (_, i) => toDateStr(new Date(year, month, i + 1))));
-  const dayEvents = data.events.filter(ev => occursOnDate(ev, selectedDay) && (personFilter === 'all' || ev.personIds?.includes(personFilter)));
+  const { year, month, cells } = useMemo(() => {
+    const anchorDate = parseDate(monthAnchor);
+    const monthStart = startOfMonth(anchorDate);
+    const monthEnd = endOfMonth(anchorDate);
+    const yr = anchorDate.getFullYear();
+    const mth = anchorDate.getMonth();
+    
+    // ISO offset (Poniedziałek = 0, ..., Niedziela = 6)
+    const startOffset = (getDay(monthStart) + 6) % 7;
+    
+    const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd }).map(d => format(d, 'yyyy-MM-dd'));
+    const cellList = Array(startOffset).fill(null).concat(monthDays);
+    
+    return { year: yr, month: mth, cells: cellList };
+  }, [monthAnchor]);
+
+  // Słownik (Record<string, Event[]>), gdzie kluczem jest data YYYY-MM-DD,
+  // a wartością tablica pasujących wydarzeń (w tym wielodniowych i cyklicznych)
+  const eventsByDate = useMemo(() => {
+    const map = {};
+    const visibleDates = cells.filter(Boolean);
+    if (visibleDates.length === 0) return map;
+
+    const filteredEvents = (data.events || []).filter(ev => 
+      personFilter === 'all' || ev.personIds?.includes(personFilter)
+    );
+
+    for (const dateStr of visibleDates) {
+      map[dateStr] = [];
+    }
+
+    for (const ev of filteredEvents) {
+      for (const dateStr of visibleDates) {
+        if (occursOnDate(ev, dateStr)) {
+          map[dateStr].push(ev);
+        }
+      }
+    }
+
+    return map;
+  }, [cells, data.events, personFilter]);
+
+  const dayEvents = useMemo(() => {
+    return eventsByDate[selectedDay] || [];
+  }, [eventsByDate, selectedDay]);
 
   return (
     <div className="space-y-4 animate-fadeIn">
       <div className="flex items-center justify-between px-1">
-        <button onClick={() => setMonthAnchor(addMonths(monthAnchor, -1))} className="p-2 rounded-xl hover:bg-stone-800"><ChevronLeft size={20} /></button>
+        <button onClick={() => setMonthAnchor(addMonthsStr(monthAnchor, -1))} className="p-2 rounded-xl hover:bg-stone-800"><ChevronLeft size={20} /></button>
         <h2 style={{ fontFamily: 'Fraunces' }} className="text-xl font-bold capitalize text-stone-100">{MONTHS[month]} {year}</h2>
-        <button onClick={() => setMonthAnchor(addMonths(monthAnchor, 1))} className="p-2 rounded-xl hover:bg-stone-800"><ChevronRight size={20} /></button>
+        <button onClick={() => setMonthAnchor(addMonthsStr(monthAnchor, 1))} className="p-2 rounded-xl hover:bg-stone-800"><ChevronRight size={20} /></button>
       </div>
 
       <div className="flex gap-1.5 overflow-x-auto pb-1 px-1 no-scrollbar">
@@ -682,8 +724,8 @@ function CalendarView({ data, onOpenAdd, onOpenEvent }) {
             if (!dateStr) return <div key={i} className="aspect-square" />;
             const isToday = dateStr === todayStr();
             const isSelected = dateStr === selectedDay;
-            const evs = data.events.filter(ev => occursOnDate(ev, dateStr) && (personFilter === 'all' || ev.personIds?.includes(personFilter)));
-            const cellWeekday = (parseDate(dateStr).getDay() + 6) % 7;
+            const evs = eventsByDate[dateStr] || [];
+            const cellWeekday = weekdayIdx(dateStr);
 
             return (
               <button 
@@ -761,7 +803,7 @@ function CalendarView({ data, onOpenAdd, onOpenEvent }) {
       <Section title={parseDate(selectedDay).toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })} action={<button onClick={() => onOpenAdd(selectedDay)} style={{ background: COLORS.accent, color: '#121214' }} className="rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1"><Plus size={14} /> Dodaj</button>}>
         {dayEvents.length === 0 ? <EmptyState text="Brak wydarzeń w tym dniu" /> : (
           <div className="space-y-2">
-            {dayEvents.sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99')).map(ev => {
+            {dayEvents.slice().sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99')).map(ev => {
               const isMultiDay = (!ev.recurrence?.freq || ev.recurrence.freq === 'none') && ev.endDate && ev.endDate > ev.date;
               return (
                 <div key={ev.id} onClick={() => onOpenEvent(ev)} className="w-full border rounded-2xl p-3.5 text-left bg-[#1E1E22] border-[#33333C] cursor-pointer">
@@ -946,7 +988,7 @@ function WallView({ wall = [], people, onDeleteWallMessage, onTogglePinWallMessa
 
 function MealsView({ meals, onUpdateMeal }) {
   const [mondayAnchor, setMondayAnchor] = useState(getMonday(todayStr()));
-  const days = Array(7).fill(0).map((_, i) => addDays(mondayAnchor, i));
+  const days = Array(7).fill(0).map((_, i) => addDaysStr(mondayAnchor, i));
   const weekMeals = meals?.[mondayAnchor] || {};
 
   return (
@@ -954,9 +996,9 @@ function MealsView({ meals, onUpdateMeal }) {
       <div className="flex items-center justify-between px-1">
         <div><h2 style={{ fontFamily: 'Fraunces' }} className="text-2xl font-bold text-stone-100">Posiłki</h2><p className="text-xs text-stone-400">Jadłospis</p></div>
         <div className="flex items-center gap-2 border rounded-xl p-1 bg-[#1E1E22] border-[#33333C]">
-          <button onClick={() => setMondayAnchor(addDays(mondayAnchor, -7))} className="p-1 rounded-lg hover:bg-stone-800"><ChevronLeft size={18} /></button>
+          <button onClick={() => setMondayAnchor(addDaysStr(mondayAnchor, -7))} className="p-1 rounded-lg hover:bg-stone-800"><ChevronLeft size={18} /></button>
           <span className="text-xs font-mono font-semibold">{parseDate(mondayAnchor).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })}</span>
-          <button onClick={() => setMondayAnchor(addDays(mondayAnchor, 7))} className="p-1 rounded-lg hover:bg-stone-800"><ChevronRight size={18} /></button>
+          <button onClick={() => setMondayAnchor(addDaysStr(mondayAnchor, 7))} className="p-1 rounded-lg hover:bg-stone-800"><ChevronRight size={18} /></button>
         </div>
       </div>
       <div className="space-y-3">
@@ -2217,7 +2259,7 @@ export default function App() {
 
         const now = new Date();
         const today = toDateStr(now);
-        const tomorrow = addDays(today, 1);
+        const tomorrow = addDaysStr(today, 1);
 
         // 1. Sprawdzanie wydarzeń (tylko przypisane do bieżącego profilu)
         if (Array.isArray(data.events)) {
@@ -2318,7 +2360,10 @@ export default function App() {
       return;
     }
 
-    if (JSON.stringify(oldData) === JSON.stringify(newData)) return;
+    // Szybkie sprawdzenie znacznika czasu synchronizacji (zastępuje kosztowne JSON.stringify całego stanu)
+    if (oldData.lastUpdatedAt && newData.lastUpdatedAt && oldData.lastUpdatedAt === newData.lastUpdatedAt) {
+      return;
+    }
 
     const currentPersonId = profileRef.current?.person_id;
 
@@ -2556,13 +2601,14 @@ export default function App() {
   }, [supabaseClient, family, profile, handleRemoteDataUpdate]);
 
   const persist = useCallback(async (next) => {
-    setData(next);
-    dataRef.current = next; // Kluczowe: zapobiega powtórnemu powiadomieniu u autora zmiany
+    const updated = { ...next, lastUpdatedAt: Date.now() };
+    setData(updated);
+    dataRef.current = updated; // Kluczowe: zapobiega powtórnemu powiadomieniu u autora zmiany
     if (supabaseClient && family) {
       try {
         await supabaseClient.from('family_state').upsert({
           family_id: family.id,
-          data: next,
+          data: updated,
           updated_at: new Date().toISOString()
         });
       } catch (e) {
