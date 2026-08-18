@@ -2361,8 +2361,11 @@ export default function App() {
     }
 
     // Szybkie sprawdzenie znacznika czasu synchronizacji (zastępuje kosztowne JSON.stringify całego stanu)
-    if (oldData.lastUpdatedAt && newData.lastUpdatedAt && oldData.lastUpdatedAt === newData.lastUpdatedAt) {
-      return;
+    if (oldData.lastUpdatedAt && newData.lastUpdatedAt) {
+      if (oldData.lastUpdatedAt === newData.lastUpdatedAt) return;
+    } else {
+      // Bezpieczny fallback dla istniejących stanów rodziny w Supabase (przed dodaniem pola lastUpdatedAt)
+      if (JSON.stringify(oldData) === JSON.stringify(newData)) return;
     }
 
     const currentPersonId = profileRef.current?.person_id;
