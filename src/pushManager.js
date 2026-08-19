@@ -211,15 +211,16 @@ export async function unsubscribeFromPushNotifications(supabase) {
 
 /**
  * Dodaje wpis do tabeli notifications (np. nowe zadanie, wiadomość na tablicy)
- * i wywołuje rozesłanie push do innych domowników
+ * i wywołuje rozesłanie push do przypisanych domowników
  */
-export async function recordFamilyNotification(supabase, { familyId, userId, title, body, type = 'info', url = '/' }) {
+export async function recordFamilyNotification(supabase, { familyId, userId, targetPersonIds = null, title, body, type = 'info', url = '/', tag = null }) {
   if (!supabase || !familyId) return;
 
   try {
+    const notificationTag = tag || `${type}_${Date.now()}`;
     const { data, error } = await supabase.from('notifications').insert({
       family_id: familyId,
-      user_id: userId || null, // null = wszyscy w rodzinie
+      user_id: userId || null, // null = filtrowane przez targetPersonIds lub wszyscy
       title,
       body,
       type,
@@ -231,7 +232,7 @@ export async function recordFamilyNotification(supabase, { familyId, userId, tit
       addLog('info', `Zapisano powiadomienie w chmurze: "${title}"`);
     }
 
-    // Jeśli skonfigurowana jest Edge Function 'send-push', wywołujemy ją
+    // Jeśli skonfigurowana jest Edge Function 'send-push', wywołujemy ją z targetPersonIds
     if (typeof supabase.functions?.invoke === 'function') {
       try {
         await supabase.functions.invoke('send-push', {
@@ -239,13 +240,15 @@ export async function recordFamilyNotification(supabase, { familyId, userId, tit
             notification_id: data?.id,
             family_id: familyId,
             user_id: userId,
+            target_person_ids: targetPersonIds,
             title,
             body,
+            type,
+            tag: notificationTag,
             url,
           },
         });
       } catch (fnErr) {
-        // Ignorujemy jeśli Edge function nie jest jeszcze wdrożona
         console.log('Edge function send-push not active or optional:', fnErr);
       }
     }

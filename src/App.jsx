@@ -2659,9 +2659,11 @@ export default function App() {
       if (family?.id && supabaseClient) {
         recordFamilyNotification(supabaseClient, {
           familyId: family.id,
+          targetPersonIds: ev.personIds && ev.personIds.length > 0 ? ev.personIds : null,
           title: 'Nowe wydarzenie w kalendarzu 📅',
           body: `${ev.title}${ev.time ? ` (${ev.time})` : ''}`,
-          type: 'event'
+          type: 'event',
+          tag: `event_new_${ev.id}`
         });
       }
     } else {
@@ -2679,9 +2681,11 @@ export default function App() {
       if (family?.id && supabaseClient) {
         recordFamilyNotification(supabaseClient, {
           familyId: family.id,
+          targetPersonIds: t.personIds && t.personIds.length > 0 ? t.personIds : null,
           title: 'Nowe zadanie dla rodziny 📝',
           body: `${t.title}`,
-          type: 'task'
+          type: 'task',
+          tag: `task_new_${t.id}`
         });
       }
     } else {
@@ -2704,11 +2708,14 @@ export default function App() {
     showToast("Wysłano na tablicę 💬"); 
     if (family?.id && supabaseClient) {
       const author = data?.people?.find(p => p.id === msg.authorId)?.name || 'Ktoś';
+      const targetPersonIds = (data?.people || []).filter(p => p.id !== msg.authorId).map(p => p.id);
       recordFamilyNotification(supabaseClient, {
         familyId: family.id,
+        targetPersonIds: targetPersonIds.length > 0 ? targetPersonIds : null,
         title: `${author} napisał(a) na Tablicy 💬`,
         body: msg.text,
-        type: 'wall_message'
+        type: 'wall_message',
+        tag: `wall_msg_${msg.id}`
       });
     }
   };
