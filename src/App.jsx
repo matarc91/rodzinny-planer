@@ -2268,16 +2268,11 @@ export default function App() {
     profileRef.current = profile;
   }, [profile]);
 
-  // Pomocnicza funkcja inteligentnego dostarczania powiadomień:
-  // - Jeśli aplikacja jest na 1. planie (!document.hidden): TYLKO wewnątrz-aplikacyjny Toast
-  // - Jeśli karta/aplikacja jest w tle (document.hidden): Powiadomienie systemowe (sendSystemNotification)
+  // Pomocnicza funkcja inteligentnego dostarczania powiadomień wewnątrz aplikacji:
+  // - W interfejsie użytkownika wyświetla elegancki Toast
+  // - Powiadomienia systemowe/OS w tle obsługiwane są bezpośrednio przez Web Push (Service Worker)
   const deliverNotification = useCallback((title, body, toastMsg) => {
-    const isBackground = typeof document !== 'undefined' && document.hidden;
-    if (isBackground) {
-      sendSystemNotification(title, body);
-    } else {
-      showToast(toastMsg || (body ? `${title}: ${body}` : title));
-    }
+    showToast(toastMsg || (body ? `${title}: ${body}` : title));
   }, []);
 
   // System sprawdzania i wysyłania przypomnień czasowych dla wydarzeń i zadań
@@ -2687,6 +2682,8 @@ export default function App() {
     const nextNotes = noteId ? data.notes.filter(n => n.id !== noteId) : data.notes; 
     const exists = data.events.some(e => e.id === ev.id); 
     persist({ ...data, events: exists ? data.events.map(e => e.id === ev.id ? ev : e) : [...data.events, ev], notes: nextNotes }); 
+    const authorName = data?.people?.find(p => p.id === currentUserId)?.name || 'Współdomownik';
+
     if (!exists) {
       showToast("Dodano wydarzenie! 📅");
       if (family?.id && supabaseClient) {
@@ -2695,13 +2692,24 @@ export default function App() {
           userId: session?.user?.id || profile?.id,
           targetPersonIds: ev.personIds && ev.personIds.length > 0 ? ev.personIds : null,
           title: 'Nowe wydarzenie w kalendarzu 📅',
-          body: `${ev.title}${ev.time ? ` (${ev.time})` : ''}`,
+          body: `${authorName} dodał(a): "${ev.title}"${ev.time ? ` (${ev.time})` : ''}`,
           type: 'event',
           tag: `event_new_${ev.id}`
         });
       }
     } else {
       showToast("Zaktualizowano wydarzenie 📅");
+      if (family?.id && supabaseClient) {
+        recordFamilyNotification(supabaseClient, {
+          familyId: family.id,
+          userId: session?.user?.id || profile?.id,
+          targetPersonIds: ev.personIds && ev.personIds.length > 0 ? ev.personIds : null,
+          title: 'Zaktualizowano wydarzenie 📅',
+          body: `${authorName} zaktualizował(a) wydarzenie: "${ev.title}"${ev.time ? ` (${ev.time})` : ''}`,
+          type: 'event_update',
+          tag: `event_upd_${ev.id}`
+        });
+      }
     }
   };
 
@@ -2710,6 +2718,8 @@ export default function App() {
     const nextNotes = noteId ? data.notes.filter(n => n.id !== noteId) : data.notes; 
     const exists = data.tasks.some(x => x.id === t.id); 
     persist({ ...data, tasks: exists ? data.tasks.map(x => x.id === t.id ? t : x) : [...data.tasks, t], notes: nextNotes }); 
+    const authorName = data?.people?.find(p => p.id === currentUserId)?.name || 'Współdomownik';
+
     if (!exists) {
       showToast("Dodano zadanie! 📝");
       if (family?.id && supabaseClient) {
@@ -2718,13 +2728,24 @@ export default function App() {
           userId: session?.user?.id || profile?.id,
           targetPersonIds: t.personIds && t.personIds.length > 0 ? t.personIds : null,
           title: 'Nowe zadanie dla rodziny 📝',
-          body: `${t.title}`,
+          body: `${authorName} przypisał(a) zadanie: "${t.title}"`,
           type: 'task',
           tag: `task_new_${t.id}`
         });
       }
     } else {
       showToast("Zaktualizowano zadanie 📝");
+      if (family?.id && supabaseClient) {
+        recordFamilyNotification(supabaseClient, {
+          familyId: family.id,
+          userId: session?.user?.id || profile?.id,
+          targetPersonIds: t.personIds && t.personIds.length > 0 ? t.personIds : null,
+          title: 'Zaktualizowano zadanie 📝',
+          body: `${authorName} zaktualizował(a) zadanie: "${t.title}"`,
+          type: 'task_update',
+          tag: `task_upd_${t.id}`
+        });
+      }
     }
   };
 
@@ -2834,8 +2855,41 @@ export default function App() {
     }
   };
 
-  const deleteEvent = id => persist({ ...data, events: data.events.filter(e => e.id !== id) });
-  const deleteTask = id => persist({ ...data, tasks: data.tasks.filter(t => t.id !== id) });
+  const deleteEvent = id => {
+    const ev = (data.events || []).find(e => e.id === id);
+    persist({ ...data, events: (data.events || []).filter(e => e.id !== id) });
+    showToast("Usunięto wydarzenie 🗑️");
+    if (ev && family?.id && supabaseClient) {
+      const authorName = data?.people?.find(p => p.id === currentUserId)?.name || 'Współdomownik';
+      recordFamilyNotification(supabaseClient, {
+        familyId: family.id,
+        userId: session?.user?.id || profile?.id,
+        targetPersonIds: ev.personIds && ev.personIds.length > 0 ? ev.personIds : null,
+        title: 'Usunięto wydarzenie 🗑️',
+        body: `${authorName} usunął(a) wydarzenie: "${ev.title}"`,
+        type: 'event_delete',
+        tag: `event_del_${id}`
+      });
+    }
+  };
+
+  const deleteTask = id => {
+    const t = (data.tasks || []).find(x => x.id === id);
+    persist({ ...data, tasks: (data.tasks || []).filter(x => x.id !== id) });
+    showToast("Usunięto zadanie 🗑️");
+    if (t && family?.id && supabaseClient) {
+      const authorName = data?.people?.find(p => p.id === currentUserId)?.name || 'Współdomownik';
+      recordFamilyNotification(supabaseClient, {
+        familyId: family.id,
+        userId: session?.user?.id || profile?.id,
+        targetPersonIds: t.personIds && t.personIds.length > 0 ? t.personIds : null,
+        title: 'Usunięto zadanie 🗑️',
+        body: `${authorName} usunął(a) zadanie: "${t.title}"`,
+        type: 'task_delete',
+        tag: `task_del_${id}`
+      });
+    }
+  };
   const deleteNote = id => persist({ ...data, notes: data.notes.filter(n => n.id !== id) });
   
   const toggleTask = (task) => {
