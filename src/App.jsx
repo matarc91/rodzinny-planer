@@ -16,7 +16,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, Repeat, Clock, Trash2, AlertCircle, 
   Pencil, Bell, BellOff, Utensils, Sparkles, Settings, ToggleLeft, ToggleRight,
   Pin, MessageSquare, Info, RefreshCw, Wifi, LogOut, ArrowRight, Key, Mail,
-  Terminal, Copy, UserX, Smartphone, CheckCircle, HelpCircle, Code
+  Terminal, Copy, UserX, UserCheck, Smartphone, CheckCircle, HelpCircle, Code
 } from 'lucide-react';
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');`;
@@ -435,7 +435,7 @@ function NoteModal({ editItem, currentUserId, onClose, onSave }) {
   );
 }
 
-function PersonModal({ editPerson, existingCount, onClose, onSave }) {
+function PersonModal({ editPerson, existingCount, isCurrentProfile, onSelectAsMyProfile, onClose, onSave }) {
   const [name, setName] = useState(editPerson?.name || '');
   const [color, setColor] = useState(editPerson?.color || PERSON_PALETTE[existingCount % PERSON_PALETTE.length]);
   const [emoji, setEmoji] = useState(editPerson?.emoji || '👨');
@@ -446,6 +446,29 @@ function PersonModal({ editPerson, existingCount, onClose, onSave }) {
         <div><label className="text-xs font-semibold mb-1 block text-stone-400">Imię / Rola</label><input autoFocus value={name} onChange={e => setName(e.target.value)} style={{ borderColor: COLORS.border }} className={inputStyle} /></div>
         <div><label className="text-xs font-semibold mb-1.5 block text-stone-400">Ikona</label><div className="flex flex-wrap gap-2 p-2 rounded-xl bg-stone-900 border border-stone-800">{AVATAR_EMOJIS.map(em => <button key={em} type="button" onClick={() => setEmoji(em)} className={`w-9 h-9 rounded-lg text-lg flex items-center justify-center transition ${emoji === em ? 'bg-stone-800 shadow-md scale-110' : 'hover:bg-stone-800/50'}`}>{em}</button>)}</div></div>
         <div><label className="text-xs font-semibold mb-1.5 block text-stone-400">Kolor</label><div className="flex flex-wrap gap-2">{PERSON_PALETTE.map(c => <button key={c} type="button" onClick={() => setColor(c)} style={{ background: c }} className={`w-8 h-8 rounded-full transition-transform ${color === c ? 'ring-2 ring-offset-2 ring-stone-900 scale-110' : 'opacity-80'}`} />)}</div></div>
+        
+        {editPerson && onSelectAsMyProfile && (
+          <div className="pt-2 border-t border-[#33333C]">
+            {isCurrentProfile ? (
+              <div className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold">
+                <Check size={15} className="text-amber-400" /> To Twoje aktualne konto (To ja)
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectAsMyProfile();
+                  onClose();
+                }}
+                className="w-full py-2.5 px-3 rounded-xl bg-stone-900 border border-amber-500/40 hover:bg-amber-500/10 text-amber-300 text-xs font-semibold flex items-center justify-center gap-2 transition active:scale-95"
+              >
+                <UserCheck size={16} className="text-amber-400" />
+                Ustaw ten profil jako mój (To ja)
+              </button>
+            )}
+          </div>
+        )}
+
         <button onClick={save} style={{ background: COLORS.accent, color: '#121214' }} className="w-full rounded-xl py-3 text-sm font-bold shadow hover:opacity-90 transition mt-2">{editPerson ? 'Zapisz' : 'Dodaj osobę'}</button>
       </div>
     </ModalShell>
@@ -1138,7 +1161,7 @@ function AppLogsSection() {
   );
 }
 
-function SettingsView({ family, profile, settings, onUpdateSettings, people, onAddPerson, onEditPerson, onDeletePerson, onSelectPerson, onSignOut, supabase, showToast, onDeleteFamily, onDeleteUserAccount }) {
+function SettingsView({ family, profile, settings, onUpdateSettings, people, onAddPerson, onEditPerson, onDeletePerson, onSignOut, supabase, showToast, onDeleteFamily, onDeleteUserAccount }) {
   const [expandedSection, setExpandedSection] = useState(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -1366,29 +1389,8 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
 
         {expandedSection === 'members' && (
           <div className="p-4 pt-3 border-t border-[#33333C] space-y-3 bg-stone-900/40">
-            {/* Pasek statusu powiązania konta */}
-            <div className="bg-stone-900/80 border border-stone-800 p-3 rounded-xl flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-stone-400">Twoje przypisane <code className="text-amber-400 font-mono">person_id</code>:</span>
-                {profile?.person_id ? (
-                  <span className="font-mono font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
-                    {profile.person_id}
-                  </span>
-                ) : (
-                  <span className="text-red-400 font-medium bg-red-950/40 px-2 py-0.5 rounded border border-red-900/40">
-                    Brak (nieprzypisane)
-                  </span>
-                )}
-              </div>
-              {profile?.person_id && (
-                <span className="text-[11px] text-emerald-400 font-medium">
-                  {people.find(p => p.id === profile.person_id)?.name || 'Wybrany profil'}
-                </span>
-              )}
-            </div>
-
             <div className="flex items-center justify-between pb-1">
-              <span className="text-xs text-stone-400 font-medium">Lista domowników i ID w bazie</span>
+              <span className="text-xs text-stone-400 font-medium">Lista domowników</span>
               <button 
                 onClick={onAddPerson} 
                 className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-xl text-xs font-bold flex items-center gap-1 transition active:scale-95 shadow-sm"
@@ -1400,29 +1402,22 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
               {people.map(p => {
                 const isCurrent = profile?.person_id === p.id;
                 return (
-                  <div key={p.id} className={`bg-stone-900 border ${isCurrent ? 'border-amber-500/60 bg-amber-500/10 shadow-sm shadow-amber-950/20' : 'border-[#33333C]'} rounded-xl p-3 flex items-center justify-between`}>
+                  <div key={p.id} className={`bg-stone-900 border ${isCurrent ? 'border-amber-500/40 bg-amber-500/5' : 'border-[#33333C]'} rounded-xl p-3 flex items-center justify-between`}>
                     <div className="flex items-center gap-3">
                       <Chip person={p} size="lg" />
                       <div>
                         <div className="text-sm font-bold text-stone-100 flex items-center gap-2">
                           {p.name}
-                          <span className="font-mono text-[10px] text-stone-400 bg-stone-800 px-1.5 py-0.5 rounded border border-stone-700">
-                            ID: {p.id}
-                          </span>
                           {isCurrent && (
-                            <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-semibold border border-emerald-500/40 flex items-center gap-1">
-                              <Check size={11} /> Twoje konto
+                            <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-semibold">
+                              To ja
                             </span>
                           )}
                         </div>
-                        {!isCurrent && onSelectPerson && (
-                          <button 
-                            type="button" 
-                            onClick={() => onSelectPerson(p.id)}
-                            className="text-[11px] text-amber-400 hover:text-amber-300 font-medium underline transition mt-1 flex items-center gap-1"
-                          >
-                            Połącz moje konto z tym profilem (przypisz ID: {p.id})
-                          </button>
+                        {isCurrent && (
+                          <div className="text-[11px] text-stone-500 font-mono mt-0.5">
+                            ID: {p.id}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -2914,7 +2909,7 @@ export default function App() {
         {tab === 'notes' && <NotesView notes={visibleNotes} onDelete={deleteNote} onConvert={openConvertNote} onEdit={openEditNote} onToggleItem={toggleNoteItem} onOpenAddNote={() => setModal('note')} />}
         {tab === 'wall' && data.settings?.enableWall && <WallView wall={data.wall} people={data.people} onDeleteWallMessage={deleteWallMessage} onTogglePinWallMessage={togglePinWallMessage} onOpenAddWall={() => setModal('wall')} />}
         {tab === 'meals' && data.settings?.enableMeals && <MealsView meals={data.meals} onUpdateMeal={updateMeal} />}
-        {tab === 'settings' && <SettingsView family={family} profile={profile} settings={data.settings} onUpdateSettings={updateSettings} people={data.people} onAddPerson={() => setModal('person')} onEditPerson={openEditPerson} onDeletePerson={deletePerson} onSelectPerson={selectPerson} onSignOut={handleSignOut} supabase={supabaseClient} showToast={showToast} onDeleteFamily={deleteFamily} onDeleteUserAccount={deleteUserAccount} />}
+        {tab === 'settings' && <SettingsView family={family} profile={profile} settings={data.settings} onUpdateSettings={updateSettings} people={data.people} onAddPerson={() => setModal('person')} onEditPerson={openEditPerson} onDeletePerson={deletePerson} onSignOut={handleSignOut} supabase={supabaseClient} showToast={showToast} onDeleteFamily={deleteFamily} onDeleteUserAccount={deleteUserAccount} />}
         
         <PoweredByFooter className="mt-12 mb-4" />
       </main>
@@ -2937,7 +2932,16 @@ export default function App() {
       {modal === 'task' && <AddTaskModal people={data.people} currentUserId={currentUserId} initial={modalPayload?.initial} editItem={modalPayload?.editItem} onClose={closeModal} onSave={upsertTask} />}
       {modal === 'note' && <NoteModal editItem={modalPayload?.editItem} currentUserId={currentUserId} onClose={closeModal} onSave={upsertNote} />}
       {modal === 'wall' && <AddWallMessageModal people={data.people} currentUserId={currentUserId} onClose={closeModal} onSave={addWallMessage} />}
-      {modal === 'person' && <PersonModal editPerson={editingPerson} existingCount={data.people.length} onClose={closeModal} onSave={upsertPerson} />}
+      {modal === 'person' && (
+        <PersonModal 
+          editPerson={editingPerson} 
+          existingCount={data.people.length} 
+          isCurrentProfile={profile?.person_id === editingPerson?.id}
+          onSelectAsMyProfile={editingPerson ? () => selectPerson(editingPerson.id) : null}
+          onClose={closeModal} 
+          onSave={upsertPerson} 
+        />
+      )}
 
       {detailEvent && <EventDetailModal event={detailEvent} people={data.people} onClose={() => setDetailEvent(null)} onEdit={openEditEvent} onDelete={deleteEvent} onToggleSubItem={toggleSubItem} />}
       {detailTask && <TaskDetailModal task={data.tasks.find(t => t.id === detailTask.id) || detailTask} people={data.people} onClose={() => setDetailTask(null)} onToggle={toggleTask} onDelete={deleteTask} onEdit={openEditTask} onToggleSubItem={toggleSubItem} />}
