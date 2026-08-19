@@ -186,15 +186,25 @@ const createMockSupabase = () => {
   };
 };
 
+let supabaseInstance = null;
+
 export const getSupabaseClient = () => {
+  if (supabaseInstance) {
+    return supabaseInstance;
+  }
+
   if (isSupabaseConfigured) {
     try {
-      return createClient(supabaseUrl, supabaseAnonKey);
+      supabaseInstance = createClient(supabaseUrl, supabaseAnonKey);
+      return supabaseInstance;
     } catch (e) {
       console.warn('Failed to initialize real Supabase client, using local storage fallback.', e);
-      return createMockSupabase();
+      supabaseInstance = createMockSupabase();
+      return supabaseInstance;
     }
   }
-  return createMockSupabase();
+  
+  supabaseInstance = createMockSupabase();
+  return supabaseInstance;
 };
 

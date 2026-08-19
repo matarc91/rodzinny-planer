@@ -27,7 +27,7 @@ self.addEventListener('push', (event) => {
         icon: '/favicon.svg',
         badge: '/favicon.svg',
         url: '/',
-        tag: 'family_notification_' + Date.now(),
+        tag: 'rodzinny-planer-notif',
       };
 
       if (event.data) {

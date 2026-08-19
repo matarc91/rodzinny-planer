@@ -54,6 +54,21 @@ const addMonthsStr = (dateStr, n) => format(addMonths(parseDate(dateStr), n), 'y
 function uid(prefix) { return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); }
 function reminderLabel(hours) { const opt = REMINDER_OPTIONS.find(o => o.hours === hours); return opt ? opt.label : 'Brak'; }
 
+function getInitialSentReminders() {
+  try {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('rp_sent_reminders') : null;
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        return new Set(parsed);
+      }
+    }
+  } catch {
+    // Ignorujemy błędy odczytu
+  }
+  return new Set();
+}
+
 async function sendSystemNotification(title, body, extraOptions = {}) {
   try {
     addLog('info', `Próba wysłania powiadomienia systemowego: "${title}" - "${body}"`);
@@ -2258,7 +2273,16 @@ export default function App() {
 
   const dataRef = useRef(null);
   const profileRef = useRef(profile);
-  const sentRemindersRef = useRef(new Set());
+  const sentRemindersRef = useRef(getInitialSentReminders());
+
+  const markReminderSent = useCallback((key) => {
+    sentRemindersRef.current.add(key);
+    try {
+      localStorage.setItem('rp_sent_reminders', JSON.stringify(Array.from(sentRemindersRef.current)));
+    } catch {
+      // Ignorujemy błędy localStorage
+    }
+  }, []);
 
   useEffect(() => {
     dataRef.current = data;
@@ -2309,7 +2333,7 @@ export default function App() {
                 const key = `event_${ev.id}_${dateStr}_${reminderHours}_${timeStr}`;
 
                 if (diffMs >= 0 && diffMs < 15 * 60 * 1000 && !sentRemindersRef.current.has(key)) {
-                  sentRemindersRef.current.add(key);
+                  markReminderSent(key);
 
                   let labelText = 'O czasie wydarzenia';
                   if (reminderHours === 1) labelText = 'Za 1 godz.';
@@ -2349,7 +2373,7 @@ export default function App() {
               const key = `task_${t.id}_${dateStr}_${reminderHours}_${timeStr}`;
 
               if (diffMs >= 0 && diffMs < 15 * 60 * 1000 && !sentRemindersRef.current.has(key)) {
-                sentRemindersRef.current.add(key);
+                markReminderSent(key);
 
                 let labelText = 'Termin zadania';
                 if (reminderHours === 1) labelText = 'Za 1 godz.';
@@ -2374,7 +2398,7 @@ export default function App() {
     checkReminders();
     const interval = setInterval(checkReminders, 20000);
     return () => clearInterval(interval);
-  }, [data, deliverNotification]);
+  }, [data, deliverNotification, markReminderSent]);
 
   // Zaawansowana detekcja zmian (DODANE, ZMODYFIKOWANE, USUNIĘTE)
   // z precyzyjnym podziałem na odbiorców (Tablica = cała rodzina, Zadania/Wydarzenia = przypisani domownicy)
