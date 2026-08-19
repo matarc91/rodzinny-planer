@@ -210,36 +210,22 @@ export async function unsubscribeFromPushNotifications(supabase) {
 }
 
 /**
- * Dodaje wpis do tabeli notifications (np. nowe zadanie, wiadomość na tablicy)
- * i wywołuje rozesłanie push do przypisanych domowników
+ * Bezpośrednio wywołuje Edge Function 'send-push' w chmurze Supabase
+ * bez pośredniego zapisu do tabeli notifications (zapobiega dublowaniu przez Webhooki i gubieniu targetPersonIds)
  */
 export async function recordFamilyNotification(supabase, { familyId, userId, targetPersonIds = null, title, body, type = 'info', url = '/', tag = null }) {
   if (!supabase || !familyId) return;
 
   try {
     const notificationTag = tag || `${type}_${Date.now()}`;
-    const { data, error } = await supabase.from('notifications').insert({
-      family_id: familyId,
-      user_id: userId || null, // null = filtrowane przez targetPersonIds lub wszyscy
-      title,
-      body,
-      type,
-    }).select().single();
 
-    if (error) {
-      addLog('warn', `Błąd zapisu do notifications: ${error.message}`);
-    } else {
-      addLog('info', `Zapisano powiadomienie w chmurze: "${title}"`);
-    }
-
-    // Jeśli skonfigurowana jest Edge Function 'send-push', wywołujemy ją z targetPersonIds
+    // Jeśli skonfigurowana jest Edge Function 'send-push', wywołujemy ją bezpośrednio
     if (typeof supabase.functions?.invoke === 'function') {
       try {
-        await supabase.functions.invoke('send-push', {
+        const { data, error } = await supabase.functions.invoke('send-push', {
           body: {
-            notification_id: data?.id,
             family_id: familyId,
-            user_id: userId,
+            user_id: userId || null, // ID autora akcji (wykluczany z powiadomień)
             target_person_ids: targetPersonIds,
             title,
             body,
@@ -248,8 +234,14 @@ export async function recordFamilyNotification(supabase, { familyId, userId, tar
             url,
           },
         });
+
+        if (error) {
+          addLog('warn', `Edge Function send-push zwróciła błąd: ${error.message}`);
+        } else {
+          addLog('info', `Wysłano Web Push przez Edge Function: "${title}"`, data);
+        }
       } catch (fnErr) {
-        console.log('Edge function send-push not active or optional:', fnErr);
+        addLog('warn', `Błąd wywołania send-push: ${fnErr.message}`);
       }
     }
   } catch (err) {

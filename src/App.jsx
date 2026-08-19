@@ -2692,6 +2692,7 @@ export default function App() {
       if (family?.id && supabaseClient) {
         recordFamilyNotification(supabaseClient, {
           familyId: family.id,
+          userId: session?.user?.id || profile?.id,
           targetPersonIds: ev.personIds && ev.personIds.length > 0 ? ev.personIds : null,
           title: 'Nowe wydarzenie w kalendarzu 📅',
           body: `${ev.title}${ev.time ? ` (${ev.time})` : ''}`,
@@ -2714,6 +2715,7 @@ export default function App() {
       if (family?.id && supabaseClient) {
         recordFamilyNotification(supabaseClient, {
           familyId: family.id,
+          userId: session?.user?.id || profile?.id,
           targetPersonIds: t.personIds && t.personIds.length > 0 ? t.personIds : null,
           title: 'Nowe zadanie dla rodziny 📝',
           body: `${t.title}`,
@@ -2744,6 +2746,7 @@ export default function App() {
       const targetPersonIds = (data?.people || []).filter(p => p.id !== msg.authorId).map(p => p.id);
       recordFamilyNotification(supabaseClient, {
         familyId: family.id,
+        userId: session?.user?.id || profile?.id,
         targetPersonIds: targetPersonIds.length > 0 ? targetPersonIds : null,
         title: `${author} napisał(a) na Tablicy 💬`,
         body: msg.text,
