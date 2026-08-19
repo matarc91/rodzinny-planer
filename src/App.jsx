@@ -1138,7 +1138,7 @@ function AppLogsSection() {
   );
 }
 
-function SettingsView({ family, profile, settings, onUpdateSettings, people, onAddPerson, onEditPerson, onDeletePerson, onSignOut, supabase, showToast, onDeleteFamily, onDeleteUserAccount }) {
+function SettingsView({ family, profile, settings, onUpdateSettings, people, onAddPerson, onEditPerson, onDeletePerson, onSelectPerson, onSignOut, supabase, showToast, onDeleteFamily, onDeleteUserAccount }) {
   const [expandedSection, setExpandedSection] = useState(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -1366,8 +1366,29 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
 
         {expandedSection === 'members' && (
           <div className="p-4 pt-3 border-t border-[#33333C] space-y-3 bg-stone-900/40">
+            {/* Pasek statusu powiązania konta */}
+            <div className="bg-stone-900/80 border border-stone-800 p-3 rounded-xl flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-stone-400">Twoje przypisane <code className="text-amber-400 font-mono">person_id</code>:</span>
+                {profile?.person_id ? (
+                  <span className="font-mono font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                    {profile.person_id}
+                  </span>
+                ) : (
+                  <span className="text-red-400 font-medium bg-red-950/40 px-2 py-0.5 rounded border border-red-900/40">
+                    Brak (nieprzypisane)
+                  </span>
+                )}
+              </div>
+              {profile?.person_id && (
+                <span className="text-[11px] text-emerald-400 font-medium">
+                  {people.find(p => p.id === profile.person_id)?.name || 'Wybrany profil'}
+                </span>
+              )}
+            </div>
+
             <div className="flex items-center justify-between pb-1">
-              <span className="text-xs text-stone-400 font-medium">Lista domowników</span>
+              <span className="text-xs text-stone-400 font-medium">Lista domowników i ID w bazie</span>
               <button 
                 onClick={onAddPerson} 
                 className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-xl text-xs font-bold flex items-center gap-1 transition active:scale-95 shadow-sm"
@@ -1376,37 +1397,54 @@ function SettingsView({ family, profile, settings, onUpdateSettings, people, onA
               </button>
             </div>
             <div className="grid grid-cols-1 gap-2">
-              {people.map(p => (
-                <div key={p.id} className="bg-stone-900 border border-[#33333C] rounded-xl p-3 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Chip person={p} size="lg" />
-                    <div>
-                      <div className="text-sm font-bold text-stone-100 flex items-center gap-2">
-                        {p.name} 
-                        {profile?.person_id === p.id && (
-                          <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-semibold">To Ty</span>
+              {people.map(p => {
+                const isCurrent = profile?.person_id === p.id;
+                return (
+                  <div key={p.id} className={`bg-stone-900 border ${isCurrent ? 'border-amber-500/60 bg-amber-500/10 shadow-sm shadow-amber-950/20' : 'border-[#33333C]'} rounded-xl p-3 flex items-center justify-between`}>
+                    <div className="flex items-center gap-3">
+                      <Chip person={p} size="lg" />
+                      <div>
+                        <div className="text-sm font-bold text-stone-100 flex items-center gap-2">
+                          {p.name}
+                          <span className="font-mono text-[10px] text-stone-400 bg-stone-800 px-1.5 py-0.5 rounded border border-stone-700">
+                            ID: {p.id}
+                          </span>
+                          {isCurrent && (
+                            <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-semibold border border-emerald-500/40 flex items-center gap-1">
+                              <Check size={11} /> Twoje konto
+                            </span>
+                          )}
+                        </div>
+                        {!isCurrent && onSelectPerson && (
+                          <button 
+                            type="button" 
+                            onClick={() => onSelectPerson(p.id)}
+                            className="text-[11px] text-amber-400 hover:text-amber-300 font-medium underline transition mt-1 flex items-center gap-1"
+                          >
+                            Połącz moje konto z tym profilem (przypisz ID: {p.id})
+                          </button>
                         )}
                       </div>
                     </div>
+                    <div className="flex gap-1.5">
+                      <button 
+                        onClick={() => onEditPerson(p)} 
+                        className="p-2 text-stone-400 hover:text-stone-200 bg-stone-800 hover:bg-stone-700 rounded-lg transition"
+                        title="Edytuj profil"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button 
+                        onClick={() => onDeletePerson(p.id)} 
+                        className="p-2 text-stone-400 hover:text-red-400 bg-stone-800 hover:bg-red-950/60 rounded-lg transition"
+                        title="Usuń profil"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex gap-1.5">
-                    <button 
-                      onClick={() => onEditPerson(p)} 
-                      className="p-2 text-stone-400 hover:text-stone-200 bg-stone-800 hover:bg-stone-700 rounded-lg transition"
-                      title="Edytuj profil"
-                    >
-                      <Pencil size={15} />
-                    </button>
-                    <button 
-                      onClick={() => onDeletePerson(p.id)} 
-                      className="p-2 text-stone-400 hover:text-red-400 bg-stone-800 hover:bg-red-950/60 rounded-lg transition"
-                      title="Usuń profil"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -2722,6 +2760,19 @@ export default function App() {
   const deleteWallMessage = id => { persist({ ...data, wall: (data.wall || []).filter(w => w.id !== id) }); };
   const togglePinWallMessage = id => { persist({ ...data, wall: (data.wall || []).map(w => w.id === id ? { ...w, isPinned: !w.isPinned } : w) }); };
   const upsertPerson = p => { const exists = data.people.some(x => x.id === p.id); persist({ ...data, people: exists ? data.people.map(x => x.id === p.id ? p : x) : [...data.people, p] }); showToast("Zapisano osobę"); };
+  const selectPerson = async (id) => {
+    if (!supabaseClient || !profile?.id) return;
+    try {
+      const { error } = await supabaseClient.from('profiles').update({ person_id: id }).eq('id', profile.id);
+      if (error) throw error;
+      setProfile(prev => prev ? { ...prev, person_id: id } : { id: session.user.id, family_id: family?.id, person_id: id });
+      const pName = data?.people?.find(p => p.id === id)?.name || 'nową osobę';
+      showToast(`Połączono Twoje konto z: ${pName} 👤`);
+    } catch (e) {
+      console.error(e);
+      showToast("Błąd łączenia profilu");
+    }
+  };
   const updateMeal = (mondayKey, weekMeals) => persist({ ...data, meals: { ...(data.meals || {}), [mondayKey]: weekMeals } });
   const updateSettings = newSettings => persist({ ...data, settings: newSettings });
   const deletePerson = async (id) => {
@@ -2863,7 +2914,7 @@ export default function App() {
         {tab === 'notes' && <NotesView notes={visibleNotes} onDelete={deleteNote} onConvert={openConvertNote} onEdit={openEditNote} onToggleItem={toggleNoteItem} onOpenAddNote={() => setModal('note')} />}
         {tab === 'wall' && data.settings?.enableWall && <WallView wall={data.wall} people={data.people} onDeleteWallMessage={deleteWallMessage} onTogglePinWallMessage={togglePinWallMessage} onOpenAddWall={() => setModal('wall')} />}
         {tab === 'meals' && data.settings?.enableMeals && <MealsView meals={data.meals} onUpdateMeal={updateMeal} />}
-        {tab === 'settings' && <SettingsView family={family} profile={profile} settings={data.settings} onUpdateSettings={updateSettings} people={data.people} onAddPerson={() => setModal('person')} onEditPerson={openEditPerson} onDeletePerson={deletePerson} onSignOut={handleSignOut} supabase={supabaseClient} showToast={showToast} onDeleteFamily={deleteFamily} onDeleteUserAccount={deleteUserAccount} />}
+        {tab === 'settings' && <SettingsView family={family} profile={profile} settings={data.settings} onUpdateSettings={updateSettings} people={data.people} onAddPerson={() => setModal('person')} onEditPerson={openEditPerson} onDeletePerson={deletePerson} onSelectPerson={selectPerson} onSignOut={handleSignOut} supabase={supabaseClient} showToast={showToast} onDeleteFamily={deleteFamily} onDeleteUserAccount={deleteUserAccount} />}
         
         <PoweredByFooter className="mt-12 mb-4" />
       </main>
