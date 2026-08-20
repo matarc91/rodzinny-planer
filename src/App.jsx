@@ -21,6 +21,8 @@ import {
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');`;
 
+const APP_VERSION = 'v2.0.0';
+
 // Wersja aplikacji z pełnym systemem Auth i Prywatnymi Notatkami
 const COLORS = {
   bg: '#121214', surface: '#1E1E22', surfaceHighlight: '#2A2A30', 
@@ -41,7 +43,13 @@ const REMINDER_OPTIONS = [
   { hours: 2, label: '2 godz. przed' },
   { hours: 24, label: '1 dzień przed' },
 ];
-const RECURRENCE_LABELS = { none: 'Jednorazowo', daily: 'Codziennie', weekly: 'Co tydzień', monthly: 'Co miesiąc' };
+const RECURRENCE_LABELS = { 
+  none: 'Jednorazowo', 
+  daily: 'Codziennie', 
+  weekly: 'Co tydzień', 
+  biweekly: 'Co 2 tyg.', 
+  quadweekly: 'Co 4 tyg.' 
+};
 
 const toDateStr = (d) => (d ? format(typeof d === 'string' ? parseISO(d) : d, 'yyyy-MM-dd') : '');
 const todayStr = () => format(new Date(), 'yyyy-MM-dd');
@@ -118,6 +126,11 @@ async function sendSystemNotification(title, body, extraOptions = {}) {
 
 function occursOnDate(event, dateStr) {
   if (dateStr < event.date) return false;
+  // Sprawdzenie czy pojedyncze wystąpienie nie zostało wykluczone z cyklu
+  if (Array.isArray(event.excludedDates) && event.excludedDates.includes(dateStr)) {
+    return false;
+  }
+
   const freq = event.recurrence?.freq || 'none';
   if (freq === 'none') {
     if (event.endDate && event.endDate >= event.date) {
@@ -127,6 +140,19 @@ function occursOnDate(event, dateStr) {
   }
   if (freq === 'daily') return true;
   if (freq === 'weekly') return weekdayIdx(dateStr) === weekdayIdx(event.date);
+  if (freq === 'biweekly') {
+    const d1 = parseDate(event.date);
+    const d2 = parseDate(dateStr);
+    const diffDays = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 && diffDays % 14 === 0;
+  }
+  if (freq === 'quadweekly') {
+    const d1 = parseDate(event.date);
+    const d2 = parseDate(dateStr);
+    const diffDays = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 && diffDays % 28 === 0;
+  }
+  // Wsteczna kompatybilność jeśli jakieś wcześniejsze zdarzenie miało monthly
   if (freq === 'monthly') return dayOfMonth(dateStr) === dayOfMonth(event.date);
   return false;
 }
@@ -157,6 +183,16 @@ function getEventBadgeBackground(ev, people, isSelected = false) {
 function getPeriodKey(freq, dateStr) {
   if (freq === 'daily') return dateStr;
   if (freq === 'weekly') return getMonday(dateStr);
+  if (freq === 'biweekly') {
+    const monday = parseDate(getMonday(dateStr));
+    const biweekIdx = Math.floor(monday.getTime() / (1000 * 60 * 60 * 24 * 14));
+    return `biweek_${biweekIdx}`;
+  }
+  if (freq === 'quadweekly') {
+    const monday = parseDate(getMonday(dateStr));
+    const quadweekIdx = Math.floor(monday.getTime() / (1000 * 60 * 60 * 24 * 28));
+    return `quadweek_${quadweekIdx}`;
+  }
   if (freq === 'monthly') return dateStr.slice(0, 7);
   return 'once';
 }
@@ -509,39 +545,115 @@ function AddWallMessageModal({ people, currentUserId, onClose, onSave }) {
   );
 }
 
-function EventDetailModal({ event, people, onClose, onEdit, onDelete, onToggleSubItem }) {
+function EventDetailModal({ event, people, onClose, onEdit, onDelete, onExcludeDate, onToggleSubItem }) {
+  const [deleteConfirmMode, setDeleteConfirmMode] = useState(false);
   const isMultiDay = (!event.recurrence?.freq || event.recurrence.freq === 'none') && event.endDate && event.endDate > event.date;
+  const isRecurring = Boolean(event.recurrence?.freq && event.recurrence.freq !== 'none');
+  const targetDate = event.occurrenceDate || event.date;
+
   return (
-    <ModalShell title="Szczegóły wydarzenia" onClose={onClose}>
-      <div className="space-y-4">
-        <div>
-          <h4 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-xl font-bold">{event.title}</h4>
-          <div className="flex items-center gap-2 flex-wrap text-xs mt-1 font-mono text-stone-400">
-            {isMultiDay ? (
-              <span className="text-amber-300 font-semibold bg-amber-900/30 px-2 py-0.5 rounded border border-amber-900/50">
-                📅 {event.date} – {event.endDate} {event.time ? `· ⏰ ${event.time}` : ''}
-              </span>
-            ) : (
-              <span>📅 {event.date} {event.time ? `· ⏰ ${event.time}` : ''}</span>
-            )}
-            {event.recurrence?.freq && event.recurrence.freq !== 'none' && (
-              <span className="flex items-center gap-1 bg-amber-900/40 text-amber-300 px-2 py-0.5 rounded">
-                <Repeat size={12} /> {RECURRENCE_LABELS[event.recurrence.freq]}
-              </span>
-            )}
+    <ModalShell title={deleteConfirmMode ? "Usuwanie wydarzenia" : "Szczegóły wydarzenia"} onClose={onClose}>
+      {deleteConfirmMode ? (
+        <div className="space-y-4 animate-fadeIn">
+          <div className="bg-red-950/40 border border-red-900/60 p-4 rounded-2xl space-y-2">
+            <h4 className="text-sm font-bold text-red-300 flex items-center gap-2">
+              <Trash2 size={16} /> To wydarzenie powtarza się w cyklu
+            </h4>
+            <p className="text-xs text-stone-300 leading-relaxed">
+              Wybierz, czy chcesz usunąć tylko to jedno konkretne wystąpienie z dnia <b className="text-amber-300 font-mono">{targetDate}</b>, czy cały cykl wydarzeń z kalendarza.
+            </p>
+          </div>
+
+          <div className="space-y-2 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                if (onExcludeDate) {
+                  onExcludeDate(event.id, targetDate);
+                }
+                onClose();
+              }}
+              className="w-full py-3 px-4 rounded-xl bg-stone-900 border border-stone-700 hover:border-amber-500/50 hover:bg-stone-800 text-stone-200 text-xs font-semibold flex items-center justify-between transition shadow-sm"
+            >
+              <div className="text-left">
+                <div className="font-bold text-stone-100 flex items-center gap-1.5">
+                  <span>Usuń tylko to wystąpienie</span>
+                  <span className="text-[10px] font-mono bg-stone-800 px-1.5 py-0.5 rounded text-amber-300">{targetDate}</span>
+                </div>
+                <div className="text-[11px] text-stone-400 font-normal mt-0.5">Pozostałe powtórzenia w kalendarzu pozostaną bez zmian</div>
+              </div>
+              <Calendar size={16} className="text-amber-400 shrink-0 ml-2" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                onDelete(event.id);
+                onClose();
+              }}
+              className="w-full py-3 px-4 rounded-xl bg-red-950/60 border border-red-800/80 hover:bg-red-900/80 text-red-200 text-xs font-semibold flex items-center justify-between transition shadow-sm"
+            >
+              <div className="text-left">
+                <div className="font-bold text-red-100">Usuń cały cykl (wszystkie powtórzenia)</div>
+                <div className="text-[11px] text-red-300/80 font-normal mt-0.5">Wydarzenie zostanie całkowicie usunięte z kalendarza</div>
+              </div>
+              <Trash2 size={16} className="text-red-400 shrink-0 ml-2" />
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setDeleteConfirmMode(false)}
+            className="w-full py-2.5 rounded-xl bg-stone-900 text-stone-400 hover:text-stone-200 text-xs font-medium transition"
+          >
+            Anuluj
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div>
+            <h4 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-xl font-bold">{event.title}</h4>
+            <div className="flex items-center gap-2 flex-wrap text-xs mt-1 font-mono text-stone-400">
+              {isMultiDay ? (
+                <span className="text-amber-300 font-semibold bg-amber-900/30 px-2 py-0.5 rounded border border-amber-900/50">
+                  📅 {event.date} – {event.endDate} {event.time ? `· ⏰ ${event.time}` : ''}
+                </span>
+              ) : (
+                <span>📅 {targetDate} {event.time ? `· ⏰ ${event.time}` : ''}</span>
+              )}
+              {isRecurring && (
+                <span className="flex items-center gap-1 bg-amber-900/40 text-amber-300 px-2 py-0.5 rounded">
+                  <Repeat size={12} /> {RECURRENCE_LABELS[event.recurrence.freq] || 'Cykliczne'}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-stone-400">
+            {event.reminder ? <Bell size={14} className="text-amber-400" /> : <BellOff size={14} />} <span>{event.reminder ? `Przypomnienie: ${reminderLabel(event.reminder.hours)}` : 'Brak przypomnienia'}</span>
+          </div>
+          <div><div className="text-xs font-semibold mb-1 text-stone-400">Biorą udział:</div><PersonRow people={people} personIds={event.personIds} /></div>
+          {event.note && <div style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }} className="border rounded-xl p-3 text-sm whitespace-pre-wrap text-stone-300">{event.note}</div>}
+          {event.items?.length > 0 && <div><div className="text-xs font-semibold mb-1 text-stone-400">Kroki:</div><ChecklistContainer items={event.items} onToggleItem={(itemId) => onToggleSubItem(event.id, itemId, 'event')} /></div>}
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => onEdit(event)} style={{ borderColor: COLORS.border, color: COLORS.ink }} className="flex-1 border rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-1.5 hover:bg-stone-800"><Pencil size={15} /> Edytuj</button>
+            <button 
+              onClick={() => {
+                if (isRecurring) {
+                  setDeleteConfirmMode(true);
+                } else {
+                  onDelete(event.id); 
+                  onClose();
+                }
+              }} 
+              style={{ borderColor: COLORS.border, color: COLORS.warn }} 
+              className="border rounded-xl px-4 flex items-center justify-center hover:bg-red-950/40"
+              title="Usuń wydarzenie"
+            >
+              <Trash2 size={16} />
+            </button>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-stone-400">
-          {event.reminder ? <Bell size={14} className="text-amber-400" /> : <BellOff size={14} />} <span>{event.reminder ? `Przypomnienie: ${reminderLabel(event.reminder.hours)}` : 'Brak przypomnienia'}</span>
-        </div>
-        <div><div className="text-xs font-semibold mb-1 text-stone-400">Biorą udział:</div><PersonRow people={people} personIds={event.personIds} /></div>
-        {event.note && <div style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }} className="border rounded-xl p-3 text-sm whitespace-pre-wrap text-stone-300">{event.note}</div>}
-        {event.items?.length > 0 && <div><div className="text-xs font-semibold mb-1 text-stone-400">Kroki:</div><ChecklistContainer items={event.items} onToggleItem={(itemId) => onToggleSubItem(event.id, itemId, 'event')} /></div>}
-        <div className="flex gap-2 pt-2">
-          <button onClick={() => onEdit(event)} style={{ borderColor: COLORS.border, color: COLORS.ink }} className="flex-1 border rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-1.5 hover:bg-stone-800"><Pencil size={15} /> Edytuj</button>
-          <button onClick={() => { onDelete(event.id); onClose(); }} style={{ borderColor: COLORS.border, color: COLORS.warn }} className="border rounded-xl px-4 flex items-center justify-center hover:bg-red-950/40"><Trash2 size={16} /></button>
-        </div>
-      </div>
+      )}
     </ModalShell>
   );
 }
@@ -647,7 +759,7 @@ function TodayView({ data, onOpenEvent, onOpenTask, onOpenAddEvent, onOpenAddTas
             {events.map(ev => {
               const isMultiDay = (!ev.recurrence?.freq || ev.recurrence.freq === 'none') && ev.endDate && ev.endDate > ev.date;
               return (
-                <div key={ev.id} onClick={() => onOpenEvent(ev)} style={{ background: COLORS.surface, borderColor: COLORS.border }} className="w-full border rounded-2xl p-3.5 text-left shadow-2xs cursor-pointer">
+                <div key={ev.id} onClick={() => onOpenEvent(ev, today)} style={{ background: COLORS.surface, borderColor: COLORS.border }} className="w-full border rounded-2xl p-3.5 text-left shadow-2xs cursor-pointer">
                   <div className="flex items-center gap-2.5">
                     {ev.time ? (
                       <span style={{ fontFamily: 'IBM Plex Mono', color: COLORS.accent, background: '#2B261D' }} className="text-xs px-2 py-0.5 rounded-md font-semibold shrink-0 font-mono">{ev.time}</span>
@@ -844,7 +956,7 @@ function CalendarView({ data, onOpenAdd, onOpenEvent }) {
             {dayEvents.slice().sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99')).map(ev => {
               const isMultiDay = (!ev.recurrence?.freq || ev.recurrence.freq === 'none') && ev.endDate && ev.endDate > ev.date;
               return (
-                <div key={ev.id} onClick={() => onOpenEvent(ev)} className="w-full border rounded-2xl p-3.5 text-left bg-[#1E1E22] border-[#33333C] cursor-pointer">
+                <div key={ev.id} onClick={() => onOpenEvent(ev, selectedDay)} className="w-full border rounded-2xl p-3.5 text-left bg-[#1E1E22] border-[#33333C] cursor-pointer">
                   <div className="flex items-center gap-2.5">
                     {ev.time ? (
                       <span style={{ color: COLORS.accent, background: '#2B261D' }} className="text-xs px-2 py-0.5 rounded-md font-semibold font-mono">{ev.time}</span>
@@ -1796,16 +1908,21 @@ function AppLogo({ className = "w-8 h-8 rounded-xl", iconSize = 18 }) {
 
 function PoweredByFooter({ className = "" }) {
   return (
-    <footer className={`mt-8 text-center text-xs text-stone-500 flex items-center justify-center gap-1.5 ${className}`}>
-      <span>Powered by</span>
-      <a 
-        href="https://syncup.pl" 
-        target="_blank" 
-        rel="noopener noreferrer" 
-        className="text-stone-400 hover:text-amber-400 transition font-medium underline decoration-stone-700 underline-offset-2"
-      >
-        syncup.pl
-      </a>
+    <footer className={`mt-8 text-center text-xs text-stone-500 flex flex-col items-center justify-center gap-1 ${className}`}>
+      <div className="flex items-center justify-center gap-1.5">
+        <span>Powered by</span>
+        <a 
+          href="https://syncup.pl" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-stone-400 hover:text-amber-400 transition font-medium underline decoration-stone-700 underline-offset-2"
+        >
+          syncup.pl
+        </a>
+      </div>
+      <span className="text-[11px] font-mono text-stone-500/80 font-medium">
+        {APP_VERSION}
+      </span>
     </footer>
   );
 }
@@ -2897,6 +3014,34 @@ export default function App() {
     }
   };
 
+  const excludeEventDate = (eventId, dateStr) => {
+    const ev = (data.events || []).find(e => e.id === eventId);
+    if (!ev) return;
+    const nextExcluded = Array.from(new Set([...(ev.excludedDates || []), dateStr]));
+    const updatedEv = { ...ev, excludedDates: nextExcluded };
+    persist({
+      ...data,
+      events: (data.events || []).map(e => e.id === eventId ? updatedEv : e)
+    });
+    showToast(`Usunięto wystąpienie (${dateStr}) 🗑️`);
+    if (family?.id && supabaseClient) {
+      const authorName = data?.people?.find(p => p.id === currentUserId)?.name || 'Współdomownik';
+      recordFamilyNotification(supabaseClient, {
+        familyId: family.id,
+        userId: session?.user?.id || profile?.id,
+        targetPersonIds: ev.personIds && ev.personIds.length > 0 ? ev.personIds : null,
+        title: 'Usunięto wystąpienie wydarzenia 🗑️',
+        body: `${authorName} usunął(a) wystąpienie "${ev.title}" z dnia ${dateStr}`,
+        type: 'event_delete_instance',
+        tag: `event_del_inst_${eventId}_${dateStr}`
+      });
+    }
+  };
+
+  const openDetailEvent = (ev, dateStr) => {
+    setDetailEvent({ ...ev, occurrenceDate: dateStr || ev.date });
+  };
+
   const deleteTask = id => {
     const t = (data.tasks || []).find(x => x.id === id);
     persist({ ...data, tasks: (data.tasks || []).filter(x => x.id !== id) });
@@ -2960,6 +3105,8 @@ export default function App() {
     showToast("Rodzina została usunięta.");
   };
 
+  const currentPerson = data?.people?.find(p => p.id === currentUserId);
+
   const TABS = [
     { id: 'today', label: 'Dziś', icon: Clock },
     { id: 'calendar', label: 'Kalendarz', icon: Calendar },
@@ -2975,17 +3122,38 @@ export default function App() {
 
       {toast && <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-stone-800 text-stone-100 text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl border border-stone-700 flex items-center gap-2 animate-bounce"><Sparkles size={14} className="text-amber-400" />{toast}</div>}
 
-      <header className="flex items-center justify-between px-5 pt-6 pb-4 sticky top-0 z-30 bg-[#121214]/85 backdrop-blur-md border-b border-stone-800/50">
-        <div className="flex items-center gap-2.5">
-          <AppLogo className="w-8 h-8 rounded-xl" iconSize={18} />
-          <h1 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-xl font-bold truncate">{family.name}</h1>
+      <header className="flex items-center justify-between px-4 sm:px-5 pt-6 pb-4 sticky top-0 z-30 bg-[#121214]/85 backdrop-blur-md border-b border-stone-800/50">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <AppLogo className="w-8 h-8 rounded-xl shrink-0" iconSize={18} />
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-xl font-bold truncate">{family.name}</h1>
+            {currentPerson ? (
+              <button 
+                type="button"
+                onClick={() => setTab('settings')}
+                title={`Zalogowano jako: ${currentPerson.name} (kliknij, aby przejść do ustawień profilu)`}
+                className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-stone-800/90 border border-stone-700/60 text-xs font-semibold text-stone-200 hover:border-amber-500/40 hover:bg-stone-800 transition shadow-xs cursor-pointer"
+              >
+                <Chip person={currentPerson} size="sm" />
+                <span className="truncate max-w-[90px] text-[11px] font-medium text-stone-300">{currentPerson.name}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setTab('settings')}
+                className="shrink-0 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] font-semibold text-amber-300 hover:bg-amber-500/20 transition cursor-pointer"
+              >
+                Wybierz profil
+              </button>
+            )}
+          </div>
         </div>
         <button onClick={() => setTab('settings')} className={`p-2 rounded-full transition border shadow-sm ${tab === 'settings' ? 'bg-amber-500/10 border-amber-500/50 text-amber-400' : 'bg-stone-900 border-stone-800 text-stone-300 hover:bg-stone-800'}`}><Settings size={20} /></button>
       </header>
 
       <main className="flex-1 overflow-y-auto px-4 pt-4 pb-24 max-w-2xl mx-auto w-full">
-        {tab === 'today' && <TodayView data={data} onOpenEvent={setDetailEvent} onOpenTask={setDetailTask} onOpenAddEvent={openAddEvent} onOpenAddTask={openAddTask} onToggleTask={toggleTask} />}
-        {tab === 'calendar' && <CalendarView data={data} onOpenAdd={openAddEvent} onOpenEvent={setDetailEvent} />}
+        {tab === 'today' && <TodayView data={data} onOpenEvent={openDetailEvent} onOpenTask={setDetailTask} onOpenAddEvent={openAddEvent} onOpenAddTask={openAddTask} onToggleTask={toggleTask} />}
+        {tab === 'calendar' && <CalendarView data={data} onOpenAdd={openAddEvent} onOpenEvent={openDetailEvent} />}
         {tab === 'tasks' && <TasksView data={data} onToggleTask={toggleTask} onDeleteTask={deleteTask} onOpenTask={setDetailTask} onOpenAddTask={openAddTask} />}
         {tab === 'notes' && <NotesView notes={visibleNotes} onDelete={deleteNote} onConvert={openConvertNote} onEdit={openEditNote} onToggleItem={toggleNoteItem} onOpenAddNote={() => setModal('note')} />}
         {tab === 'wall' && data.settings?.enableWall && <WallView wall={data.wall} people={data.people} onDeleteWallMessage={deleteWallMessage} onTogglePinWallMessage={togglePinWallMessage} onOpenAddWall={() => setModal('wall')} />}
@@ -3024,7 +3192,17 @@ export default function App() {
         />
       )}
 
-      {detailEvent && <EventDetailModal event={detailEvent} people={data.people} onClose={() => setDetailEvent(null)} onEdit={openEditEvent} onDelete={deleteEvent} onToggleSubItem={toggleSubItem} />}
+      {detailEvent && (
+        <EventDetailModal 
+          event={detailEvent} 
+          people={data.people} 
+          onClose={() => setDetailEvent(null)} 
+          onEdit={openEditEvent} 
+          onDelete={deleteEvent} 
+          onExcludeDate={excludeEventDate}
+          onToggleSubItem={toggleSubItem} 
+        />
+      )}
       {detailTask && <TaskDetailModal task={data.tasks.find(t => t.id === detailTask.id) || detailTask} people={data.people} onClose={() => setDetailTask(null)} onToggle={toggleTask} onDelete={deleteTask} onEdit={openEditTask} onToggleSubItem={toggleSubItem} />}
     </div>
   );
