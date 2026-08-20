@@ -117,6 +117,15 @@ export default function App() {
           .eq('id', session.user.id)
           .single();
         if (prof) {
+          // Upewnij się, że profil ma zapisany aktualny adres email
+          if (session.user.email && prof.email !== session.user.email) {
+            supabaseClient
+              .from('profiles')
+              .update({ email: session.user.email.toLowerCase() })
+              .eq('id', session.user.id)
+              .then(() => {})
+              .catch(() => {});
+          }
           setProfile(prof);
           if (prof.family_id) {
             const { data: fam } = await supabaseClient
@@ -126,6 +135,20 @@ export default function App() {
               .single();
             setFamily(fam);
           }
+        } else {
+          // Inicjalizacja profilu
+          const initialProf = {
+            id: session.user.id,
+            email: session.user.email ? session.user.email.toLowerCase() : null,
+            family_id: null,
+            person_id: null,
+          };
+          try {
+            await supabaseClient.from('profiles').upsert(initialProf);
+          } catch {
+            // Ignorujemy błędy schematu
+          }
+          setProfile(initialProf);
         }
       } catch (e) {
         console.warn(e);
@@ -772,6 +795,37 @@ export default function App() {
     }
   };
 
+  const leaveFamily = async () => {
+    const famName = family ? `"${family.name}"` : 'rodziny';
+    if (
+      !confirm(
+        `Czy na pewno chcesz odpiąć się od ${famName}?\n\n- Twoje konto logowania pozostanie aktywne.\n- Zostaniesz przeniesiony(a) do menu wyboru: dołączenie z kodem do innej rodziny lub stworzenie nowej.\n- Dane wspólne obecnej rodziny nie zostaną skasowane.`
+      )
+    )
+      return;
+
+    try {
+      if (supabaseClient && profile?.id) {
+        await supabaseClient
+          .from('profiles')
+          .update({
+            family_id: null,
+            person_id: null,
+          })
+          .eq('id', profile.id);
+      }
+
+      setFamily(null);
+      setProfile((prev) => (prev ? { ...prev, family_id: null, person_id: null } : null));
+      setData(null);
+      setTab('today');
+      showToast('Odpięto od rodziny. Możesz teraz dołączyć do innej lub stworzyć nową.');
+    } catch (err) {
+      console.error('Błąd podczas odpinania od rodziny:', err);
+      showToast('Wystąpił błąd podczas odpinania od rodziny.');
+    }
+  };
+
   const deleteUserAccount = async () => {
     if (
       !confirm(
@@ -1141,6 +1195,7 @@ export default function App() {
             onSignOut={handleSignOut}
             supabase={supabaseClient}
             showToast={showToast}
+            onLeaveFamily={leaveFamily}
             onDeleteFamily={deleteFamily}
             onDeleteUserAccount={deleteUserAccount}
           />

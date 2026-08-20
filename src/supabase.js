@@ -93,25 +93,43 @@ const createMockSupabase = () => {
         }
         return { data: {}, error: null };
       },
+      async resend({ type, email }) {
+        if (!email || !email.includes('@')) {
+          return { data: null, error: { message: 'Wprowadź poprawny adres e-mail.' } };
+        }
+        return { data: { type, email }, error: null };
+      },
     },
     from(table) {
       return {
         select() {
           return {
             eq(col, val) {
+              const rows = getStoredData(table, []);
+              const filtered = rows.filter((r) => r[col] === val);
+              const found = filtered[0];
+
               return {
+                then(resolve, reject) {
+                  return Promise.resolve({ data: filtered, error: null }).then(resolve, reject);
+                },
                 async single() {
-                  const rows = getStoredData(table, []);
-                  const found = rows.find((r) => r[col] === val);
                   if (!found && table === 'family_state') {
                     return { data: null, error: { code: 'PGRST116' } };
                   }
                   return { data: found || null, error: found ? null : { code: 'PGRST116', message: 'Not found' } };
                 },
+                async maybeSingle() {
+                  return { data: found || null, error: null };
+                },
                 async select() {
                   return this;
                 },
               };
+            },
+            then(resolve, reject) {
+              const rows = getStoredData(table, []);
+              return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
             },
             async single() {
               const rows = getStoredData(table, []);

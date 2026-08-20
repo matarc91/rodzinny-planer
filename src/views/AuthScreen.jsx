@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertCircle, Mail } from 'lucide-react';
+import { AlertCircle, Mail, CheckCircle2, RefreshCw, Send } from 'lucide-react';
 import { AppLogo } from '../components/ui/AppLogo.jsx';
 import { PoweredByFooter } from '../components/ui/PoweredByFooter.jsx';
 
@@ -13,37 +13,148 @@ export function AuthScreen({ supabase }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
+  const [canResendConfirmation, setCanResendConfirmation] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendStatus, setResendStatus] = useState(null);
+
+  const translateAuthError = (err) => {
+    if (!err) return 'Wystąpił nieznany błąd.';
+    const msg = typeof err === 'string' ? err : err.message || '';
+
+    if (msg.includes('Email not confirmed') || msg.includes('email_not_confirmed')) {
+      return 'Twój adres e-mail nie został jeszcze aktywowany. Kliknij w link potwierdzający wysłany na Twoją skrzynkę pocztową (sprawdź też folder SPAM).';
+    }
+    if (msg.includes('Invalid login credentials') || msg.includes('invalid_grant')) {
+      return 'Nieprawidłowy adres e-mail lub hasło.';
+    }
+    if (msg.includes('User already registered') || msg.includes('user_already_exists')) {
+      return 'Konto o tym adresie e-mail już istnieje. Zaloguj się lub skorzystaj z opcji resetowania hasła.';
+    }
+    if (msg.includes('Password should be at least 6 characters')) {
+      return 'Hasło musi mieć co najmniej 6 znaków.';
+    }
+    if (msg.includes('rate limit') || msg.includes('over_email_send_rate_limit')) {
+      return 'Zbyt wiele prób wysyłki wiadomości e-mail. Odczekaj chwilę przed kolejną próbą.';
+    }
+    if (msg.includes('To signup, please provide your email')) {
+      return 'Wprowadź poprawny adres e-mail.';
+    }
+    return msg;
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!email.trim()) return;
+    setResending(true);
+    setResendStatus(null);
+    try {
+      if (supabase?.auth?.resend) {
+        const { error: resendErr } = await supabase.auth.resend({
+          type: 'signup',
+          email: email.trim().toLowerCase(),
+        });
+        if (resendErr) throw resendErr;
+      }
+      setResendStatus('Wysłano ponownie link aktywacyjny! Sprawdź skrzynkę oraz folder SPAM.');
+    } catch (err) {
+      setResendStatus(`Błąd wysyłki: ${translateAuthError(err)}`);
+    } finally {
+      setResending(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setSuccessMessage(null);
+    setCanResendConfirmation(false);
+    setResendStatus(null);
+
+    const cleanEmail = email.trim().toLowerCase();
 
     try {
       if (authMode === 'login') {
-        const { error: err } = await supabase.auth.signInWithPassword({ email, password });
-        if (err) throw err;
-      } else if (authMode === 'register') {
-        const { error: err } = await supabase.auth.signUp({ email, password });
-        if (err) throw err;
-        setSuccessMessage(
-          'Konto zostało utworzone! Jeśli w połączonym projekcie Supabase włączono weryfikację e-mail, wysłano wiadomość z potwierdzeniem na Twój adres e-mail (sprawdź też folder SPAM).'
-        );
-      } else if (authMode === 'forgot') {
-        if (!email.trim()) {
-          throw new Error('Podaj swój adres e-mail.');
+        const { error: err } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password,
+        });
+
+        if (err) {
+          if (err.message?.includes('Email not confirmed') || err.message?.includes('email_not_confirmed')) {
+            setCanResendConfirmation(true);
+          }
+          throw err;
         }
-        const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      } else if (authMode === 'register') {
+        const { data: signUpData, error: err } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password,
+        });
+
+        if (err) throw err;
+
+        // Sprawdzenie czy konto już istniało (Supabase z ochroną zwraca puste identities)
+        if (signUpData?.user?.identities && signUpData.user.identities.length === 0) {
+          throw new Error('Konto o tym adresie e-mail już istnieje. Zaloguj się lub skorzystaj z resetowania hasła.');
+        }
+
+        // Zapiszmy profil jeśli to możliwe
+        if (signUpData?.user?.id) {
+          try {
+            await supabase.from('profiles').upsert({
+              id: signUpData.user.id,
+              email: cleanEmail,
+              family_id: null,
+              person_id: null,
+            });
+          } catch {
+            // Ignorujemy błąd jeśli tabela ma inne reguły
+          }
+        }
+
+        // Jeśli sesja jest pusta, to wymagane jest potwierdzenie e-mail
+        if (!signUpData?.session) {
+          setCanResendConfirmation(true);
+          setSuccessMessage(
+            `Konto zostało zarejestrowane! Na adres ${cleanEmail} wysłano wiadomość z linkiem aktywacyjnym. Kliknij go, aby aktywować konto przed pierwszym logowaniem (sprawdź też folder SPAM).`
+          );
+        } else {
+          setSuccessMessage('Konto zostało utworzone i jesteś zalogowany!');
+        }
+      } else if (authMode === 'forgot') {
+        if (!cleanEmail || !cleanEmail.includes('@')) {
+          throw new Error('Wprowadź poprawny adres e-mail.');
+        }
+
+        // Weryfikacja czy użytkownik istnieje w tabeli profiles
+        try {
+          const { data: existingProfiles, error: checkErr } = await supabase
+            .from('profiles')
+            .select('id, email')
+            .eq('email', cleanEmail);
+
+          if (!checkErr && existingProfiles && existingProfiles.length === 0) {
+            throw new Error('Nie znaleziono zarejestrowanego użytkownika o podanym adresie e-mail.');
+          }
+        } catch (checkErr) {
+          if (checkErr.message?.includes('Nie znaleziono zarejestrowanego użytkownika')) {
+            throw checkErr;
+          }
+          // Jeśli zapytanie do profiles nie ma kolumny email lub RLS blokuje, kontynuujemy z resetPasswordForEmail
+        }
+
+        const { error: err } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
           redirectTo: window.location.origin,
         });
+
         if (err) throw err;
+
         setSuccessMessage(
-          'Wysłano wiadomość z linkiem do resetowania hasła! Sprawdź swoją skrzynkę odbiorczą oraz folder SPAM.'
+          `Wysłano wiadomość z linkiem do resetowania hasła na adres ${cleanEmail}! Sprawdź swoją skrzynkę odbiorczą oraz folder SPAM.`
         );
       }
     } catch (err) {
-      setError(err.message || 'Wystąpił błąd.');
+      setError(translateAuthError(err));
     } finally {
       setLoading(false);
     }
@@ -53,6 +164,8 @@ export function AuthScreen({ supabase }) {
     setAuthMode(mode);
     setError(null);
     setSuccessMessage(null);
+    setCanResendConfirmation(false);
+    setResendStatus(null);
   };
 
   return (
@@ -77,14 +190,34 @@ export function AuthScreen({ supabase }) {
 
         {authMode === 'forgot' && (
           <p className="text-xs text-stone-400 mb-4 leading-relaxed">
-            Podaj swój e-mail rejestracyjny. Wyślemy Ci instrukcję do ustawienia nowego hasła.
+            Podaj swój e-mail rejestracyjny. Wyślemy Ci instrukcję z jednorazowym linkiem do ustawienia nowego hasła.
           </p>
         )}
 
         {error && (
-          <div className="bg-red-950/50 border border-red-900 text-red-300 text-xs p-3 rounded-xl flex items-center gap-2">
-            <AlertCircle size={15} className="shrink-0" />
-            <span>{error}</span>
+          <div className="bg-red-950/50 border border-red-900 text-red-300 text-xs p-3.5 rounded-xl space-y-2">
+            <div className="flex items-start gap-2">
+              <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-400" />
+              <span className="leading-relaxed">{error}</span>
+            </div>
+            {canResendConfirmation && (
+              <button
+                type="button"
+                onClick={handleResendConfirmation}
+                disabled={resending}
+                className="w-full mt-2 py-2 px-3 bg-red-900/40 hover:bg-red-900/70 border border-red-800 text-red-200 text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1.5"
+              >
+                {resending ? <RefreshCw size={13} className="animate-spin" /> : <Send size={13} />}
+                Wyślij link aktywacyjny ponownie
+              </button>
+            )}
+          </div>
+        )}
+
+        {resendStatus && (
+          <div className="bg-stone-900 border border-amber-500/40 text-amber-300 text-xs p-3 rounded-xl flex items-center gap-2">
+            <CheckCircle2 size={15} className="shrink-0 text-amber-400" />
+            <span>{resendStatus}</span>
           </div>
         )}
 
@@ -94,6 +227,17 @@ export function AuthScreen({ supabase }) {
               <Mail size={16} className="shrink-0 text-emerald-400 mt-0.5" />
               <span className="leading-relaxed">{successMessage}</span>
             </div>
+            {canResendConfirmation && (
+              <button
+                type="button"
+                onClick={handleResendConfirmation}
+                disabled={resending}
+                className="w-full mt-2 py-2 px-3 bg-emerald-900/40 hover:bg-emerald-900/70 border border-emerald-800 text-emerald-200 text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1.5"
+              >
+                {resending ? <RefreshCw size={13} className="animate-spin" /> : <Send size={13} />}
+                Nie doszło? Wyślij link aktywacyjny ponownie
+              </button>
+            )}
           </div>
         )}
 
