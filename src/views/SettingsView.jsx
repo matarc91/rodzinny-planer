@@ -76,7 +76,7 @@ export function SettingsView({
   const handleEnableNotifications = async () => {
     setNotifErrorDetails(null);
     setNotifLoading(true);
-    addLog('info', 'Uruchomiono konfiguracj? powiadomień Web Push...');
+    addLog('info', 'Uruchomiono konfiguracj臋 powiadomie艅 Web Push...');
 
     try {
       const sub = await subscribeToPushNotifications(supabase, profile, family?.id);
@@ -84,13 +84,13 @@ export function SettingsView({
         typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'granted'
       );
       setPushSubscribed(Boolean(sub));
-      showToast('Powiadomienia Web Push w tle zosta?y aktywowane!');
-      addLog('success', 'Pomy?lnie w??czono i zsynchronizowano Web Push.');
+      showToast('Powiadomienia Web Push w tle zosta艂y aktywowane!');
+      addLog('success', 'Pomy艣lnie w艂膮czono i zsynchronizowano Web Push.');
     } catch (e) {
-      const errFormatted = `${e.name || 'B??d'}: ${e.message || e}`;
-      addLog('error', `B??d podczas w??czania Web Push: ${errFormatted}`);
-      setNotifErrorDetails(e.message || 'Wyst?pi? problem z rejestracj? powiadomień.');
-      showToast('Nie uda?o si? w??czy? powiadomień.');
+      const errFormatted = `${e.name || 'B艂膮d'}: ${e.message || e}`;
+      addLog('error', `B艂膮d podczas w艂膮czania Web Push: ${errFormatted}`);
+      setNotifErrorDetails(e.message || 'Wyst膮pi艂 problem z rejestracj膮 powiadomie艅.');
+      showToast('Nie uda艂o si臋 w艂膮czy膰 powiadomie艅.');
     } finally {
       setNotifLoading(false);
     }
@@ -98,41 +98,41 @@ export function SettingsView({
 
   const handleSendTestNotification = async () => {
     try {
-      addLog('info', 'Wysy?anie testowego powiadomienia przez chmur?...');
-      showToast('Wysy?anie powiadomienia testowego...');
+      addLog('info', 'Wysy艂anie testowego powiadomienia przez chmur臋...');
+      showToast('Wysy艂anie powiadomienia testowego...');
 
-      await sendSystemNotification('Rodzinny Planer', 'Test powiadomień systemowych!');
+      await sendSystemNotification('Rodzinny Planer', 'Test powiadomie艅 systemowych!');
 
       if (supabase && family?.id) {
         const { data, error } = await supabase.functions.invoke('send-push', {
           body: {
             family_id: family.id,
             title: 'Test z Chmury (Web Push)',
-            body: 'Powiadomienia w tle z Supabase dzia?aj? prawid?owo!',
+            body: 'Powiadomienia w tle z Supabase dzia艂aj膮 prawid艂owo!',
           },
         });
         if (error) {
-          addLog('warn', `Edge function zwróci?a: ${error.message}`);
+          addLog('warn', `Edge function zwr贸ci艂a: ${error.message}`);
         } else {
-          addLog('success', 'Wys?ano ??danie Push do chmury Supabase!', data);
-          showToast('Wys?ano sygna? Push przez chmur?!');
+          addLog('success', 'Wys艂ano 偶膮danie Push do chmury Supabase!', data);
+          showToast('Wys艂ano sygna艂 Push przez chmur臋!');
         }
       }
     } catch (e) {
-      addLog('error', `B??d testu powiadomień: ${e.message}`);
+      addLog('error', `B艂膮d testu powiadomie艅: ${e.message}`);
       setNotifErrorDetails(e.message);
     }
   };
 
   const handleDisableNotifications = async () => {
-    if (!confirm('Czy na pewno chcesz wy??czy? powiadomienia Push na tym urz?dzeniu?')) return;
+    if (!confirm('Czy na pewno chcesz wy艂膮czy膰 powiadomienia Push na tym urz膮dzeniu?')) return;
     setNotifLoading(true);
     try {
       await unsubscribeFromPushNotifications(supabase, profile);
       setPushSubscribed(false);
-      showToast('Wy??czono powiadomienia Push na tym urz?dzeniu.');
+      showToast('Wy艂膮czono powiadomienia Push na tym urz膮dzeniu.');
     } catch (e) {
-      showToast('B??d wy??czania powiadomień: ' + e.message);
+      showToast('B艂膮d wy艂膮czania powiadomie艅: ' + e.message);
     } finally {
       setNotifLoading(false);
     }
@@ -141,11 +141,11 @@ export function SettingsView({
   const handleChangePassword = async (e) => {
     e.preventDefault();
     if (!newPassword || newPassword.length < 6) {
-      setPwdMessage({ type: 'error', text: 'Has?o musi mie? co najmniej 6 znaków.' });
+      setPwdMessage({ type: 'error', text: 'Has艂o musi mie膰 co najmniej 6 znak贸w.' });
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPwdMessage({ type: 'error', text: 'Has?a nie s? identyczne.' });
+      setPwdMessage({ type: 'error', text: 'Has艂a nie s膮 identyczne.' });
       return;
     }
 
@@ -155,15 +155,15 @@ export function SettingsView({
     try {
       const { error } = (await supabase?.auth?.updateUser({ password: newPassword })) || {};
       if (error) {
-        setPwdMessage({ type: 'error', text: error.message || 'Nie uda?o si? zmieni? has?a.' });
+        setPwdMessage({ type: 'error', text: error.message || 'Nie uda艂o si臋 zmieni膰 has艂a.' });
       } else {
-        setPwdMessage({ type: 'success', text: 'Has?o zosta?o pomy?lnie zmienione!' });
+        setPwdMessage({ type: 'success', text: 'Has艂o zosta艂o pomy艣lnie zmienione!' });
         setNewPassword('');
         setConfirmPassword('');
-        if (showToast) showToast('Has?o zmienione pomy?lnie!');
+        if (showToast) showToast('Has艂o zmienione pomy艣lnie!');
       }
     } catch {
-      setPwdMessage({ type: 'error', text: 'Wyst?pi? b??d podczas zmiany has?a.' });
+      setPwdMessage({ type: 'error', text: 'Wyst膮pi艂 b艂膮d podczas zmiany has艂a.' });
     } finally {
       setPwdLoading(false);
     }
@@ -176,7 +176,7 @@ export function SettingsView({
           <h2 style={{ fontFamily: 'Fraunces' }} className="text-2xl font-bold text-stone-100">
             Ustawienia
           </h2>
-          <p className="text-xs text-stone-400 mt-0.5">Zarz?dzaj profilem, rodzin? i powiadomieniami</p>
+          <p className="text-xs text-stone-400 mt-0.5">Zarz膮dzaj profilem, rodzin膮 i powiadomieniami</p>
         </div>
         <button
           onClick={onSignOut}
@@ -193,7 +193,7 @@ export function SettingsView({
           </div>
           <div>
             <div className="text-sm font-bold text-emerald-400 flex items-center gap-2">
-              Po??czono z chmur?
+              Po艂膮czono z chmur膮
               <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             </div>
             <div className="text-xs text-stone-400">Synchronizacja danych w czasie rzeczywistym jest aktywna.</div>
@@ -236,19 +236,19 @@ export function SettingsView({
               />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1.5 block text-stone-400">Kod do??czenia dla innych</label>
+              <label className="text-xs font-semibold mb-1.5 block text-stone-400">Kod do艂膮czenia dla innych</label>
               <div className="text-lg font-mono font-bold tracking-widest text-amber-400 bg-amber-900/20 px-4 py-2.5 rounded-xl inline-block border border-amber-900/50">
                 {family?.join_code}
               </div>
               <p className="text-[11px] text-stone-500 mt-1.5 leading-relaxed">
-                Podaj ten kod innym domownikom, by do??czyli do tej rodziny na swoich telefonach.
+                Podaj ten kod innym domownikom, by do艂膮czyli do tej rodziny na swoich telefonach.
               </p>
             </div>
           </div>
         )}
       </div>
 
-      {/* SEKCJA 2: Cz?onkowie Rodziny */}
+      {/* SEKCJA 2: Cz艂onkowie Rodziny */}
       <div className="bg-[#1E1E22] border border-[#33333C] rounded-2xl overflow-hidden transition-all shadow-sm">
         <button
           type="button"
@@ -260,9 +260,9 @@ export function SettingsView({
               <Users size={18} />
             </div>
             <div>
-              <div className="text-sm font-bold text-stone-100">Cz?onkowie rodziny</div>
+              <div className="text-sm font-bold text-stone-100">Cz艂onkowie rodziny</div>
               <div className="text-xs text-stone-400">
-                {people.length} {people.length === 1 ? 'osoba' : people.length < 5 ? 'osoby' : 'osób'} w grupie
+                {people.length} {people.length === 1 ? 'osoba' : people.length < 5 ? 'osoby' : 'os贸b'} w grupie
               </div>
             </div>
           </div>
@@ -274,12 +274,12 @@ export function SettingsView({
         {expandedSection === 'members' && (
           <div className="p-4 pt-3 border-t border-[#33333C] space-y-3 bg-stone-900/40">
             <div className="flex items-center justify-between pb-1">
-              <span className="text-xs text-stone-400 font-medium">Lista domowników</span>
+              <span className="text-xs text-stone-400 font-medium">Lista domownik贸w</span>
               <button
                 onClick={onAddPerson}
                 className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-xl text-xs font-bold flex items-center gap-1 transition active:scale-95 shadow-sm"
               >
-                <Plus size={14} /> Dodaj osob?
+                <Plus size={14} /> Dodaj osob臋
               </button>
             </div>
             <div className="grid grid-cols-1 gap-2">
@@ -319,7 +319,7 @@ export function SettingsView({
                       <button
                         onClick={() => onDeletePerson(p.id)}
                         className="p-2 text-stone-400 hover:text-red-400 bg-stone-800 hover:bg-red-950/60 rounded-lg transition"
-                        title="Usuń profil"
+                        title="Usu艅 profil"
                       >
                         <Trash2 size={15} />
                       </button>
@@ -332,15 +332,15 @@ export function SettingsView({
         )}
       </div>
 
-      {/* SEKCJA: Modu?y */}
+      {/* SEKCJA: Modu艂y */}
       <div className="bg-[#1E1E22] border border-[#33333C] rounded-2xl p-4 space-y-3 shadow-sm">
         <h3 className="text-sm font-bold border-b border-[#33333C] pb-2 text-stone-100 flex items-center gap-2">
-          <Sparkles size={16} className="text-amber-400" /> Modu?y aplikacji
+          <Sparkles size={16} className="text-amber-400" /> Modu艂y aplikacji
         </h3>
         <div className="flex items-center justify-between py-1">
           <div>
-            <div className="text-sm font-semibold text-stone-200">Tablica (Lodówka)</div>
-            <div className="text-xs text-stone-400">Wspólna przestrzeń na wiadomo?ci i notatki domowników.</div>
+            <div className="text-sm font-semibold text-stone-200">Tablica (Lod贸wka)</div>
+            <div className="text-xs text-stone-400">Wsp贸lna przestrze艅 na wiadomo艣ci i notatki domownik贸w.</div>
           </div>
           <button
             type="button"
@@ -356,8 +356,8 @@ export function SettingsView({
         </div>
         <div className="flex items-center justify-between py-1 pt-2 border-t border-stone-800">
           <div>
-            <div className="text-sm font-semibold text-stone-200">Posi?ki (Jad?ospis)</div>
-            <div className="text-xs text-stone-400">Tygodniowy planer obiadów i posi?ków.</div>
+            <div className="text-sm font-semibold text-stone-200">Posi艂ki (Jad艂ospis)</div>
+            <div className="text-xs text-stone-400">Tygodniowy planer obiad贸w i posi艂k贸w.</div>
           </div>
           <button
             type="button"
@@ -386,7 +386,7 @@ export function SettingsView({
             </div>
             <div>
               <div className="text-sm font-bold text-stone-100">Ustawienia konta</div>
-              <div className="text-xs text-stone-400">Zmiana has?a i dane logowania</div>
+              <div className="text-xs text-stone-400">Zmiana has艂a i dane logowania</div>
             </div>
           </div>
           <div className="text-stone-400 p-1">
@@ -398,22 +398,22 @@ export function SettingsView({
           <div className="p-4 pt-3 border-t border-[#33333C] space-y-3.5 bg-stone-900/40">
             <form onSubmit={handleChangePassword} className="space-y-3">
               <div>
-                <label className="text-xs font-semibold mb-1.5 block text-stone-400">Nowe has?o</label>
+                <label className="text-xs font-semibold mb-1.5 block text-stone-400">Nowe has艂o</label>
                 <input
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Minimum 6 znaków"
+                  placeholder="Minimum 6 znak贸w"
                   className="w-full border border-[#33333C] rounded-xl px-3.5 py-2 text-sm bg-stone-900 text-stone-200 focus:outline-none focus:border-amber-500"
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold mb-1.5 block text-stone-400">Powtórz nowe has?o</label>
+                <label className="text-xs font-semibold mb-1.5 block text-stone-400">Powt贸rz nowe has艂o</label>
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Wpisz ponownie nowe has?o"
+                  placeholder="Wpisz ponownie nowe has艂o"
                   className="w-full border border-[#33333C] rounded-xl px-3.5 py-2 text-sm bg-stone-900 text-stone-200 focus:outline-none focus:border-amber-500"
                 />
               </div>
@@ -433,7 +433,7 @@ export function SettingsView({
                 disabled={pwdLoading}
                 className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-xl text-xs font-bold transition disabled:opacity-50 active:scale-95 shadow-sm"
               >
-                {pwdLoading ? 'Zapisywanie...' : 'Zmień has?o'}
+                {pwdLoading ? 'Zapisywanie...' : 'Zmie艅 has艂o'}
               </button>
             </form>
           </div>
@@ -454,7 +454,7 @@ export function SettingsView({
             <div>
               <div className="text-sm font-bold text-stone-100">Powiadomienia w tle (Web Push)</div>
               <div className="text-xs text-stone-400">
-                {pushSubscribed ? 'Aktywne w chmurze' : 'Konfiguracja alertów na telefon'}
+                {pushSubscribed ? 'Aktywne w chmurze' : 'Konfiguracja alert贸w na telefon'}
               </div>
             </div>
           </div>
@@ -470,7 +470,7 @@ export function SettingsView({
         {expandedSection === 'notifications' && (
           <div className="p-4 pt-3 border-t border-[#33333C] space-y-4 bg-stone-900/40">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-stone-400 font-medium">Status urz?dzenia</span>
+              <span className="text-xs text-stone-400 font-medium">Status urz膮dzenia</span>
               <button
                 type="button"
                 onClick={() => setShowSqlGuide(!showSqlGuide)}
@@ -516,7 +516,7 @@ export function SettingsView({
                   ) : (
                     <>
                       <AlertCircle size={14} className="text-amber-400" />{' '}
-                      <span className="text-amber-400">Niepo??czona</span>
+                      <span className="text-amber-400">Niepo艂膮czona</span>
                     </>
                   )}
                 </div>
@@ -534,8 +534,8 @@ export function SettingsView({
                 {notifLoading
                   ? 'Aktywowanie...'
                   : pushSubscribed
-                  ? 'Od?wie? Web Push'
-                  : 'W??cz Web Push w tle'}
+                  ? 'Od艣wie偶 Web Push'
+                  : 'W艂膮cz Web Push w tle'}
               </button>
 
               <button
@@ -552,9 +552,9 @@ export function SettingsView({
                   onClick={handleDisableNotifications}
                   disabled={notifLoading}
                   className="py-2.5 px-3 bg-stone-900 text-red-400 border border-red-900/40 rounded-xl text-xs font-semibold hover:bg-red-950/40 transition active:scale-95"
-                  title="Wy??cz na tym telefonie"
+                  title="Wy艂膮cz na tym telefonie"
                 >
-                  Wy??cz
+                  Wy艂膮cz
                 </button>
               )}
             </div>
@@ -571,12 +571,12 @@ export function SettingsView({
             {showSqlGuide && (
               <div className="bg-stone-900 p-4 rounded-xl border border-amber-500/30 text-xs text-stone-300 space-y-3">
                 <div className="font-bold text-amber-400 flex items-center gap-1.5">
-                  <Code size={15} /> Jak dzia?a Web Push przy zamkni?tej aplikacji?
+                  <Code size={15} /> Jak dzia艂a Web Push przy zamkni臋tej aplikacji?
                 </div>
                 <p className="text-stone-300 leading-relaxed text-[11px]">
-                  Gdy zamykasz aplikacj?, Twój telefon rejestruje token subskrypcji w tabeli{' '}
+                  Gdy zamykasz aplikacj臋, Tw贸j telefon rejestruje token subskrypcji w tabeli{' '}
                   <code className="bg-stone-800 px-1 py-0.5 rounded text-amber-300">push_subscriptions</code> w
-                  Supabase. Aby serwer Supabase sam wysy?a? powiadomienia o terminach i wydarzeniach, uruchom plik{' '}
+                  Supabase. Aby serwer Supabase sam wysy艂a艂 powiadomienia o terminach i wydarzeniach, uruchom plik{' '}
                   <code className="bg-stone-800 px-1 py-0.5 rounded text-amber-300">
                     supabase_notifications_setup.sql
                   </code>{' '}
@@ -586,10 +586,10 @@ export function SettingsView({
             )}
 
             <p className="text-[11px] text-stone-400 leading-relaxed bg-stone-900/70 p-3 rounded-xl border border-stone-800">
-              <strong>Wskazówka (Dzia?anie jak aplikacja ze sklepu):</strong> Na telefonie (Android / iPhone) w menu
-              przegl?darki wybierz <span className="text-amber-400 font-medium">&quot;Dodaj do ekranu g?ównego&quot;</span> /{' '}
-              <span className="text-amber-400 font-medium">&quot;Zainstaluj aplikacj?&quot;</span>. Dzi?ki temu system
-              operacyjny traktuje aplikacj? jako PWA i nie ubija powiadomień w tle.
+              <strong>Wskaz贸wka (Dzia艂anie jak aplikacja ze sklepu):</strong> Na telefonie (Android / iPhone) w menu
+              przegl膮darki wybierz <span className="text-amber-400 font-medium">&quot;Dodaj do ekranu g艂贸wnego&quot;</span> /{' '}
+              <span className="text-amber-400 font-medium">&quot;Zainstaluj aplikacj臋&quot;</span>. Dzi臋ki temu system
+              operacyjny traktuje aplikacj臋 jako PWA i nie ubija powiadomie艅 w tle.
             </p>
           </div>
         )}
@@ -608,7 +608,7 @@ export function SettingsView({
             </div>
             <div>
               <div className="text-sm font-bold text-stone-100">Logi Aplikacji i Diagnostyka</div>
-              <div className="text-xs text-stone-400">Podgl?d zdarzeń systemowych, b??dów i synchronizacji</div>
+              <div className="text-xs text-stone-400">Podgl膮d zdarze艅 systemowych, b艂臋d贸w i synchronizacji</div>
             </div>
           </div>
           <div className="text-stone-400 p-1">
@@ -636,7 +636,7 @@ export function SettingsView({
             </div>
             <div>
               <div className="text-sm font-bold text-red-400 flex items-center gap-1.5">Strefa niebezpieczna</div>
-              <div className="text-xs text-stone-400">Odpi?cie od rodziny, usuwanie konta lub usuwanie ca?ej rodziny</div>
+              <div className="text-xs text-stone-400">Odpi臋cie od rodziny, usuwanie konta lub usuwanie ca艂ej rodziny</div>
             </div>
           </div>
           <div className="text-stone-400 p-1">
@@ -650,31 +650,31 @@ export function SettingsView({
 
         {expandedSection === 'danger' && (
           <div className="p-4 pt-3 border-t border-red-900/40 space-y-4 bg-red-950/10">
-            {/* Opcja 1: Tylko odpi?cie od rodziny */}
+            {/* Opcja 1: Tylko odpi臋cie od rodziny */}
             <div className="space-y-2">
               <div className="text-xs font-semibold text-stone-200 flex items-center gap-1.5">
-                <Users size={14} className="text-amber-400" /> Odpi?cie od bie??cej rodziny (Opu?? rodzin?)
+                <Users size={14} className="text-amber-400" /> Odpi臋cie od bie偶膮cej rodziny (Opu艣膰 rodzin臋)
               </div>
               <p className="text-xs text-stone-400 leading-relaxed">
-                Od??cza Twoje konto od rodziny <strong className="text-stone-200">{family?.name}</strong>. Twoje konto
-                u?ytkownika pozostanie aktywne, a aplikacja przekieruje Ci? do menu do??czenia z kodem lub stworzenia nowej rodziny.
+                Od艂膮cza Twoje konto od rodziny <strong className="text-stone-200">{family?.name}</strong>. Twoje konto
+                u偶ytkownika pozostanie aktywne, a aplikacja przekieruje Ci臋 do menu do艂膮czenia z kodem lub stworzenia nowej rodziny.
               </p>
               <button
                 type="button"
                 onClick={onLeaveFamily}
                 className="w-full py-2.5 bg-stone-900 border border-amber-500/40 text-amber-300 hover:bg-stone-800 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 active:scale-95 shadow-sm"
               >
-                <Users size={15} /> Odepnij si? od rodziny i przejd? do wyboru
+                <Users size={15} /> Odepnij si臋 od rodziny i przejd藕 do wyboru
               </button>
             </div>
 
             {/* Opcja 2: Usuwanie konta */}
             <div className="space-y-2 pt-3 border-t border-red-900/30">
               <div className="text-xs font-semibold text-stone-200 flex items-center gap-1.5">
-                <UserX size={14} className="text-red-400" /> Usuwanie konta u?ytkownika
+                <UserX size={14} className="text-red-400" /> Usuwanie konta u偶ytkownika
               </div>
               <p className="text-xs text-stone-400 leading-relaxed">
-                Spowoduje wyczyszczenie Twoich prywatnych notatek, odpi?cie profilu od cz?onka rodziny oraz wylogowanie
+                Spowoduje wyczyszczenie Twoich prywatnych notatek, odpi臋cie profilu od cz艂onka rodziny oraz wylogowanie
                 z aplikacji.
               </p>
               <button
@@ -682,17 +682,17 @@ export function SettingsView({
                 onClick={onDeleteUserAccount}
                 className="w-full py-2.5 bg-red-950/60 border border-red-800/60 text-red-300 hover:bg-red-900 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 active:scale-95 shadow-sm"
               >
-                <UserX size={15} /> Usuń moje konto i odepnij od rodziny
+                <UserX size={15} /> Usu艅 moje konto i odepnij od rodziny
               </button>
             </div>
 
-            {/* Opcja 3: Usuwanie ca?ej rodziny */}
+            {/* Opcja 3: Usuwanie ca艂ej rodziny */}
             <div className="space-y-2 pt-3 border-t border-red-900/30">
               <div className="text-xs font-semibold text-stone-200 flex items-center gap-1.5">
-                <Trash2 size={14} className="text-red-400" /> Usuwanie ca?ej rodziny
+                <Trash2 size={14} className="text-red-400" /> Usuwanie ca艂ej rodziny
               </div>
               <p className="text-xs text-stone-400 leading-relaxed">
-                Usuni?cie rodziny spowoduje skasowanie ca?ego wspólnego kalendarza, zadań, notatek i ca?ej listy domowników
+                Usuni臋cie rodziny spowoduje skasowanie ca艂ego wsp贸lnego kalendarza, zada艅, notatek i ca艂ej listy domownik贸w
                 z bazy.
               </p>
               <button
@@ -700,7 +700,7 @@ export function SettingsView({
                 onClick={onDeleteFamily}
                 className="w-full py-2.5 bg-red-950/90 border border-red-800/90 text-red-400 hover:bg-red-900 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 active:scale-95 shadow-sm"
               >
-                <Trash2 size={15} /> Usuń ca?? rodzin? i zresetuj dane
+                <Trash2 size={15} /> Usu艅 ca艂膮 rodzin臋 i zresetuj dane
               </button>
             </div>
           </div>
