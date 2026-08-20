@@ -84,7 +84,7 @@ export function SettingsView({
         typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'granted'
       );
       setPushSubscribed(Boolean(sub));
-      showToast('Powiadomienia Web Push w tle zosta?y aktywowane! ??');
+      showToast('Powiadomienia Web Push w tle zosta?y aktywowane!');
       addLog('success', 'Pomy?lnie w??czono i zsynchronizowano Web Push.');
     } catch (e) {
       const errFormatted = `${e.name || 'B??d'}: ${e.message || e}`;
@@ -99,15 +99,15 @@ export function SettingsView({
   const handleSendTestNotification = async () => {
     try {
       addLog('info', 'Wysy?anie testowego powiadomienia przez chmur?...');
-      showToast('Wysy?anie powiadomienia testowego... ??');
+      showToast('Wysy?anie powiadomienia testowego...');
 
-      await sendSystemNotification('Rodzinny Planer ??', 'Test powiadomie¨½ systemowych!');
+      await sendSystemNotification('Rodzinny Planer', 'Test powiadomie¨½ systemowych!');
 
       if (supabase && family?.id) {
         const { data, error } = await supabase.functions.invoke('send-push', {
           body: {
             family_id: family.id,
-            title: 'Test z Chmury (Web Push) ??',
+            title: 'Test z Chmury (Web Push)',
             body: 'Powiadomienia w tle z Supabase dzia?aj? prawid?owo!',
           },
         });
@@ -115,7 +115,7 @@ export function SettingsView({
           addLog('warn', `Edge function zwr¨®ci?a: ${error.message}`);
         } else {
           addLog('success', 'Wys?ano ??danie Push do chmury Supabase!', data);
-          showToast('Wys?ano sygna? Push przez chmur?! ??');
+          showToast('Wys?ano sygna? Push przez chmur?!');
         }
       }
     } catch (e) {
@@ -454,7 +454,7 @@ export function SettingsView({
             <div>
               <div className="text-sm font-bold text-stone-100">Powiadomienia w tle (Web Push)</div>
               <div className="text-xs text-stone-400">
-                {pushSubscribed ? 'Aktywne w chmurze ??' : 'Konfiguracja alert¨®w na telefon'}
+                {pushSubscribed ? 'Aktywne w chmurze' : 'Konfiguracja alert¨®w na telefon'}
               </div>
             </div>
           </div>
