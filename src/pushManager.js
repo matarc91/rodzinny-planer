@@ -92,14 +92,17 @@ export async function subscribeToPushNotifications(supabase, user, familyId) {
 
   addLog('info', 'Rozpoczęcie procedury włączania powiadomień Web Push w tle...');
 
-  // 1. Prośba o uprawnienia systemowe
-  const permission = await Notification.requestPermission();
+  // 1. Prośba o uprawnienia systemowe (musi być na samym początku w odpowiedzi na gest)
+  let permission = Notification.permission;
+  if (permission !== 'granted') {
+    permission = await Notification.requestPermission();
+  }
   addLog('info', `Status uprawnień systemowych: ${permission}`);
 
   if (permission !== 'granted') {
     throw new Error(
       permission === 'denied'
-        ? 'Zgoda na powiadomienia została zablokowana w przeglądarce.'
+        ? 'Zgoda na powiadomienia została zablokowana w systemie lub przeglądarce.'
         : 'Nie udzielono zgody na powiadomienia.'
     );
   }
@@ -166,16 +169,18 @@ export async function subscribeToPushNotifications(supabase, user, familyId) {
     }
   }
 
-  // 5. Wyświetlenie powiadomienia potwierdzającego
+  // 5. Bezpieczne wyświetlenie powiadomienia potwierdzającego
   try {
-    await reg.showNotification('Rodzinny Planer 🔔', {
-      body: 'Powiadomienia w tle zostały pomyślnie aktywowane na tym urządzeniu!',
-      icon: '/favicon.svg',
-      badge: '/favicon.svg',
-      tag: 'rodzinny-planer-welcome',
-      renotify: true,
-      vibrate: [200, 100, 200],
-    });
+    if (Notification.permission === 'granted' && reg.showNotification) {
+      await reg.showNotification('Rodzinny Planer 🔔', {
+        body: 'Powiadomienia w tle zostały pomyślnie aktywowane na tym urządzeniu!',
+        icon: '/favicon.svg',
+        badge: '/favicon.svg',
+        tag: 'rodzinny-planer-welcome',
+        renotify: true,
+        vibrate: [200, 100, 200],
+      });
+    }
   } catch (notifErr) {
     addLog('warn', `Nie udało się wyświetlić powiadomienia powitalnego: ${notifErr.message}`);
   }
