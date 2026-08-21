@@ -3,6 +3,6 @@
       "target": {
         "namespace": "android_app",
         "package_name": "pl.syncup.planer_rodzinny.twa",
-        "sha256_cert_fingerprints": ["45:CA:D9:8E:84:44:12:B1:D7:C2:79:9A:A3:78:75:5F:DA:D0:4F:6A:10:4D:F6:DC:E3:A6:42:62:D0:65:6D:78"]
+        "sha256_cert_fingerprints": ["07:6B:F2:BF:3B:C1:28:EA:82:45:C7:7B:65:A9:D0:71:0C:CB:3E:5D:4F:46:95:AB:88:3C:B2:A5:60:A1:12:EC"]
       }
     }]
