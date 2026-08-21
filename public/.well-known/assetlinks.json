@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "pl.syncup.planer_rodzinny.twa",
+        "sha256_cert_fingerprints": ["45:CA:D9:8E:84:44:12:B1:D7:C2:79:9A:A3:78:75:5F:DA:D0:4F:6A:10:4D:F6:DC:E3:A6:42:62:D0:65:6D:78"]
+      }
+    }]
