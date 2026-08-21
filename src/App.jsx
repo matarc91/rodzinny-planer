@@ -60,8 +60,27 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   // UI state
-  const [tab, setTab] = useState('today');
-  const [modal, setModal] = useState(null);
+  const [tab, setTab] = useState(() => {
+    if (typeof window !== 'undefined' && window.location) {
+      const p = new URLSearchParams(window.location.search);
+      const t = p.get('tab');
+      if (t && ['today', 'calendar', 'tasks', 'notes', 'wall', 'meals', 'settings'].includes(t)) {
+        return t;
+      }
+    }
+    return 'today';
+  });
+  const [modal, setModal] = useState(() => {
+    if (typeof window !== 'undefined' && window.location) {
+      const p = new URLSearchParams(window.location.search);
+      const a = p.get('action');
+      if (a === 'add-event') return 'event';
+      if (a === 'add-task') return 'task';
+      if (a === 'add-wall') return 'wall';
+      if (a === 'add-note') return 'note';
+    }
+    return null;
+  });
   const [modalPayload, setModalPayload] = useState(null);
   const [addEventDate, setAddEventDate] = useState(todayStr());
   const [detailEvent, setDetailEvent] = useState(null);

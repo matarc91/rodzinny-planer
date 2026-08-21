@@ -1,6 +1,80 @@
 {
-  "short_name": "Planer",
   "name": "Rodzinny Planer",
+  "short_name": "Planer",
+  "description": "Rodzinny planer do wspólnego zarządzania czasem, kalendarzem, posiłkami i obowiązkami domowników.",
+  "id": "/?source=pwa",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "window-controls-overlay"
+  ],
+  "orientation": "portrait",
+  "background_color": "#121214",
+  "theme_color": "#121214",
+  "lang": "pl-PL",
+  "dir": "ltr",
+  "categories": [
+    "lifestyle",
+    "productivity",
+    "utilities"
+  ],
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  "shortcuts": [
+    {
+      "name": "Dodaj wydarzenie",
+      "short_name": "Wydarzenie",
+      "description": "Szybkie dodawanie nowego wydarzenia do kalendarza",
+      "url": "/?tab=calendar&action=add-event",
+      "icons": [
+        {
+          "src": "/favicon.svg",
+          "sizes": "any"
+        }
+      ]
+    },
+    {
+      "name": "Dodaj zadanie",
+      "short_name": "Zadanie",
+      "description": "Szybkie dodawanie nowego zadania lub obowiązku",
+      "url": "/?tab=tasks&action=add-task",
+      "icons": [
+        {
+          "src": "/favicon.svg",
+          "sizes": "any"
+        }
+      ]
+    },
+    {
+      "name": "Tablica na lodówce",
+      "short_name": "Lodówka",
+      "description": "Otwórz wspólną tablicę wiadomości",
+      "url": "/?tab=wall",
+      "icons": [
+        {
+          "src": "/favicon.svg",
+          "sizes": "any"
+        }
+      ]
+    },
+    {
+      "name": "Jadłospis i posiłki",
+      "short_name": "Posiłki",
+      "description": "Zobacz i zaplanuj posiłki na ten tydzień",
+      "url": "/?tab=meals",
+      "icons": [
+        {
+          "src": "/favicon.svg",
+          "sizes": "any"
+        }
+      ]
+    }
+  ],
   "icons": [
     {
       "src": "/favicon.svg",
@@ -20,8 +94,20 @@
       "purpose": "any maskable"
     }
   ],
-  "start_url": "/",
-  "display": "standalone",
-  "theme_color": "#121214",
-  "background_color": "#121214"
+  "screenshots": [
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Widok mobilny Rodzinnego Planera"
+    },
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Widok główny aplikacji na pulpicie"
+    }
+  ]
 }

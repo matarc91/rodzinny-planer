@@ -1,6 +1,7 @@
 // Service Worker dla powiadomień Push i PWA w Rodzinnym Planerze
 
 const NOTIF_CACHE_NAME = 'rp-shown-notifs-v1';
+const STATIC_CACHE_NAME = 'rp-static-v1';
 
 // Funkcja sprawdzająca czy dane powiadomienie było już wyświetlone (zapobiega powtórzeniom co 1 min)
 async function isDuplicateNotification(tag) {
@@ -10,7 +11,6 @@ async function isDuplicateNotification(tag) {
     const cachedResponse = await cache.match(`/notif-tag/${encodeURIComponent(tag)}`);
     if (cachedResponse) {
       const info = await cachedResponse.json();
-      // Jeśli powiadomienie o tym tagu było wyświetlone w ciągu ostatnich 12 godzin - ignorujemy powtórkę
       if (Date.now() - (info.timestamp || 0) < 12 * 60 * 60 * 1000) {
         return true;
       }
@@ -29,7 +29,7 @@ async function recordShownNotification(tag) {
     await cache.put(
       `/notif-tag/${encodeURIComponent(tag)}`,
       new Response(JSON.stringify({ timestamp: Date.now() }), {
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
     );
   } catch (e) {
@@ -37,12 +37,74 @@ async function recordShownNotification(tag) {
   }
 }
 
-self.addEventListener('install', () => {
+// Pliki podstawowe do pamięci podręcznej offline
+const PRECACHE_ASSETS = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/favicon.svg'
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(STATIC_CACHE_NAME).then((cache) => {
+      return cache.addAll(PRECACHE_ASSETS).catch((err) => {
+        console.warn('[SW] Błąd precache:', err);
+      });
+    })
+  );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.map((key) => {
+          if (key !== STATIC_CACHE_NAME && key !== NOTIF_CACHE_NAME) {
+            return caches.delete(key);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
+});
+
+// Strategia Network-First dla żądań HTTP (zgodność z PWABuilder)
+self.addEventListener('fetch', (event) => {
+  // Ignoruj żądania inne niż GET oraz zapytania do zewnętrznych API (np. Supabase)
+  if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
+
+  event.respondWith(
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          const responseToCache = networkResponse.clone();
+          caches.open(STATIC_CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return networkResponse;
+      })
+      .catch(async () => {
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        // Fallback dla nawigacji
+        if (event.request.mode === 'navigate') {
+          const fallback = await caches.match('/');
+          if (fallback) return fallback;
+        }
+        return new Response('Brak połączenia z siecią.', {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        });
+      })
+  );
 });
 
 // Obsługa przychodzących powiadomień Web Push z serwera / chmury
