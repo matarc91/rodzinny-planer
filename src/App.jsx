@@ -1205,7 +1205,11 @@ export default function App() {
           <MealsView meals={data.meals} onUpdateMeal={updateMeal} />
         )}
         {tab === 'budget' && data.settings?.enableBudget !== false && (
-          <BudgetView data={data} onUpdateData={persist} />
+          <BudgetView
+            data={data}
+            onUpdateData={persist}
+            currentPersonId={currentUserId}
+          />
         )}
         {tab === 'settings' && (
           <SettingsView

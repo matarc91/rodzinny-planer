@@ -12,20 +12,24 @@ import {
   Trash2,
   Calendar,
   Sparkles,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { format, addMonths, parseISO } from 'date-fns';
 import { COLORS, MONTHS, createDefaultMonthBudget } from '../utils/constants.js';
 import { TransactionModal } from '../components/modals/TransactionModal.jsx';
+import { ManageCategoriesModal } from '../components/modals/ManageCategoriesModal.jsx';
+import { Chip } from '../components/ui/Chip.jsx';
 
-export function BudgetView({ data, onUpdateData }) {
+export function BudgetView({ data, onUpdateData, currentPersonId = null }) {
   // Aktualny miesiąc domyślnie 'YYYY-MM'
   const [monthKey, setMonthKey] = useState(() => format(new Date(), 'yyyy-MM'));
-  const [activeModal, setActiveModal] = useState(null); // 'add-transaction' | null
+  const [activeModal, setActiveModal] = useState(null); // 'add-transaction' | 'manage-categories' | null
   const [filterType, setFilterType] = useState('all'); // 'all' | 'expense' | 'fixedCost' | 'income'
 
   // Dane bieżącego miesiąca
   const budgetState = data?.budget || {};
   const currentMonthBudget = budgetState[monthKey];
+  const people = data?.people || [];
 
   // Parsowanie etykiety miesiąca do wyświetlenia
   const { monthLabel } = useMemo(() => {
@@ -161,6 +165,24 @@ export function BudgetView({ data, onUpdateData }) {
     });
   };
 
+  // Zapisanie zmodyfikowanych kategorii
+  const handleSaveCategories = (updatedCategories) => {
+    if (!currentMonthBudget) return;
+
+    const updatedMonth = {
+      ...currentMonthBudget,
+      categories: updatedCategories,
+    };
+
+    onUpdateData({
+      ...data,
+      budget: {
+        ...budgetState,
+        [monthKey]: updatedMonth,
+      },
+    });
+  };
+
   // Usuwanie pozycji
   const handleDeleteItem = (type, id) => {
     if (!currentMonthBudget) return;
@@ -190,6 +212,12 @@ export function BudgetView({ data, onUpdateData }) {
       currency: 'PLN',
       maximumFractionDigits: 2,
     }).format(val || 0);
+  };
+
+  // Znajdź osobę po ID
+  const getPerson = (pId) => {
+    if (!pId) return null;
+    return people.find((p) => p.id === pId) || null;
   };
 
   // Połączona lista operacji
@@ -242,7 +270,7 @@ export function BudgetView({ data, onUpdateData }) {
   }, [currentMonthBudget, filterType]);
 
   return (
-    <div className="space-y-5 animate-fadeIn pb-12">
+    <div className="space-y-5 animate-fadeIn pb-14">
       {/* 1. SELEKTOR MIESIĄCA */}
       <div className="flex items-center justify-between px-1">
         <button
@@ -314,20 +342,20 @@ export function BudgetView({ data, onUpdateData }) {
                   Dostępne wolne środki
                 </span>
                 {summary.available >= 0 ? (
-                  <span className="flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-800/40">
-                    <CheckCircle2 size={12} /> W budżecie
+                  <span className="flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded-md border border-emerald-800/40">
+                    <CheckCircle2 size={13} /> W budżecie
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 text-xs font-bold text-rose-400 bg-rose-950/60 px-2 py-0.5 rounded-md border border-rose-800/40">
-                    <AlertTriangle size={12} /> Przekroczenie
+                  <span className="flex items-center gap-1 text-xs font-bold text-rose-400 bg-rose-950/60 px-2.5 py-1 rounded-md border border-rose-800/40">
+                    <AlertTriangle size={13} /> Przekroczenie
                   </span>
                 )}
               </div>
 
-              <div className="flex items-baseline gap-2">
+              <div className="flex items-baseline gap-2 mt-1">
                 <h1
                   style={{ fontFamily: 'Fraunces' }}
-                  className={`text-3xl font-extrabold tracking-tight ${
+                  className={`text-3xl sm:text-4xl font-extrabold tracking-tight ${
                     summary.available >= 0 ? 'text-emerald-400' : 'text-rose-400'
                   }`}
                 >
@@ -335,75 +363,88 @@ export function BudgetView({ data, onUpdateData }) {
                 </h1>
               </div>
 
-              <p className="text-[11px] text-stone-400 mt-1">
+              <p className="text-xs text-stone-400 mt-2">
                 Przychody ({formatPLN(summary.totalIncome)}) – Stałe ({formatPLN(summary.totalFixedCosts)}) – Wydatki ({formatPLN(summary.totalExpenses)})
               </p>
             </div>
 
             {/* Równanie / Kafelki składowe */}
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
               <div
                 style={{ background: COLORS.surface, borderColor: COLORS.border }}
-                className="p-3.5 rounded-xl border flex flex-col justify-between"
+                className="p-3 sm:p-4 rounded-xl border flex flex-col justify-between"
               >
                 <div className="flex items-center gap-1.5 text-emerald-400 mb-1">
                   <TrendingUp size={14} />
-                  <span className="text-[11px] font-semibold">Przychody</span>
+                  <span className="text-[11px] sm:text-xs font-semibold">Przychody</span>
                 </div>
-                <span className="text-sm sm:text-base font-bold text-stone-100 font-mono">
+                <span className="text-xs sm:text-sm md:text-base font-bold text-stone-100 font-mono truncate">
                   {formatPLN(summary.totalIncome)}
                 </span>
               </div>
 
               <div
                 style={{ background: COLORS.surface, borderColor: COLORS.border }}
-                className="p-3.5 rounded-xl border flex flex-col justify-between"
+                className="p-3 sm:p-4 rounded-xl border flex flex-col justify-between"
               >
                 <div className="flex items-center gap-1.5 text-orange-400 mb-1">
                   <Landmark size={14} />
-                  <span className="text-[11px] font-semibold">Koszty stałe</span>
+                  <span className="text-[11px] sm:text-xs font-semibold">Koszty stałe</span>
                 </div>
-                <span className="text-sm sm:text-base font-bold text-stone-100 font-mono">
+                <span className="text-xs sm:text-sm md:text-base font-bold text-stone-100 font-mono truncate">
                   {formatPLN(summary.totalFixedCosts)}
                 </span>
               </div>
 
               <div
                 style={{ background: COLORS.surface, borderColor: COLORS.border }}
-                className="p-3.5 rounded-xl border flex flex-col justify-between"
+                className="p-3 sm:p-4 rounded-xl border flex flex-col justify-between"
               >
                 <div className="flex items-center gap-1.5 text-amber-400 mb-1">
                   <TrendingDown size={14} />
-                  <span className="text-[11px] font-semibold">Bieżące</span>
+                  <span className="text-[11px] sm:text-xs font-semibold">Bieżące</span>
                 </div>
-                <span className="text-sm sm:text-base font-bold text-stone-100 font-mono">
+                <span className="text-xs sm:text-sm md:text-base font-bold text-stone-100 font-mono truncate">
                   {formatPLN(summary.totalExpenses)}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* 4. SEKCJA: KATEGORIE I LIMITY (PASKI POSTĘPU) */}
+          {/* 4. SEKCJA: KATEGORIE I LIMITY (POPRAWIONY LAYOUT I EDYCJA) */}
           <div
             style={{ background: COLORS.surface, borderColor: COLORS.border }}
-            className="rounded-2xl p-4.5 border space-y-4 shadow-sm"
+            className="rounded-2xl p-5 border space-y-4 shadow-sm"
           >
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
               <div>
                 <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-base font-bold">
                   Limity kategorii
                 </h3>
-                <p className="text-[11px] text-stone-400">Kontrola wydatków w bieżącym miesiącu</p>
+                <p className="text-xs text-stone-400">Kontrola wydatków w bieżącym miesiącu</p>
               </div>
 
-              <button
-                onClick={() => setActiveModal('add-transaction')}
-                style={{ background: COLORS.accent, color: '#121214' }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow hover:opacity-90 transition cursor-pointer"
-              >
-                <Plus size={14} />
-                Dodaj operację
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveModal('manage-categories')}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-stone-300 bg-stone-800 hover:bg-stone-700 transition border border-stone-700"
+                  title="Modyfikuj, dodawaj lub usuwaj kategorie"
+                >
+                  <SlidersHorizontal size={14} className="text-amber-400" />
+                  <span>Kategorie</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveModal('add-transaction')}
+                  style={{ background: COLORS.accent, color: '#121214' }}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold shadow hover:opacity-90 transition cursor-pointer"
+                >
+                  <Plus size={14} />
+                  <span>Dodaj wpis</span>
+                </button>
+              </div>
             </div>
 
             <div className="space-y-3.5 pt-1">
@@ -412,28 +453,40 @@ export function BudgetView({ data, onUpdateData }) {
                 const barWidth = Math.min(100, Math.max(2, cat.percent));
 
                 return (
-                  <div key={cat.id} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-stone-200 flex items-center gap-1.5">
-                        {cat.icon && <span>{cat.icon}</span>}
-                        {cat.name}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-stone-300">
-                          <span className={isOver ? 'text-rose-400 font-bold' : 'text-stone-100'}>
+                  <div
+                    key={cat.id}
+                    style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
+                    className="p-3.5 rounded-xl border space-y-2.5"
+                  >
+                    {/* Górna linijka: Nazwa i wartości liczbowe */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-base shrink-0">{cat.icon || '🏷️'}</span>
+                        <span className="text-sm font-semibold text-stone-200 truncate">{cat.name}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="text-xs font-mono">
+                          <span className={isOver ? 'text-rose-400 font-bold' : 'text-stone-100 font-bold'}>
                             {formatPLN(cat.spent)}
-                          </span>{' '}
-                          / <span className="text-stone-400">{formatPLN(cat.limit)}</span>
-                        </span>
-                        {isOver && (
-                          <span className="text-[10px] bg-rose-500/20 text-rose-300 px-1.5 py-0.5 rounded border border-rose-500/30 font-semibold">
+                          </span>
+                          <span className="text-stone-500 mx-1">/</span>
+                          <span className="text-stone-400">{formatPLN(cat.limit)}</span>
+                        </div>
+
+                        {isOver ? (
+                          <span className="text-[11px] bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-md border border-rose-500/30 font-semibold shrink-0">
                             +{formatPLN(cat.diff)}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-stone-500 font-mono shrink-0">
+                            {cat.percent}%
                           </span>
                         )}
                       </div>
                     </div>
 
-                    {/* Progress bar */}
+                    {/* Progress bar z marginesem i tłem */}
                     <div className="w-full bg-stone-900 rounded-full h-2.5 overflow-hidden border border-stone-800">
                       <div
                         style={{
@@ -448,17 +501,27 @@ export function BudgetView({ data, onUpdateData }) {
               })}
 
               {summary.categoriesProgress.length === 0 && (
-                <p className="text-xs text-stone-500 italic py-2">Brak zdefiniowanych limitów w tym miesiącu.</p>
+                <div className="text-center py-5 border border-dashed border-stone-800 rounded-xl bg-stone-900/30 space-y-2">
+                  <p className="text-xs text-stone-400">Brak zdefiniowanych kategorii w tym miesiącu.</p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveModal('manage-categories')}
+                    style={{ color: COLORS.accent }}
+                    className="text-xs font-bold hover:underline"
+                  >
+                    + Dodaj pierwszą kategorię
+                  </button>
+                </div>
               )}
             </div>
           </div>
 
-          {/* 5. LISTA OPERACJI Z DANEGO MIESIĄCA */}
+          {/* 5. LISTA OPERACJI Z DANEGO MIESIĄCA (Z OZNACZENIEM OSOBY) */}
           <div
             style={{ background: COLORS.surface, borderColor: COLORS.border }}
-            className="rounded-2xl p-4.5 border space-y-4 shadow-sm"
+            className="rounded-2xl p-5 border space-y-4 shadow-sm"
           >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-base font-bold">
                 Operacje ({combinedTransactions.length})
               </h3>
@@ -466,7 +529,7 @@ export function BudgetView({ data, onUpdateData }) {
               {/* Filtry */}
               <div
                 style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
-                className="flex p-0.5 rounded-xl border text-[11px] font-semibold overflow-x-auto no-scrollbar"
+                className="flex p-0.5 rounded-xl border text-xs font-semibold overflow-x-auto no-scrollbar"
               >
                 <button
                   onClick={() => setFilterType('all')}
@@ -474,7 +537,7 @@ export function BudgetView({ data, onUpdateData }) {
                     background: filterType === 'all' ? COLORS.accent : 'transparent',
                     color: filterType === 'all' ? '#121214' : COLORS.inkSoft,
                   }}
-                  className="px-2.5 py-1 rounded-lg transition shrink-0"
+                  className="px-3 py-1.5 rounded-lg transition shrink-0"
                 >
                   Wszystkie
                 </button>
@@ -484,7 +547,7 @@ export function BudgetView({ data, onUpdateData }) {
                     background: filterType === 'expense' ? COLORS.accent : 'transparent',
                     color: filterType === 'expense' ? '#121214' : COLORS.inkSoft,
                   }}
-                  className="px-2.5 py-1 rounded-lg transition shrink-0"
+                  className="px-3 py-1.5 rounded-lg transition shrink-0"
                 >
                   Wydatki
                 </button>
@@ -494,7 +557,7 @@ export function BudgetView({ data, onUpdateData }) {
                     background: filterType === 'fixedCost' ? COLORS.accent : 'transparent',
                     color: filterType === 'fixedCost' ? '#121214' : COLORS.inkSoft,
                   }}
-                  className="px-2.5 py-1 rounded-lg transition shrink-0"
+                  className="px-3 py-1.5 rounded-lg transition shrink-0"
                 >
                   Stałe koszty
                 </button>
@@ -504,7 +567,7 @@ export function BudgetView({ data, onUpdateData }) {
                     background: filterType === 'income' ? COLORS.accent : 'transparent',
                     color: filterType === 'income' ? '#121214' : COLORS.inkSoft,
                   }}
-                  className="px-2.5 py-1 rounded-lg transition shrink-0"
+                  className="px-3 py-1.5 rounded-lg transition shrink-0"
                 >
                   Przychody
                 </button>
@@ -512,20 +575,21 @@ export function BudgetView({ data, onUpdateData }) {
             </div>
 
             {/* Lista wpisów */}
-            <div className="space-y-2 pt-1">
+            <div className="space-y-2.5 pt-1">
               {combinedTransactions.map((tx) => {
                 const isIncome = tx.type === 'income';
                 const isFixed = tx.type === 'fixedCost';
+                const person = getPerson(tx.personId);
 
                 return (
                   <div
                     key={tx.id}
                     style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
-                    className="flex items-center justify-between p-3 rounded-xl border transition hover:border-stone-700"
+                    className="flex items-center justify-between p-3.5 rounded-xl border transition hover:border-stone-700 gap-3"
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                           isIncome
                             ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                             : isFixed
@@ -533,20 +597,37 @@ export function BudgetView({ data, onUpdateData }) {
                             : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                         }`}
                       >
-                        {isIncome && <TrendingUp size={16} />}
-                        {isFixed && <Landmark size={16} />}
-                        {!isIncome && !isFixed && <TrendingDown size={16} />}
+                        {isIncome && <TrendingUp size={18} />}
+                        {isFixed && <Landmark size={18} />}
+                        {!isIncome && !isFixed && <TrendingDown size={18} />}
                       </div>
 
-                      <div>
-                        <div className="text-sm font-bold text-stone-100">{tx.displayTitle}</div>
-                        <div className="text-[11px] text-stone-400 flex items-center gap-2">
-                          <span>{tx.categoryName || 'Brak kategorii'}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-bold text-stone-100 truncate">{tx.displayTitle}</div>
+                        <div className="text-xs text-stone-400 flex flex-wrap items-center gap-2 mt-0.5">
+                          <span className="text-stone-300 font-medium">{tx.categoryName || 'Brak kategorii'}</span>
                           {tx.date && (
                             <>
-                              <span>•</span>
-                              <span className="flex items-center gap-1 font-mono">
-                                <Calendar size={10} /> {tx.date}
+                              <span className="text-stone-600">•</span>
+                              <span className="flex items-center gap-1 font-mono text-stone-400">
+                                <Calendar size={11} /> {tx.date}
+                              </span>
+                            </>
+                          )}
+                          {/* Oznaczenie osoby */}
+                          {person && (
+                            <>
+                              <span className="text-stone-600">•</span>
+                              <span
+                                style={{
+                                  borderColor: `${person.color}40`,
+                                  background: `${person.color}15`,
+                                  color: person.color,
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium"
+                              >
+                                <Chip person={person} size="sm" />
+                                <span>{person.name}</span>
                               </span>
                             </>
                           )}
@@ -554,9 +635,9 @@ export function BudgetView({ data, onUpdateData }) {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5 shrink-0">
                       <span
-                        className={`font-mono text-sm font-bold ${
+                        className={`font-mono text-sm sm:text-base font-bold ${
                           isIncome ? 'text-emerald-400' : 'text-stone-100'
                         }`}
                       >
@@ -566,10 +647,10 @@ export function BudgetView({ data, onUpdateData }) {
 
                       <button
                         onClick={() => handleDeleteItem(tx.type, tx.id)}
-                        className="p-1.5 rounded-lg text-stone-500 hover:text-rose-400 hover:bg-stone-800 transition"
+                        className="p-2 rounded-lg text-stone-500 hover:text-rose-400 hover:bg-stone-800 transition"
                         title="Usuń wpis"
                       >
-                        <Trash2 size={15} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
@@ -577,7 +658,7 @@ export function BudgetView({ data, onUpdateData }) {
               })}
 
               {combinedTransactions.length === 0 && (
-                <div className="text-center py-6 text-stone-500 text-xs italic">
+                <div className="text-center py-8 text-stone-500 text-xs italic">
                   Brak operacji dla wybranego filtru w tym miesiącu.
                 </div>
               )}
@@ -591,8 +672,19 @@ export function BudgetView({ data, onUpdateData }) {
         <TransactionModal
           monthKey={monthKey}
           categories={currentMonthBudget?.categories || []}
+          people={people}
+          currentPersonId={currentPersonId}
           onClose={() => setActiveModal(null)}
           onSave={handleSaveTransaction}
+        />
+      )}
+
+      {/* MODAL ZARZĄDZANIA KATEGORIAMI */}
+      {activeModal === 'manage-categories' && (
+        <ManageCategoriesModal
+          categories={currentMonthBudget?.categories || []}
+          onClose={() => setActiveModal(null)}
+          onSave={handleSaveCategories}
         />
       )}
     </div>

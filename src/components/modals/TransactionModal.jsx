@@ -2,17 +2,27 @@ import { useState } from 'react';
 import { COLORS, uid } from '../../utils/constants.js';
 import { todayStr } from '../../utils/dateUtils.js';
 import { ModalShell } from '../ui/ModalShell.jsx';
-import { TrendingDown, TrendingUp, Landmark } from 'lucide-react';
+import { Chip } from '../ui/Chip.jsx';
+import { TrendingDown, TrendingUp, Landmark, User } from 'lucide-react';
 
 const inputStyle =
   'w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 transition bg-stone-900 text-stone-100 placeholder-stone-500';
 
-export function TransactionModal({ monthKey, categories = [], onClose, onSave, initialType = 'expense' }) {
+export function TransactionModal({
+  monthKey,
+  categories = [],
+  people = [],
+  currentPersonId = null,
+  onClose,
+  onSave,
+  initialType = 'expense',
+}) {
   const [type, setType] = useState(initialType); // 'expense' | 'fixedCost' | 'income'
   const [amount, setAmount] = useState('');
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
-  
+  const [personId, setPersonId] = useState(currentPersonId || people[0]?.id || null);
+
   // Domyślna data: jeśli dziś należy do wybranego miesiąca -> dzisiaj, w przeciwnym razie 1. dzień wybranego miesiąca
   const [date, setDate] = useState(() => {
     const today = todayStr();
@@ -36,6 +46,7 @@ export function TransactionModal({ monthKey, categories = [], onClose, onSave, i
         categoryId: categoryId || 'other',
         categoryName: selectedCategory ? selectedCategory.name : 'Inne',
         description: title.trim(),
+        personId: personId || null,
         createdAt: new Date().toISOString(),
       });
     } else if (type === 'fixedCost') {
@@ -44,6 +55,7 @@ export function TransactionModal({ monthKey, categories = [], onClose, onSave, i
         id: uid('fc'),
         title: title.trim(),
         amount: numAmount,
+        personId: personId || null,
         createdAt: new Date().toISOString(),
       });
     } else if (type === 'income') {
@@ -52,6 +64,7 @@ export function TransactionModal({ monthKey, categories = [], onClose, onSave, i
         id: uid('inc'),
         title: title.trim(),
         amount: numAmount,
+        personId: personId || null,
         createdAt: new Date().toISOString(),
       });
     }
@@ -110,6 +123,48 @@ export function TransactionModal({ monthKey, categories = [], onClose, onSave, i
             Przychód
           </button>
         </div>
+
+        {/* Wybór osoby / kto dodał */}
+        {people && people.length > 0 && (
+          <div>
+            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5 text-stone-400">
+              <User size={13} className="text-amber-400" />
+              Kto ponosi / otrzymuje?
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setPersonId(null)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
+                  personId === null
+                    ? 'bg-stone-800 border-amber-500/50 text-amber-400'
+                    : 'bg-stone-900/60 border-stone-800 text-stone-400 hover:text-stone-300'
+                }`}
+              >
+                Cała rodzina
+              </button>
+              {people.map((p) => {
+                const isSelected = personId === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPersonId(p.id)}
+                    style={{
+                      borderColor: isSelected ? p.color : COLORS.border,
+                      background: isSelected ? `${p.color}22` : COLORS.surfaceHighlight,
+                      color: isSelected ? p.color : COLORS.inkSoft,
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition"
+                  >
+                    <Chip person={p} size="sm" />
+                    <span>{p.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Kwota */}
         <div>
