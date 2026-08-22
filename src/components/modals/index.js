@@ -5,3 +5,4 @@ export { PersonModal } from './PersonModal.jsx';
 export { AddWallMessageModal } from './AddWallMessageModal.jsx';
 export { EventDetailModal } from './EventDetailModal.jsx';
 export { TaskDetailModal } from './TaskDetailModal.jsx';
+export { TransactionModal } from './TransactionModal.jsx';

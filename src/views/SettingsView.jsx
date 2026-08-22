@@ -66,11 +66,29 @@ export function SettingsView({
   };
 
   useEffect(() => {
-    async function checkSub() {
+    let isMounted = true;
+    async function loadStatus() {
+      if (typeof window !== 'undefined' && 'Notification' in window && isMounted) {
+        setNotifPermission(Notification.permission);
+      }
       const res = await checkPushSubscription();
-      setPushSubscribed(res.subscribed);
+      if (isMounted) {
+        setPushSubscribed(res.subscribed);
+      }
     }
-    checkSub();
+    loadStatus();
+
+    const handleVisibilityOrFocus = () => {
+      loadStatus();
+    };
+
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
   }, []);
 
   const handleEnableNotifications = async () => {
@@ -365,6 +383,23 @@ export function SettingsView({
             className="p-1 transition active:scale-90"
           >
             {settings.enableMeals ? (
+              <ToggleRight size={32} className="text-amber-400" />
+            ) : (
+              <ToggleLeft size={32} className="text-stone-600" />
+            )}
+          </button>
+        </div>
+        <div className="flex items-center justify-between py-1 pt-2 border-t border-stone-800">
+          <div>
+            <div className="text-sm font-semibold text-stone-200">Planowanie Budżetu</div>
+            <div className="text-xs text-stone-400">Miesięczny podział przychodów, stałych kosztów i limitów.</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onUpdateSettings({ ...settings, enableBudget: settings.enableBudget === false ? true : false })}
+            className="p-1 transition active:scale-90"
+          >
+            {settings.enableBudget !== false ? (
               <ToggleRight size={32} className="text-amber-400" />
             ) : (
               <ToggleLeft size={32} className="text-stone-600" />

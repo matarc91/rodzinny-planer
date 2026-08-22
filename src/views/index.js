@@ -5,6 +5,7 @@ export { NotesView } from './NotesView.jsx';
 export { WallView } from './WallView.jsx';
 export { MealsView } from './MealsView.jsx';
 export { SettingsView } from './SettingsView.jsx';
+export { BudgetView } from './BudgetView.jsx';
 export { AppLogsSection } from './AppLogsSection.jsx';
 export { ResetPasswordScreen } from './ResetPasswordScreen.jsx';
 export { AuthScreen } from './AuthScreen.jsx';

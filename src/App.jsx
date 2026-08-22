@@ -6,6 +6,7 @@ import {
   StickyNote,
   MessageSquare,
   Utensils,
+  PiggyBank,
   Settings,
   Sparkles,
   RefreshCw,
@@ -40,6 +41,7 @@ import {
   NotesView,
   WallView,
   MealsView,
+  BudgetView,
   SettingsView,
   ResetPasswordScreen,
   AuthScreen,
@@ -1101,6 +1103,7 @@ export default function App() {
     { id: 'notes', label: 'Notatki', icon: StickyNote },
     ...(data.settings?.enableWall ? [{ id: 'wall', label: 'Tablica', icon: MessageSquare }] : []),
     ...(data.settings?.enableMeals ? [{ id: 'meals', label: 'Posiłki', icon: Utensils }] : []),
+    ...(data.settings?.enableBudget !== false ? [{ id: 'budget', label: 'Budżet', icon: PiggyBank }] : []),
   ];
 
   return (
@@ -1200,6 +1203,9 @@ export default function App() {
         )}
         {tab === 'meals' && data.settings?.enableMeals && (
           <MealsView meals={data.meals} onUpdateMeal={updateMeal} />
+        )}
+        {tab === 'budget' && data.settings?.enableBudget !== false && (
+          <BudgetView data={data} onUpdateData={persist} />
         )}
         {tab === 'settings' && (
           <SettingsView
