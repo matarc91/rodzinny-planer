@@ -1,28 +1,19 @@
-import { Plus, MessageSquare, Pin, Trash2 } from 'lucide-react';
+import { MessageSquare, Pin, Trash2 } from 'lucide-react';
 import { COLORS } from '../utils/constants.js';
 import { Chip } from '../components/ui/Chip.jsx';
 import { EmptyState } from '../components/ui/EmptyState.jsx';
 
-export function WallView({ wall = [], people, onDeleteWallMessage, onTogglePinWallMessage, onOpenAddWall }) {
+export function WallView({ wall = [], people, onDeleteWallMessage, onTogglePinWallMessage }) {
   const sorted = [...wall].sort((a, b) =>
     a.isPinned !== b.isPinned ? (a.isPinned ? -1 : 1) : b.createdAt.localeCompare(a.createdAt)
   );
   return (
     <div className="space-y-5 animate-fadeIn">
-      <div className="flex items-center justify-between px-1">
-        <div>
-          <h2 style={{ fontFamily: 'Fraunces' }} className="text-2xl font-bold text-stone-100">
-            Tablica
-          </h2>
-          <p className="text-xs text-stone-400">Wirtualna korkówka</p>
-        </div>
-        <button
-          onClick={onOpenAddWall}
-          style={{ background: COLORS.accent, color: '#121214' }}
-          className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1"
-        >
-          <Plus size={14} /> Wiadomość
-        </button>
+      <div className="px-1">
+        <h2 style={{ fontFamily: 'Fraunces' }} className="text-2xl font-bold text-stone-100">
+          Tablica
+        </h2>
+        <p className="text-xs text-stone-400">Wirtualna korkówka</p>
       </div>
       {sorted.length === 0 ? (
         <EmptyState text="Brak wiadomości" icon={MessageSquare} />

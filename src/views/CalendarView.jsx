@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Repeat } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Repeat } from 'lucide-react';
 import { COLORS, MONTHS, WEEKDAYS } from '../utils/constants.js';
 import {
   todayStr,
@@ -20,9 +20,14 @@ import { PersonRow } from '../components/ui/PersonRow.jsx';
 import { Section } from '../components/ui/Section.jsx';
 import { EmptyState } from '../components/ui/EmptyState.jsx';
 
-export function CalendarView({ data, onOpenAdd, onOpenEvent }) {
+export function CalendarView({ data, onOpenEvent, selectedDay: propSelectedDay, onSelectDay }) {
   const [monthAnchor, setMonthAnchor] = useState(todayStr());
-  const [selectedDay, setSelectedDay] = useState(todayStr());
+  const [internalSelectedDay, setInternalSelectedDay] = useState(todayStr());
+  const selectedDay = propSelectedDay || internalSelectedDay;
+  const setSelectedDay = (d) => {
+    setInternalSelectedDay(d);
+    onSelectDay?.(d);
+  };
   const [personFilter, setPersonFilter] = useState('all');
 
   const { year, month, cells } = useMemo(() => {
@@ -211,15 +216,6 @@ export function CalendarView({ data, onOpenAdd, onOpenEvent }) {
           day: 'numeric',
           month: 'long',
         })}
-        action={
-          <button
-            onClick={() => onOpenAdd(selectedDay)}
-            style={{ background: COLORS.accent, color: '#121214' }}
-            className="rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1"
-          >
-            <Plus size={14} /> Dodaj
-          </button>
-        }
       >
         {dayEvents.length === 0 ? (
           <EmptyState text="Brak wydarzeń w tym dniu" />

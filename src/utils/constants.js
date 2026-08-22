@@ -1,6 +1,6 @@
 export const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');`;
 
-export const APP_VERSION = 'v2.0.0';
+export const APP_VERSION = 'v3.0.0';
 
 export const COLORS = {
   bg: '#121214',

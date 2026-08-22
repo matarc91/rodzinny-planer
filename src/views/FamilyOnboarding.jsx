@@ -71,38 +71,40 @@ export function FamilyOnboarding({ supabase, session, onFamilyJoined }) {
 
   if (mode === 'choose') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#121214] text-stone-100 animate-fadeIn">
-        <h2 style={{ fontFamily: 'Fraunces' }} className="text-3xl font-bold mb-8 text-center">
-          Dołącz do Rodziny
-        </h2>
-        <div className="w-full max-w-sm space-y-4">
-          <button
-            onClick={() => setMode('join')}
-            className="w-full bg-[#1E1E22] border border-[#33333C] p-6 rounded-3xl flex flex-col items-center gap-3 hover:border-amber-500/50 transition"
-          >
-            <div className="w-12 h-12 bg-stone-800 rounded-full flex items-center justify-center text-amber-400">
-              <Users size={24} />
-            </div>
-            <span className="font-bold text-lg">Mam kod od domownika</span>
-            <span className="text-xs text-stone-400 text-center">
-              Ktoś z Twojej rodziny założył już kalendarz i udostępnił Ci 6-znakowy kod.
-            </span>
-          </button>
-          <button
-            onClick={() => setMode('create')}
-            className="w-full bg-[#1E1E22] border border-[#33333C] p-6 rounded-3xl flex flex-col items-center gap-3 hover:border-amber-500/50 transition"
-          >
-            <div className="w-12 h-12 bg-stone-800 rounded-full flex items-center justify-center text-amber-400">
-              <Plus size={24} />
-            </div>
-            <span className="font-bold text-lg">Załóż nową rodzinę</span>
-            <span className="text-xs text-stone-400 text-center">
-              Jesteś tu pierwszy? Załóż wirtualny dom i wygeneruj kod dla pozostałych.
-            </span>
-          </button>
-          <button onClick={async () => await supabase.auth.signOut()} className="w-full py-4 text-xs font-semibold text-stone-500">
-            Wyloguj mnie
-          </button>
+      <div className="min-h-screen flex flex-col items-center justify-between p-6 bg-[#121214] text-stone-100 animate-fadeIn">
+        <div className="w-full max-w-sm flex-1 flex flex-col items-center justify-center">
+          <h2 style={{ fontFamily: 'Fraunces' }} className="text-3xl font-bold mb-8 text-center">
+            Dołącz do Rodziny
+          </h2>
+          <div className="w-full space-y-4">
+            <button
+              onClick={() => setMode('join')}
+              className="w-full bg-[#1E1E22] border border-[#33333C] p-6 rounded-3xl flex flex-col items-center gap-3 hover:border-amber-500/50 transition"
+            >
+              <div className="w-12 h-12 bg-stone-800 rounded-full flex items-center justify-center text-amber-400">
+                <Users size={24} />
+              </div>
+              <span className="font-bold text-lg">Mam kod od domownika</span>
+              <span className="text-xs text-stone-400 text-center">
+                Ktoś z Twojej rodziny założył już kalendarz i udostępnił Ci 6-znakowy kod.
+              </span>
+            </button>
+            <button
+              onClick={() => setMode('create')}
+              className="w-full bg-[#1E1E22] border border-[#33333C] p-6 rounded-3xl flex flex-col items-center gap-3 hover:border-amber-500/50 transition"
+            >
+              <div className="w-12 h-12 bg-stone-800 rounded-full flex items-center justify-center text-amber-400">
+                <Plus size={24} />
+              </div>
+              <span className="font-bold text-lg">Załóż nową rodzinę</span>
+              <span className="text-xs text-stone-400 text-center">
+                Jesteś tu pierwszy? Załóż wirtualny dom i wygeneruj kod dla pozostałych.
+              </span>
+            </button>
+            <button onClick={async () => await supabase.auth.signOut()} className="w-full py-4 text-xs font-semibold text-stone-500 hover:text-stone-400 transition">
+              Wyloguj mnie
+            </button>
+          </div>
         </div>
         <PoweredByFooter />
       </div>
@@ -110,59 +112,61 @@ export function FamilyOnboarding({ supabase, session, onFamilyJoined }) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#121214] text-stone-100 animate-fadeIn">
-      <button onClick={() => setMode('choose')} className="mb-6 p-2 rounded-full bg-stone-900 text-stone-400 self-start">
-        <ChevronLeft size={24} />
-      </button>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (mode === 'create') {
-            handleCreate();
-          } else {
-            handleJoin();
-          }
-        }}
-        className="w-full max-w-sm space-y-4 bg-[#1E1E22] p-6 rounded-3xl border border-[#33333C] shadow-2xl"
-      >
-        <h2 className="text-xl font-bold mb-4">{mode === 'create' ? 'Nazwij swoją rodzinę' : 'Podaj kod dostępu'}</h2>
-        {error && <div className="bg-red-950/50 border border-red-900 text-red-300 text-xs p-3 rounded-xl">{error}</div>}
-
-        {mode === 'create' ? (
-          <div>
-            <label className="text-xs font-semibold mb-1 block text-stone-400">Nazwa wyświetlana</label>
-            <input
-              autoFocus
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="np. Rodzina Kowalskich"
-              className={inputStyle}
-            />
-          </div>
-        ) : (
-          <div>
-            <label className="text-xs font-semibold mb-1 block text-stone-400">Kod 6-znakowy</label>
-            <input
-              autoFocus
-              required
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="np. A8F9K2"
-              className={`${inputStyle} uppercase font-mono text-center tracking-widest text-lg`}
-              maxLength={6}
-            />
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-amber-500 text-stone-950 font-bold py-3.5 rounded-xl hover:bg-amber-400 transition mt-4 disabled:opacity-50"
-        >
-          {loading ? 'Ładowanie...' : 'Dalej'}
+    <div className="min-h-screen flex flex-col items-center justify-between p-6 bg-[#121214] text-stone-100 animate-fadeIn">
+      <div className="w-full max-w-sm flex-1 flex flex-col items-center justify-center">
+        <button onClick={() => setMode('choose')} className="mb-6 p-2 rounded-full bg-stone-900 text-stone-400 self-start hover:bg-stone-800 transition">
+          <ChevronLeft size={24} />
         </button>
-      </form>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (mode === 'create') {
+              handleCreate();
+            } else {
+              handleJoin();
+            }
+          }}
+          className="w-full space-y-4 bg-[#1E1E22] p-6 rounded-3xl border border-[#33333C] shadow-2xl"
+        >
+          <h2 className="text-xl font-bold mb-4">{mode === 'create' ? 'Nazwij swoją rodzinę' : 'Podaj kod dostępu'}</h2>
+          {error && <div className="bg-red-950/50 border border-red-900 text-red-300 text-xs p-3 rounded-xl">{error}</div>}
+
+          {mode === 'create' ? (
+            <div>
+              <label className="text-xs font-semibold mb-1 block text-stone-400">Nazwa wyświetlana</label>
+              <input
+                autoFocus
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="np. Rodzina Kowalskich"
+                className={inputStyle}
+              />
+            </div>
+          ) : (
+            <div>
+              <label className="text-xs font-semibold mb-1 block text-stone-400">Kod 6-znakowy</label>
+              <input
+                autoFocus
+                required
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="np. A8F9K2"
+                className={`${inputStyle} uppercase font-mono text-center tracking-widest text-lg`}
+                maxLength={6}
+              />
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-amber-500 text-stone-950 font-bold py-3.5 rounded-xl hover:bg-amber-400 transition mt-4 disabled:opacity-50"
+          >
+            {loading ? 'Ładowanie...' : 'Dalej'}
+          </button>
+        </form>
+      </div>
       <PoweredByFooter />
     </div>
   );

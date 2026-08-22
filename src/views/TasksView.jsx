@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, CheckSquare, Check, Trash2, Repeat } from 'lucide-react';
+import { CheckSquare, Check, Trash2, Repeat } from 'lucide-react';
 import { COLORS, RECURRENCE_LABELS } from '../utils/constants.js';
 import { todayStr, isTaskDoneForPeriod } from '../utils/dateUtils.js';
 import { Chip } from '../components/ui/Chip.jsx';
@@ -60,7 +60,7 @@ function TaskRow({ t, people, today, onToggle, onDelete, onOpen }) {
   );
 }
 
-export function TasksView({ data, onToggleTask, onDeleteTask, onOpenTask, onOpenAddTask }) {
+export function TasksView({ data, onToggleTask, onDeleteTask, onOpenTask }) {
   const today = todayStr();
   const [filter, setFilter] = useState('all');
   const visible = data.tasks.filter((t) => filter === 'all' || t.personIds?.includes(filter));
@@ -69,17 +69,10 @@ export function TasksView({ data, onToggleTask, onDeleteTask, onOpenTask, onOpen
 
   return (
     <div className="space-y-5 animate-fadeIn">
-      <div className="flex items-center justify-between px-1">
+      <div className="px-1">
         <h2 style={{ fontFamily: 'Fraunces' }} className="text-2xl font-bold text-stone-100">
           Zadania
         </h2>
-        <button
-          onClick={() => onOpenAddTask(today)}
-          style={{ background: COLORS.accent, color: '#121214' }}
-          className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1"
-        >
-          <Plus size={14} /> Zadanie
-        </button>
       </div>
 
       <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">

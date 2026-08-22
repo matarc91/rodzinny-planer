@@ -11,7 +11,7 @@ import {
   Sparkles,
   RefreshCw,
 } from 'lucide-react';
-import { COLORS, FONT_IMPORT, emptyData } from './utils/constants.js';
+import { COLORS, FONT_IMPORT, emptyData, createDefaultMonthBudget } from './utils/constants.js';
 import {
   todayStr,
   toDateStr,
@@ -24,7 +24,7 @@ import { getSupabaseClient } from './utils/supabaseClient.js';
 import { addLog } from './utils/logger.js';
 import { getInitialSentReminders, recordFamilyNotification } from './utils/pushService.js';
 
-import { AppLogo, Chip, PoweredByFooter } from './components/ui/index.js';
+import { AppLogo, Chip, PoweredByFooter, FloatingActionButton } from './components/ui/index.js';
 import {
   AddEventModal,
   AddTaskModal,
@@ -33,6 +33,7 @@ import {
   PersonModal,
   EventDetailModal,
   TaskDetailModal,
+  TransactionModal,
 } from './components/modals/index.js';
 import {
   TodayView,
@@ -66,12 +67,13 @@ export default function App() {
     if (typeof window !== 'undefined' && window.location) {
       const p = new URLSearchParams(window.location.search);
       const t = p.get('tab');
-      if (t && ['today', 'calendar', 'tasks', 'notes', 'wall', 'meals', 'settings'].includes(t)) {
+      if (t && ['today', 'calendar', 'tasks', 'notes', 'wall', 'meals', 'budget', 'settings'].includes(t)) {
         return t;
       }
     }
     return 'today';
   });
+  const [selectedBudgetMonth, setSelectedBudgetMonth] = useState(() => todayStr().slice(0, 7));
   const [modal, setModal] = useState(() => {
     if (typeof window !== 'undefined' && window.location) {
       const p = new URLSearchParams(window.location.search);
@@ -1057,6 +1059,35 @@ export default function App() {
     setModal('person');
   };
 
+  const openAddBudget = (monthKey) => {
+    setSelectedBudgetMonth(monthKey || todayStr().slice(0, 7));
+    setModal('budget');
+  };
+
+  const handleSaveBudgetTransaction = (type, item) => {
+    const targetMonthKey = item.date ? item.date.slice(0, 7) : selectedBudgetMonth || todayStr().slice(0, 7);
+    const budgetState = data?.budget || {};
+    const curMonthBudget = budgetState[targetMonthKey] || createDefaultMonthBudget();
+    const updatedMonth = { ...curMonthBudget };
+    if (type === 'expense') {
+      updatedMonth.expenses = [item, ...(updatedMonth.expenses || [])];
+    } else if (type === 'fixedCost') {
+      updatedMonth.fixedCosts = [...(updatedMonth.fixedCosts || []), item];
+    } else if (type === 'income') {
+      updatedMonth.incomes = [...(updatedMonth.incomes || []), item];
+    }
+
+    persist({
+      ...data,
+      budget: {
+        ...budgetState,
+        [targetMonthKey]: updatedMonth,
+      },
+    });
+    closeModal();
+    showToast('Wpis został zapisany w budżecie!');
+  };
+
   const closeModal = () => {
     setModal(null);
     setModalPayload(null);
@@ -1159,79 +1190,94 @@ export default function App() {
         </button>
       </header>
 
-      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-24 max-w-2xl mx-auto w-full">
-        {tab === 'today' && (
-          <TodayView
-            data={data}
-            onOpenEvent={openDetailEvent}
-            onOpenTask={setDetailTask}
-            onOpenAddEvent={openAddEvent}
-            onOpenAddTask={openAddTask}
-            onToggleTask={toggleTask}
-          />
-        )}
-        {tab === 'calendar' && (
-          <CalendarView data={data} onOpenAdd={openAddEvent} onOpenEvent={openDetailEvent} />
-        )}
-        {tab === 'tasks' && (
-          <TasksView
-            data={data}
-            onToggleTask={toggleTask}
-            onDeleteTask={deleteTask}
-            onOpenTask={setDetailTask}
-            onOpenAddTask={openAddTask}
-          />
-        )}
-        {tab === 'notes' && (
-          <NotesView
-            notes={visibleNotes}
-            onDelete={deleteNote}
-            onConvert={openConvertNote}
-            onEdit={openEditNote}
-            onToggleItem={toggleNoteItem}
-            onOpenAddNote={() => setModal('note')}
-          />
-        )}
-        {tab === 'wall' && data.settings?.enableWall && (
-          <WallView
-            wall={data.wall}
-            people={data.people}
-            onDeleteWallMessage={deleteWallMessage}
-            onTogglePinWallMessage={togglePinWallMessage}
-            onOpenAddWall={() => setModal('wall')}
-          />
-        )}
-        {tab === 'meals' && data.settings?.enableMeals && (
-          <MealsView meals={data.meals} onUpdateMeal={updateMeal} />
-        )}
-        {tab === 'budget' && data.settings?.enableBudget !== false && (
-          <BudgetView
-            data={data}
-            onUpdateData={persist}
-            currentPersonId={currentUserId}
-          />
-        )}
-        {tab === 'settings' && (
-          <SettingsView
-            family={family}
-            profile={profile}
-            settings={data.settings}
-            onUpdateSettings={updateSettings}
-            people={data.people}
-            onAddPerson={() => setModal('person')}
-            onEditPerson={openEditPerson}
-            onDeletePerson={deletePerson}
-            onSignOut={handleSignOut}
-            supabase={supabaseClient}
-            showToast={showToast}
-            onLeaveFamily={leaveFamily}
-            onDeleteFamily={deleteFamily}
-            onDeleteUserAccount={deleteUserAccount}
-          />
-        )}
+      <main className="flex-1 flex flex-col justify-between overflow-y-auto px-4 pt-4 pb-24 max-w-2xl mx-auto w-full">
+        <div className="flex-1 w-full">
+          {tab === 'today' && (
+            <TodayView
+              data={data}
+              onOpenEvent={openDetailEvent}
+              onOpenTask={setDetailTask}
+              onToggleTask={toggleTask}
+            />
+          )}
+          {tab === 'calendar' && (
+            <CalendarView
+              data={data}
+              selectedDay={addEventDate}
+              onSelectDay={setAddEventDate}
+              onOpenEvent={openDetailEvent}
+            />
+          )}
+          {tab === 'tasks' && (
+            <TasksView
+              data={data}
+              onToggleTask={toggleTask}
+              onDeleteTask={deleteTask}
+              onOpenTask={setDetailTask}
+            />
+          )}
+          {tab === 'notes' && (
+            <NotesView
+              notes={visibleNotes}
+              onDelete={deleteNote}
+              onConvert={openConvertNote}
+              onEdit={openEditNote}
+              onToggleItem={toggleNoteItem}
+            />
+          )}
+          {tab === 'wall' && data.settings?.enableWall && (
+            <WallView
+              wall={data.wall}
+              people={data.people}
+              onDeleteWallMessage={deleteWallMessage}
+              onTogglePinWallMessage={togglePinWallMessage}
+            />
+          )}
+          {tab === 'meals' && data.settings?.enableMeals && (
+            <MealsView meals={data.meals} onUpdateMeal={updateMeal} />
+          )}
+          {tab === 'budget' && data.settings?.enableBudget !== false && (
+            <BudgetView
+              data={data}
+              onUpdateData={persist}
+              currentPersonId={currentUserId}
+              monthKey={selectedBudgetMonth}
+              onMonthChange={setSelectedBudgetMonth}
+            />
+          )}
+          {tab === 'settings' && (
+            <SettingsView
+              family={family}
+              profile={profile}
+              settings={data.settings}
+              onUpdateSettings={updateSettings}
+              people={data.people}
+              onAddPerson={() => setModal('person')}
+              onEditPerson={openEditPerson}
+              onDeletePerson={deletePerson}
+              onSignOut={handleSignOut}
+              supabase={supabaseClient}
+              showToast={showToast}
+              onLeaveFamily={leaveFamily}
+              onDeleteFamily={deleteFamily}
+              onDeleteUserAccount={deleteUserAccount}
+            />
+          )}
+        </div>
 
-        <PoweredByFooter className="mt-12 mb-4" />
+        <PoweredByFooter className="mt-8 mb-4" />
       </main>
+
+      {/* Pływający przycisk dodawania w prawym dolnym rogu (FAB) */}
+      <FloatingActionButton
+        currentTab={tab}
+        settings={data.settings}
+        onAddEvent={() => openAddEvent(todayStr())}
+        onAddTask={() => openAddTask(todayStr())}
+        onAddNote={() => setModal('note')}
+        onAddWall={() => setModal('wall')}
+        onAddBudget={() => openAddBudget(selectedBudgetMonth)}
+      />
 
       <nav
         style={{ background: COLORS.surface, borderColor: COLORS.border }}
@@ -1295,6 +1341,19 @@ export default function App() {
           currentUserId={currentUserId}
           onClose={closeModal}
           onSave={addWallMessage}
+        />
+      )}
+      {modal === 'budget' && (
+        <TransactionModal
+          monthKey={selectedBudgetMonth}
+          categories={
+            data?.budget?.[selectedBudgetMonth]?.categories ||
+            createDefaultMonthBudget().categories
+          }
+          people={data.people}
+          currentPersonId={currentUserId}
+          onClose={closeModal}
+          onSave={handleSaveBudgetTransaction}
         />
       )}
       {modal === 'person' && (

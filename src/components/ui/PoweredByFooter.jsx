@@ -2,7 +2,7 @@ import { APP_VERSION } from '../../utils/constants.js';
 
 export function PoweredByFooter({ className = '' }) {
   return (
-    <footer className={`mt-8 text-center text-xs text-stone-500 flex flex-col items-center justify-center gap-1 ${className}`}>
+    <footer className={`mt-auto pt-8 pb-3 text-center text-xs text-stone-500 flex flex-col items-center justify-center gap-1 shrink-0 select-none ${className}`}>
       <div className="flex items-center justify-center gap-1.5">
         <span>Powered by</span>
         <a
@@ -14,7 +14,7 @@ export function PoweredByFooter({ className = '' }) {
           syncup.pl
         </a>
       </div>
-      <span className="text-[11px] font-mono text-stone-500/80 font-medium">{APP_VERSION}</span>
+      <span className="text-[11px] font-mono text-stone-500/80 font-medium tracking-wide">{APP_VERSION}</span>
     </footer>
   );
 }

@@ -169,19 +169,20 @@ export function AuthScreen({ supabase }) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#121214] text-stone-100 animate-fadeIn">
-      <AppLogo className="w-16 h-16 rounded-2xl shadow-lg shadow-amber-900/20 mb-6" iconSize={32} />
-      <h1 style={{ fontFamily: 'Fraunces' }} className="text-3xl font-bold mb-2">
-        Rodzinny Planer
-      </h1>
-      <p className="text-sm text-stone-400 mb-8 text-center max-w-xs">
-        Współdziel kalendarz i obowiązki z całą rodziną w jednym miejscu.
-      </p>
+    <div className="min-h-screen flex flex-col items-center justify-between p-6 bg-[#121214] text-stone-100 animate-fadeIn">
+      <div className="w-full max-w-sm flex-1 flex flex-col items-center justify-center">
+        <AppLogo className="w-16 h-16 rounded-2xl shadow-lg shadow-amber-900/20 mb-6" iconSize={32} />
+        <h1 style={{ fontFamily: 'Fraunces' }} className="text-3xl font-bold mb-2">
+          Rodzinny Planer
+        </h1>
+        <p className="text-sm text-stone-400 mb-8 text-center max-w-xs">
+          Współdziel kalendarz i obowiązki z całą rodziną w jednym miejscu.
+        </p>
 
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-sm space-y-4 bg-[#1E1E22] p-6 rounded-3xl border border-[#33333C] shadow-2xl"
-      >
+        <form
+          onSubmit={handleSubmit}
+          className="w-full max-w-sm space-y-4 bg-[#1E1E22] p-6 rounded-3xl border border-[#33333C] shadow-2xl"
+        >
         <h2 className="text-lg font-bold mb-1">
           {authMode === 'login' && 'Zaloguj się'}
           {authMode === 'register' && 'Utwórz darmowe konto'}
@@ -325,6 +326,7 @@ export function AuthScreen({ supabase }) {
           )}
         </div>
       </form>
+      </div>
 
       <PoweredByFooter />
     </div>

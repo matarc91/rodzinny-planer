@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
-  Plus,
   TrendingDown,
   TrendingUp,
   Landmark,
@@ -20,9 +19,22 @@ import { TransactionModal } from '../components/modals/TransactionModal.jsx';
 import { ManageCategoriesModal } from '../components/modals/ManageCategoriesModal.jsx';
 import { Chip } from '../components/ui/Chip.jsx';
 
-export function BudgetView({ data, onUpdateData, currentPersonId = null }) {
+export function BudgetView({
+  data,
+  onUpdateData,
+  currentPersonId = null,
+  monthKey: propMonthKey,
+  onMonthChange,
+}) {
   // Aktualny miesiąc domyślnie 'YYYY-MM'
-  const [monthKey, setMonthKey] = useState(() => format(new Date(), 'yyyy-MM'));
+  const [internalMonthKey, setInternalMonthKey] = useState(() => format(new Date(), 'yyyy-MM'));
+  const monthKey = propMonthKey || internalMonthKey;
+
+  const setMonthKey = (newKey) => {
+    setInternalMonthKey(newKey);
+    onMonthChange?.(newKey);
+  };
+
   const [activeModal, setActiveModal] = useState(null); // 'add-transaction' | 'manage-categories' | null
   const [filterType, setFilterType] = useState('all'); // 'all' | 'expense' | 'fixedCost' | 'income'
 
@@ -424,27 +436,15 @@ export function BudgetView({ data, onUpdateData, currentPersonId = null }) {
                 <p className="text-xs text-stone-400">Kontrola wydatków w bieżącym miesiącu</p>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveModal('manage-categories')}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-stone-300 bg-stone-800 hover:bg-stone-700 transition border border-stone-700"
-                  title="Modyfikuj, dodawaj lub usuwaj kategorie"
-                >
-                  <SlidersHorizontal size={14} className="text-amber-400" />
-                  <span>Kategorie</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveModal('add-transaction')}
-                  style={{ background: COLORS.accent, color: '#121214' }}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold shadow hover:opacity-90 transition cursor-pointer"
-                >
-                  <Plus size={14} />
-                  <span>Dodaj wpis</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setActiveModal('manage-categories')}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-stone-300 bg-stone-800 hover:bg-stone-700 transition border border-stone-700 cursor-pointer"
+                title="Modyfikuj, dodawaj lub usuwaj kategorie"
+              >
+                <SlidersHorizontal size={14} className="text-amber-400" />
+                <span>Kategorie</span>
+              </button>
             </div>
 
             <div className="space-y-3.5 pt-1">

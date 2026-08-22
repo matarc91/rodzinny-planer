@@ -9,3 +9,4 @@ export { RecurrencePicker } from './RecurrencePicker.jsx';
 export { ReminderPicker } from './ReminderPicker.jsx';
 export { AppLogo } from './AppLogo.jsx';
 export { PoweredByFooter } from './PoweredByFooter.jsx';
+export { FloatingActionButton } from './FloatingActionButton.jsx';

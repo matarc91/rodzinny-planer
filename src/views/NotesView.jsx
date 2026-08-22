@@ -1,25 +1,16 @@
-import { Plus, StickyNote, Pencil, Trash2, CheckSquare, Calendar, Check } from 'lucide-react';
+import { StickyNote, Pencil, Trash2, CheckSquare, Calendar, Check } from 'lucide-react';
 import { COLORS } from '../utils/constants.js';
 import { EmptyState } from '../components/ui/EmptyState.jsx';
 
-export function NotesView({ notes, onDelete, onConvert, onEdit, onToggleItem, onOpenAddNote }) {
+export function NotesView({ notes, onDelete, onConvert, onEdit, onToggleItem }) {
   const sorted = [...notes].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return (
     <div className="space-y-5 animate-fadeIn">
-      <div className="flex items-center justify-between px-1">
-        <div>
-          <h2 style={{ fontFamily: 'Fraunces' }} className="text-2xl font-bold text-stone-100">
-            Notatki
-          </h2>
-          <p className="text-xs text-stone-400">Prywatne notatki i listy</p>
-        </div>
-        <button
-          onClick={onOpenAddNote}
-          style={{ background: COLORS.accent, color: '#121214' }}
-          className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1"
-        >
-          <Plus size={14} /> Notatka
-        </button>
+      <div className="px-1">
+        <h2 style={{ fontFamily: 'Fraunces' }} className="text-2xl font-bold text-stone-100">
+          Notatki
+        </h2>
+        <p className="text-xs text-stone-400">Prywatne notatki i listy</p>
       </div>
 
       {sorted.length === 0 ? (

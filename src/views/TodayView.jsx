@@ -1,4 +1,4 @@
-import { Plus, Pin, AlertCircle, Utensils, Calendar, CheckSquare } from 'lucide-react';
+import { Pin, AlertCircle, Utensils, Calendar, CheckSquare } from 'lucide-react';
 import { COLORS } from '../utils/constants.js';
 import { todayStr, occursOnDate, getMonday, weekdayIdx, isTaskDoneForPeriod } from '../utils/dateUtils.js';
 import { Chip } from '../components/ui/Chip.jsx';
@@ -6,7 +6,7 @@ import { PersonRow } from '../components/ui/PersonRow.jsx';
 import { Section } from '../components/ui/Section.jsx';
 import { EmptyState } from '../components/ui/EmptyState.jsx';
 
-export function TodayView({ data, onOpenAddEvent, onOpenAddTask, onOpenEvent, onOpenTask, onToggleTask }) {
+export function TodayView({ data, onOpenEvent, onOpenTask, onToggleTask }) {
   const today = todayStr();
   const events = data.events
     .filter((ev) => occursOnDate(ev, today))
@@ -27,31 +27,13 @@ export function TodayView({ data, onOpenAddEvent, onOpenAddTask, onOpenEvent, on
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-xs uppercase tracking-wide text-stone-400 font-mono">
-            {new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </div>
-          <h2 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-2xl font-bold mt-0.5">
-            Dziś w domu
-          </h2>
+      <div>
+        <div className="text-xs uppercase tracking-wide text-stone-400 font-mono">
+          {new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}
         </div>
-        <div className="flex gap-1.5">
-          <button
-            onClick={() => onOpenAddEvent(today)}
-            style={{ background: COLORS.surface, borderColor: COLORS.border }}
-            className="px-3 py-1.5 border rounded-xl text-xs font-semibold flex items-center gap-1 shadow-xs hover:bg-stone-800"
-          >
-            <Plus size={14} /> Wydarzenie
-          </button>
-          <button
-            onClick={() => onOpenAddTask(today)}
-            style={{ background: COLORS.accent, color: '#121214' }}
-            className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs hover:opacity-90"
-          >
-            <Plus size={14} /> Zadanie
-          </button>
-        </div>
+        <h2 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-2xl font-bold mt-0.5">
+          Dziś w domu
+        </h2>
       </div>
 
       {pinnedWall.length > 0 && (
