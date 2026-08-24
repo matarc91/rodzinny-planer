@@ -313,12 +313,26 @@ export function BudgetView({
 
     if (filterType === 'all' || filterType === 'expense') {
       (currentMonthBudget.expenses || []).forEach((item) => {
+        if (filterType === 'expense' && item.goalId) return; // W filtrze 'Wydatki' pokazujemy zwykłe wydatki
         list.push({
           ...item,
           type: 'expense',
           displayDate: item.date,
           displayTitle: item.description || item.categoryName || 'Wydatek',
         });
+      });
+    }
+
+    if (filterType === 'goal') {
+      (currentMonthBudget.expenses || []).forEach((item) => {
+        if (item.goalId) {
+          list.push({
+            ...item,
+            type: 'expense',
+            displayDate: item.date,
+            displayTitle: item.description || item.goalName || 'Wpłata na cel',
+          });
+        }
       });
     }
 
@@ -736,7 +750,7 @@ export function BudgetView({
                     background: filterType === 'expense' ? COLORS.accent : 'transparent',
                     color: filterType === 'expense' ? '#121214' : COLORS.inkSoft,
                   }}
-                  className="px-3 py-1.5 rounded-lg transition shrink-0"
+                  className="px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
                 >
                   Wydatki
                 </button>
@@ -746,9 +760,19 @@ export function BudgetView({
                     background: filterType === 'fixedCost' ? COLORS.accent : 'transparent',
                     color: filterType === 'fixedCost' ? '#121214' : COLORS.inkSoft,
                   }}
-                  className="px-3 py-1.5 rounded-lg transition shrink-0"
+                  className="px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
                 >
                   Stałe koszty
+                </button>
+                <button
+                  onClick={() => setFilterType('goal')}
+                  style={{
+                    background: filterType === 'goal' ? COLORS.accent : 'transparent',
+                    color: filterType === 'goal' ? '#121214' : COLORS.inkSoft,
+                  }}
+                  className="px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
+                >
+                  Cele
                 </button>
                 <button
                   onClick={() => setFilterType('income')}
@@ -756,7 +780,7 @@ export function BudgetView({
                     background: filterType === 'income' ? COLORS.accent : 'transparent',
                     color: filterType === 'income' ? '#121214' : COLORS.inkSoft,
                   }}
-                  className="px-3 py-1.5 rounded-lg transition shrink-0"
+                  className="px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
                 >
                   Przychody
                 </button>

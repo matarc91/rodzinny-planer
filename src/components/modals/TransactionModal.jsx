@@ -19,11 +19,11 @@ export function TransactionModal({
   onSave,
   initialType = 'expense',
 }) {
-  const [type, setType] = useState(initialType); // 'expense' | 'fixedCost' | 'income'
+  const [type, setType] = useState(() => (initialGoalId ? 'goal' : initialType)); // 'expense' | 'fixedCost' | 'goal' | 'income'
   const [amount, setAmount] = useState('');
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
-  const [goalId, setGoalId] = useState(initialGoalId || '');
+  const [goalId, setGoalId] = useState(initialGoalId || goals[0]?.id || '');
   const [personId, setPersonId] = useState(currentPersonId || people[0]?.id || null);
 
   // Domyślna data: jeśli dziś należy do wybranego miesiąca -> dzisiaj, w przeciwnym razie 1. dzień wybranego miesiąca
@@ -42,16 +42,30 @@ export function TransactionModal({
 
     if (type === 'expense') {
       const selectedCategory = categories.find((c) => c.id === categoryId);
-      const selectedGoal = goals.find((g) => g.id === goalId);
       onSave('expense', {
         id: uid('exp'),
         amount: numAmount,
         date: date || `${monthKey}-01`,
         categoryId: categoryId || 'other',
         categoryName: selectedCategory ? selectedCategory.name : 'Inne',
-        goalId: goalId || null,
-        goalName: selectedGoal ? selectedGoal.name : null,
-        goalIcon: selectedGoal ? selectedGoal.icon : null,
+        goalId: null,
+        goalName: null,
+        goalIcon: null,
+        description: title.trim(),
+        personId: personId || null,
+        createdAt: new Date().toISOString(),
+      });
+    } else if (type === 'goal') {
+      const selectedGoal = goals.find((g) => g.id === goalId) || (goals.length > 0 ? goals[0] : null);
+      onSave('expense', {
+        id: uid('exp'),
+        amount: numAmount,
+        date: date || `${monthKey}-01`,
+        categoryId: 'goal',
+        categoryName: selectedGoal ? selectedGoal.name : 'Cel finansowy',
+        goalId: selectedGoal ? selectedGoal.id : goalId || 'goal-general',
+        goalName: selectedGoal ? selectedGoal.name : 'Cel finansowy',
+        goalIcon: selectedGoal ? selectedGoal.icon : '🎯',
         description: title.trim(),
         personId: personId || null,
         createdAt: new Date().toISOString(),
@@ -82,16 +96,17 @@ export function TransactionModal({
   const getTitle = () => {
     if (type === 'expense') return 'Dodaj wydatek';
     if (type === 'fixedCost') return 'Dodaj stały koszt';
+    if (type === 'goal') return 'Dodaj wydatek na cel';
     return 'Dodaj przychód';
   };
 
   return (
     <ModalShell title={getTitle()} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Przełącznik rodzaju operacji */}
+        {/* Przełącznik rodzaju operacji: Wydatek, Stały koszt, Cele, Przychód */}
         <div
           style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
-          className="grid grid-cols-3 p-1 rounded-xl border gap-1"
+          className="grid grid-cols-2 sm:grid-cols-4 p-1 rounded-xl border gap-1"
         >
           <button
             type="button"
@@ -100,11 +115,12 @@ export function TransactionModal({
               background: type === 'expense' ? COLORS.accent : 'transparent',
               color: type === 'expense' ? '#121214' : COLORS.inkSoft,
             }}
-            className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition"
+            className="flex items-center justify-center gap-1.5 py-2 px-1 rounded-lg text-xs font-bold transition cursor-pointer"
           >
-            <TrendingDown size={14} />
-            Wydatek
+            <TrendingDown size={14} className="shrink-0" />
+            <span className="truncate">Wydatek</span>
           </button>
+
           <button
             type="button"
             onClick={() => setType('fixedCost')}
@@ -112,11 +128,25 @@ export function TransactionModal({
               background: type === 'fixedCost' ? COLORS.accent : 'transparent',
               color: type === 'fixedCost' ? '#121214' : COLORS.inkSoft,
             }}
-            className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition"
+            className="flex items-center justify-center gap-1.5 py-2 px-1 rounded-lg text-xs font-bold transition cursor-pointer"
           >
-            <Landmark size={14} />
-            Stały koszt
+            <Landmark size={14} className="shrink-0" />
+            <span className="truncate">Stały koszt</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setType('goal')}
+            style={{
+              background: type === 'goal' ? COLORS.accent : 'transparent',
+              color: type === 'goal' ? '#121214' : COLORS.inkSoft,
+            }}
+            className="flex items-center justify-center gap-1.5 py-2 px-1 rounded-lg text-xs font-bold transition cursor-pointer"
+          >
+            <Target size={14} className="shrink-0" />
+            <span className="truncate">Cele</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setType('income')}
@@ -124,19 +154,23 @@ export function TransactionModal({
               background: type === 'income' ? COLORS.accent : 'transparent',
               color: type === 'income' ? '#121214' : COLORS.inkSoft,
             }}
-            className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition"
+            className="flex items-center justify-center gap-1.5 py-2 px-1 rounded-lg text-xs font-bold transition cursor-pointer"
           >
-            <TrendingUp size={14} />
-            Przychód
+            <TrendingUp size={14} className="shrink-0" />
+            <span className="truncate">Przychód</span>
           </button>
         </div>
 
-        {/* Wybór osoby / kto dodał */}
+        {/* Wybór osoby / kto dodaje */}
         {people && people.length > 0 && (
           <div>
             <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5 text-stone-400">
               <User size={13} className="text-amber-400" />
-              Kto ponosi / otrzymuje?
+              {type === 'goal'
+                ? 'Kto dodaje / odkłada?'
+                : type === 'income'
+                ? 'Kto otrzymuje?'
+                : 'Kto ponosi wydatek?'}
             </label>
             <div className="flex flex-wrap gap-1.5">
               <button
@@ -197,7 +231,7 @@ export function TransactionModal({
           </div>
         </div>
 
-        {/* Pola specyficzne dla Wydatku */}
+        {/* Pola specyficzne dla Wydatek */}
         {type === 'expense' && (
           <>
             <div>
@@ -223,44 +257,6 @@ export function TransactionModal({
               )}
             </div>
 
-            {/* Powiązanie z Celem Finansowym */}
-            {goals && goals.length > 0 && (
-              <div>
-                <label className="text-xs font-semibold mb-1 flex items-center justify-between text-stone-400">
-                  <span className="flex items-center gap-1.5">
-                    <Target size={13} className="text-amber-400" />
-                    Powiąż z celem finansowym (opcjonalnie)
-                  </span>
-                  {goalId && (
-                    <button
-                      type="button"
-                      onClick={() => setGoalId('')}
-                      className="text-[11px] text-stone-500 hover:text-stone-300"
-                    >
-                      Wyczyść
-                    </button>
-                  )}
-                </label>
-                <select
-                  value={goalId}
-                  onChange={(e) => setGoalId(e.target.value)}
-                  style={{ borderColor: COLORS.border }}
-                  className={`${inputStyle} cursor-pointer`}
-                >
-                  <option value="" className="bg-stone-900 text-stone-400">
-                    -- Standardowy wydatek (bez przypisania do celu) --
-                  </option>
-                  {goals.map((g) => (
-                    <option key={g.id} value={g.id} className="bg-stone-900 text-stone-100">
-                      {g.icon ? `${g.icon} ` : '🎯 '}
-                      {g.name} {g.targetAmount ? `(Cel: ${g.targetAmount} zł)` : '(Cel: ∞ otwarty)'}
-                      {g.isCompleted ? ' [Zakończony]' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             <div>
               <label className="text-xs font-semibold mb-1 block text-stone-400">Data wydatku</label>
               <input
@@ -277,6 +273,62 @@ export function TransactionModal({
               <input
                 type="text"
                 placeholder="np. Zakupy spożywcze, weterynarz..."
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                style={{ borderColor: COLORS.border }}
+                className={inputStyle}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Pola specyficzne dla sekcji Cele */}
+        {type === 'goal' && (
+          <>
+            <div>
+              <label className="text-xs font-semibold mb-1 flex items-center justify-between text-stone-400">
+                <span className="flex items-center gap-1.5">
+                  <Target size={13} className="text-amber-400" />
+                  Wybierz cel finansowy <span className="text-amber-500">*</span>
+                </span>
+              </label>
+              {goals && goals.length > 0 ? (
+                <select
+                  value={goalId}
+                  onChange={(e) => setGoalId(e.target.value)}
+                  required
+                  style={{ borderColor: COLORS.border }}
+                  className={`${inputStyle} cursor-pointer`}
+                >
+                  {goals.map((g) => (
+                    <option key={g.id} value={g.id} className="bg-stone-900 text-stone-100">
+                      {g.icon ? `${g.icon} ` : '🎯 '}
+                      {g.name} {g.targetAmount ? `(Cel: ${g.targetAmount} zł)` : '(Cel: ∞ otwarty)'}
+                      {g.isCompleted ? ' [Zakończony]' : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-xs text-rose-400 italic">Brak zdefiniowanych celów finansowych. Dodaj najpierw cel w panelu budżetu.</p>
+              )}
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold mb-1 block text-stone-400">Data wydatku / odłożenia</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                style={{ borderColor: COLORS.border }}
+                className={inputStyle}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold mb-1 block text-stone-400">Opis (opcjonalny)</label>
+              <input
+                type="text"
+                placeholder="np. Wpłata na konto oszczędnościowe, zaliczka na hotel..."
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 style={{ borderColor: COLORS.border }}
@@ -312,6 +364,7 @@ export function TransactionModal({
         >
           {type === 'expense' && 'Zapisz wydatek'}
           {type === 'fixedCost' && 'Dodaj koszt stały'}
+          {type === 'goal' && 'Zapisz wydatek na cel'}
           {type === 'income' && 'Dodaj przychód'}
         </button>
       </form>
