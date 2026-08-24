@@ -3,7 +3,7 @@ import { COLORS, uid } from '../../utils/constants.js';
 import { todayStr } from '../../utils/dateUtils.js';
 import { ModalShell } from '../ui/ModalShell.jsx';
 import { Chip } from '../ui/Chip.jsx';
-import { TrendingDown, TrendingUp, Landmark, User } from 'lucide-react';
+import { TrendingDown, TrendingUp, Landmark, User, Target } from 'lucide-react';
 
 const inputStyle =
   'w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 transition bg-stone-900 text-stone-100 placeholder-stone-500';
@@ -11,8 +11,10 @@ const inputStyle =
 export function TransactionModal({
   monthKey,
   categories = [],
+  goals = [],
   people = [],
   currentPersonId = null,
+  initialGoalId = null,
   onClose,
   onSave,
   initialType = 'expense',
@@ -21,6 +23,7 @@ export function TransactionModal({
   const [amount, setAmount] = useState('');
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
+  const [goalId, setGoalId] = useState(initialGoalId || '');
   const [personId, setPersonId] = useState(currentPersonId || people[0]?.id || null);
 
   // Domyślna data: jeśli dziś należy do wybranego miesiąca -> dzisiaj, w przeciwnym razie 1. dzień wybranego miesiąca
@@ -39,12 +42,16 @@ export function TransactionModal({
 
     if (type === 'expense') {
       const selectedCategory = categories.find((c) => c.id === categoryId);
+      const selectedGoal = goals.find((g) => g.id === goalId);
       onSave('expense', {
         id: uid('exp'),
         amount: numAmount,
         date: date || `${monthKey}-01`,
         categoryId: categoryId || 'other',
         categoryName: selectedCategory ? selectedCategory.name : 'Inne',
+        goalId: goalId || null,
+        goalName: selectedGoal ? selectedGoal.name : null,
+        goalIcon: selectedGoal ? selectedGoal.icon : null,
         description: title.trim(),
         personId: personId || null,
         createdAt: new Date().toISOString(),
@@ -215,6 +222,44 @@ export function TransactionModal({
                 <p className="text-xs text-stone-400 italic">Brak zdefiniowanych kategorii w tym miesiącu.</p>
               )}
             </div>
+
+            {/* Powiązanie z Celem Finansowym */}
+            {goals && goals.length > 0 && (
+              <div>
+                <label className="text-xs font-semibold mb-1 flex items-center justify-between text-stone-400">
+                  <span className="flex items-center gap-1.5">
+                    <Target size={13} className="text-amber-400" />
+                    Powiąż z celem finansowym (opcjonalnie)
+                  </span>
+                  {goalId && (
+                    <button
+                      type="button"
+                      onClick={() => setGoalId('')}
+                      className="text-[11px] text-stone-500 hover:text-stone-300"
+                    >
+                      Wyczyść
+                    </button>
+                  )}
+                </label>
+                <select
+                  value={goalId}
+                  onChange={(e) => setGoalId(e.target.value)}
+                  style={{ borderColor: COLORS.border }}
+                  className={`${inputStyle} cursor-pointer`}
+                >
+                  <option value="" className="bg-stone-900 text-stone-400">
+                    -- Standardowy wydatek (bez przypisania do celu) --
+                  </option>
+                  {goals.map((g) => (
+                    <option key={g.id} value={g.id} className="bg-stone-900 text-stone-100">
+                      {g.icon ? `${g.icon} ` : '🎯 '}
+                      {g.name} {g.targetAmount ? `(Cel: ${g.targetAmount} zł)` : '(Cel: ∞ otwarty)'}
+                      {g.isCompleted ? ' [Zakończony]' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="text-xs font-semibold mb-1 block text-stone-400">Data wydatku</label>

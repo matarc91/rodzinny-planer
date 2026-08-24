@@ -11,7 +11,7 @@ import {
   Sparkles,
   RefreshCw,
 } from 'lucide-react';
-import { COLORS, FONT_IMPORT, emptyData, createDefaultMonthBudget } from './utils/constants.js';
+import { COLORS, FONT_IMPORT, emptyData, createDefaultMonthBudget, createDefaultBudgetGoals } from './utils/constants.js';
 import {
   todayStr,
   toDateStr,
@@ -1350,6 +1350,7 @@ export default function App() {
             data?.budget?.[selectedBudgetMonth]?.categories ||
             createDefaultMonthBudget().categories
           }
+          goals={data?.budgetGoals || createDefaultBudgetGoals()}
           people={data.people}
           currentPersonId={currentUserId}
           onClose={closeModal}

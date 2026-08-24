@@ -12,11 +12,14 @@ import {
   Calendar,
   Sparkles,
   SlidersHorizontal,
+  Target,
+  Plus,
 } from 'lucide-react';
 import { format, addMonths, parseISO } from 'date-fns';
-import { COLORS, MONTHS, createDefaultMonthBudget } from '../utils/constants.js';
+import { COLORS, MONTHS, createDefaultMonthBudget, createDefaultBudgetGoals } from '../utils/constants.js';
 import { TransactionModal } from '../components/modals/TransactionModal.jsx';
 import { ManageCategoriesModal } from '../components/modals/ManageCategoriesModal.jsx';
+import { ManageGoalsModal } from '../components/modals/ManageGoalsModal.jsx';
 import { Chip } from '../components/ui/Chip.jsx';
 
 export function BudgetView({
@@ -35,12 +38,14 @@ export function BudgetView({
     onMonthChange?.(newKey);
   };
 
-  const [activeModal, setActiveModal] = useState(null); // 'add-transaction' | 'manage-categories' | null
+  const [activeModal, setActiveModal] = useState(null); // 'add-transaction' | 'manage-categories' | 'manage-goals' | null
+  const [selectedGoalForTx, setSelectedGoalForTx] = useState(null);
   const [filterType, setFilterType] = useState('all'); // 'all' | 'expense' | 'fixedCost' | 'income'
 
   // Dane bieżącego miesiąca
-  const budgetState = data?.budget || {};
+  const budgetState = useMemo(() => data?.budget || {}, [data?.budget]);
   const currentMonthBudget = budgetState[monthKey];
+  const budgetGoals = useMemo(() => data?.budgetGoals || createDefaultBudgetGoals(), [data?.budgetGoals]);
   const people = data?.people || [];
 
   // Parsowanie etykiety miesiąca do wyświetlenia
@@ -155,6 +160,43 @@ export function BudgetView({
     };
   }, [currentMonthBudget]);
 
+  // Wyliczenia dla Celów Finansowych (globalnie po wszystkich miesiącach)
+  const { goalsProgress, goalsProgressMap } = useMemo(() => {
+    const map = {};
+    Object.values(budgetState).forEach((m) => {
+      if (!m || !Array.isArray(m.expenses)) return;
+      m.expenses.forEach((exp) => {
+        if (exp.goalId) {
+          map[exp.goalId] = (map[exp.goalId] || 0) + (Number(exp.amount) || 0);
+        }
+      });
+    });
+
+    const list = (budgetGoals || []).map((g) => {
+      const spent = map[g.id] || 0;
+      const hasTarget = g.targetAmount !== null && g.targetAmount !== undefined && Number(g.targetAmount) > 0;
+      const target = hasTarget ? Number(g.targetAmount) : 0;
+      const percent = hasTarget ? Math.min(100, Math.round((spent / target) * 100)) : 100;
+      const rawPercent = hasTarget ? Math.round((spent / target) * 100) : null;
+      const isReached = hasTarget && spent >= target;
+
+      return {
+        ...g,
+        spent,
+        target,
+        hasTarget,
+        percent,
+        rawPercent,
+        isReached,
+      };
+    });
+
+    return {
+      goalsProgress: list,
+      goalsProgressMap: map,
+    };
+  }, [budgetState, budgetGoals]);
+
   // Zapis nowej transakcji
   const handleSaveTransaction = (type, item) => {
     if (!currentMonthBudget) return;
@@ -174,6 +216,14 @@ export function BudgetView({
         ...budgetState,
         [monthKey]: updatedMonth,
       },
+    });
+  };
+
+  // Zapisanie zmodyfikowanych celów finansowych
+  const handleSaveGoals = (updatedGoals) => {
+    onUpdateData({
+      ...data,
+      budgetGoals: updatedGoals,
     });
   };
 
@@ -423,7 +473,7 @@ export function BudgetView({
             </div>
           </div>
 
-          {/* 4. SEKCJA: KATEGORIE I LIMITY (POPRAWIONY LAYOUT I EDYCJA) */}
+          {/* 4. SEKCJA: KATEGORIE WYDATKÓW */}
           <div
             style={{ background: COLORS.surface, borderColor: COLORS.border }}
             className="rounded-2xl p-5 border space-y-4 shadow-sm"
@@ -431,9 +481,9 @@ export function BudgetView({
             <div className="flex flex-wrap items-center justify-between gap-2.5">
               <div>
                 <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-base font-bold">
-                  Limity kategorii
+                  Kategorie wydatków
                 </h3>
-                <p className="text-xs text-stone-400">Kontrola wydatków w bieżącym miesiącu</p>
+                <p className="text-xs text-stone-400">Kontrola wydatków i limitów w bieżącym miesiącu</p>
               </div>
 
               <button
@@ -510,6 +560,145 @@ export function BudgetView({
                     className="text-xs font-bold hover:underline"
                   >
                     + Dodaj pierwszą kategorię
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 4B. SEKCJA: CELE FINANSOWE (GLOBALNE) */}
+          <div
+            style={{ background: COLORS.surface, borderColor: COLORS.border }}
+            className="rounded-2xl p-5 border space-y-4 shadow-sm"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
+              <div>
+                <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-base font-bold flex items-center gap-2">
+                  <span>Cele finansowe</span>
+                </h3>
+                <p className="text-xs text-stone-400">Globalne plany i oszczędności rodziny (sumowane bez resetu)</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setActiveModal('manage-goals')}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-stone-300 bg-stone-800 hover:bg-stone-700 transition border border-stone-700 cursor-pointer"
+                title="Modyfikuj, dodawaj lub zamykaj cele"
+              >
+                <Target size={14} className="text-amber-400" />
+                <span>Cele</span>
+              </button>
+            </div>
+
+            <div className="space-y-3 pt-1">
+              {goalsProgress.map((goal) => {
+                const hasTarget = goal.hasTarget;
+                const isReached = goal.isReached;
+                const isCompleted = goal.isCompleted;
+
+                return (
+                  <div
+                    key={goal.id}
+                    style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
+                    className={`p-3.5 rounded-xl border space-y-2.5 transition ${
+                      isCompleted ? 'opacity-70 border-emerald-500/30' : ''
+                    }`}
+                  >
+                    {/* Górna linijka: Nazwa i wartości */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xl shrink-0">{goal.icon || '🎯'}</span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`text-sm font-semibold truncate ${isCompleted ? 'line-through text-stone-400' : 'text-stone-100'}`}>
+                              {goal.name}
+                            </span>
+                            {isCompleted ? (
+                              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-semibold border border-emerald-500/30 flex items-center gap-0.5">
+                                <CheckCircle2 size={10} /> Zrealizowany
+                              </span>
+                            ) : isReached ? (
+                              <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-semibold border border-amber-500/30">
+                                Cel osiągnięty!
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="text-xs font-mono">
+                          <span className="text-stone-100 font-bold">{formatPLN(goal.spent)}</span>
+                          <span className="text-stone-500 mx-1">/</span>
+                          {hasTarget ? (
+                            <span className="text-stone-400">{formatPLN(goal.target)}</span>
+                          ) : (
+                            <span className="text-amber-400 font-bold text-sm">∞</span>
+                          )}
+                        </div>
+
+                        {hasTarget ? (
+                          <span className="text-[11px] text-stone-400 font-mono shrink-0">
+                            {goal.rawPercent}%
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 font-bold font-mono">
+                            ∞ otwarty
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Pasek postępu */}
+                    {hasTarget ? (
+                      <div className="w-full bg-stone-900 rounded-full h-2.5 overflow-hidden border border-stone-800">
+                        <div
+                          style={{
+                            width: `${Math.max(2, Math.min(100, goal.percent))}%`,
+                            backgroundColor: isReached ? COLORS.success : COLORS.accent,
+                          }}
+                          className="h-full rounded-full transition-all duration-500"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-full bg-stone-900 rounded-full h-2.5 overflow-hidden border border-amber-500/20 relative flex items-center">
+                        <div className="h-full rounded-full w-full bg-gradient-to-r from-amber-500/30 via-amber-400/80 to-amber-500/30 animate-pulse transition-all duration-500" />
+                        <span className="absolute right-2 text-[9px] font-bold text-amber-300 pointer-events-none drop-shadow">
+                          ∞
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Szybka akcja: dodaj wydatek/odłożenie na ten cel */}
+                    {!isCompleted && (
+                      <div className="flex justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedGoalForTx(goal.id);
+                            setActiveModal('add-transaction');
+                          }}
+                          className="text-[11px] font-semibold text-amber-400/90 hover:text-amber-300 flex items-center gap-1 hover:underline cursor-pointer"
+                        >
+                          <Plus size={12} />
+                          Dodaj wydatek na ten cel
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {goalsProgress.length === 0 && (
+                <div className="text-center py-5 border border-dashed border-stone-800 rounded-xl bg-stone-900/30 space-y-2">
+                  <p className="text-xs text-stone-400">Brak zdefiniowanych celów finansowych.</p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveModal('manage-goals')}
+                    style={{ color: COLORS.accent }}
+                    className="text-xs font-bold hover:underline"
+                  >
+                    + Dodaj pierwszy cel finansowy
                   </button>
                 </div>
               )}
@@ -606,6 +795,16 @@ export function BudgetView({
                         <div className="text-sm font-bold text-stone-100 truncate">{tx.displayTitle}</div>
                         <div className="text-xs text-stone-400 flex flex-wrap items-center gap-2 mt-0.5">
                           <span className="text-stone-300 font-medium">{tx.categoryName || 'Brak kategorii'}</span>
+                          {/* Oznaczenie celu finansowego */}
+                          {tx.goalName && (
+                            <>
+                              <span className="text-stone-600">•</span>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[11px] font-medium">
+                                <span>{tx.goalIcon || '🎯'}</span>
+                                <span>{tx.goalName}</span>
+                              </span>
+                            </>
+                          )}
                           {tx.date && (
                             <>
                               <span className="text-stone-600">•</span>
@@ -672,9 +871,14 @@ export function BudgetView({
         <TransactionModal
           monthKey={monthKey}
           categories={currentMonthBudget?.categories || []}
+          goals={budgetGoals}
           people={people}
           currentPersonId={currentPersonId}
-          onClose={() => setActiveModal(null)}
+          initialGoalId={selectedGoalForTx}
+          onClose={() => {
+            setActiveModal(null);
+            setSelectedGoalForTx(null);
+          }}
           onSave={handleSaveTransaction}
         />
       )}
@@ -685,6 +889,16 @@ export function BudgetView({
           categories={currentMonthBudget?.categories || []}
           onClose={() => setActiveModal(null)}
           onSave={handleSaveCategories}
+        />
+      )}
+
+      {/* MODAL ZARZĄDZANIA CELAMI FINANSOWYMI */}
+      {activeModal === 'manage-goals' && (
+        <ManageGoalsModal
+          goals={budgetGoals}
+          goalsProgressMap={goalsProgressMap}
+          onClose={() => setActiveModal(null)}
+          onSave={handleSaveGoals}
         />
       )}
     </div>

@@ -7,3 +7,4 @@ export { EventDetailModal } from './EventDetailModal.jsx';
 export { TaskDetailModal } from './TaskDetailModal.jsx';
 export { TransactionModal } from './TransactionModal.jsx';
 export { ManageCategoriesModal } from './ManageCategoriesModal.jsx';
+export { ManageGoalsModal } from './ManageGoalsModal.jsx';

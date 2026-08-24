@@ -1,6 +1,6 @@
 export const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');`;
 
-export const APP_VERSION = 'v3.0.0';
+export const APP_VERSION = 'v3.1.0';
 
 export const COLORS = {
   bg: '#121214',
@@ -92,6 +92,27 @@ export function createDefaultMonthBudget() {
   };
 }
 
+export function createDefaultBudgetGoals() {
+  return [
+    {
+      id: 'goal_1',
+      name: 'Oszczędności',
+      targetAmount: null, // cel bez limitu (nieskończoność)
+      icon: '💰',
+      isCompleted: false,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'goal_2',
+      name: 'Wakacje',
+      targetAmount: 6000,
+      icon: '🏖️',
+      isCompleted: false,
+      createdAt: new Date().toISOString(),
+    },
+  ];
+}
+
 export function emptyData() {
   const currentMonthKey = new Date().toISOString().slice(0, 7); // np. '2026-08'
   return {
@@ -108,6 +129,7 @@ export function emptyData() {
     budget: {
       [currentMonthKey]: createDefaultMonthBudget(),
     },
+    budgetGoals: createDefaultBudgetGoals(),
     settings: { enableMeals: true, enableWall: true, enableBudget: true },
   };
 }
