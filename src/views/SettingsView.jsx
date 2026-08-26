@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   LogOut,
   Wifi,
@@ -20,12 +20,15 @@ import {
   HelpCircle,
   Code,
   Terminal,
+  RefreshCw,
   UserX,
 } from 'lucide-react';
 import { Chip } from '../components/ui/Chip.jsx';
 import { AppLogsSection } from './AppLogsSection.jsx';
 import { addLog } from '../utils/logger.js';
 import {
+  getNotificationPermission,
+  requestNotificationPermission,
   checkPushSubscription,
   subscribeToPushNotifications,
   sendSystemNotification,
@@ -57,39 +60,115 @@ export function SettingsView({
   const [notifLoading, setNotifLoading] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [showSqlGuide, setShowSqlGuide] = useState(false);
-  const [notifPermission, setNotifPermission] = useState(() =>
-    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported'
-  );
+  const [notifPermission, setNotifPermission] = useState('default');
+
+  const refreshNotificationStatus = useCallback(async () => {
+    try {
+      const perm = await getNotificationPermission();
+      setNotifPermission(perm);
+
+      const res = await checkPushSubscription();
+      setPushSubscribed(res.subscribed);
+      return { perm, subscribed: res.subscribed };
+    } catch (err) {
+      addLog('warn', `Błąd odświeżania statusu powiadomień: ${err?.message || err}`);
+      return { perm: 'unsupported', subscribed: false };
+    }
+  }, []);
 
   const toggleSection = (sectionId) => {
-    setExpandedSection((prev) => (prev === sectionId ? null : sectionId));
+    setExpandedSection((prev) => {
+      const next = prev === sectionId ? null : sectionId;
+      if (next === 'notifications') {
+        refreshNotificationStatus();
+      }
+      return next;
+    });
   };
 
   useEffect(() => {
     let isMounted = true;
-    async function loadStatus() {
-      if (typeof window !== 'undefined' && 'Notification' in window && isMounted) {
-        setNotifPermission(Notification.permission);
-      }
-      const res = await checkPushSubscription();
+    let permStatusObj = null;
+
+    async function initialLoad() {
+      const { perm, subscribed } = await refreshNotificationStatus();
       if (isMounted) {
-        setPushSubscribed(res.subscribed);
+        setNotifPermission(perm);
+        setPushSubscribed(subscribed);
       }
     }
-    loadStatus();
+    initialLoad();
+
+    // Automatyczne nasłuchiwanie zmian uprawnień w systemie Android i przeglądarce
+    if (typeof navigator !== 'undefined' && navigator.permissions?.query) {
+      navigator.permissions
+        .query({ name: 'notifications' })
+        .then((status) => {
+          if (!isMounted) return;
+          permStatusObj = status;
+          status.onchange = () => {
+            if (!isMounted) return;
+            const updatedPerm = status.state === 'prompt' ? 'default' : status.state;
+            setNotifPermission(updatedPerm);
+            addLog('info', `Wykryto zmianę uprawnień powiadomień: ${updatedPerm}`);
+            refreshNotificationStatus();
+          };
+        })
+        .catch(() => {});
+    }
 
     const handleVisibilityOrFocus = () => {
-      loadStatus();
+      if (isMounted) {
+        refreshNotificationStatus();
+      }
     };
 
     window.addEventListener('focus', handleVisibilityOrFocus);
     document.addEventListener('visibilitychange', handleVisibilityOrFocus);
     return () => {
       isMounted = false;
+      if (permStatusObj) {
+        permStatusObj.onchange = null;
+      }
       window.removeEventListener('focus', handleVisibilityOrFocus);
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
     };
-  }, []);
+  }, [refreshNotificationStatus]);
+
+  // Bezpośrednie wywołanie okna zapytania o uprawnienia systemowe
+  const handleRequestPermissionsOnly = async () => {
+    setNotifErrorDetails(null);
+    setNotifLoading(true);
+    addLog('info', 'Użytkownik kliknął prośbę o nadanie uprawnień systemowych...');
+
+    try {
+      const result = await requestNotificationPermission();
+      setNotifPermission(result);
+      if (result === 'granted') {
+        showToast('Zgoda na powiadomienia została udzielona!');
+        addLog('success', 'Uprawnienia do powiadomień przyznane.');
+        // Automatycznie kontynuuj rejestrację w Web Push
+        try {
+          const sub = await subscribeToPushNotifications(supabase, profile, family?.id);
+          setPushSubscribed(Boolean(sub));
+          showToast('Powiadomienia w tle zostały aktywowane!');
+        } catch (subErr) {
+          addLog('warn', `Błąd automatycznej subskrypcji po nadaniu uprawnień: ${subErr.message}`);
+        }
+      } else if (result === 'denied') {
+        setNotifErrorDetails('Powiadomienia zostały zablokowane w ustawieniach witryny lub przeglądarki. Aby je włączyć, przejdź do ustawień witryny i zezwól na powiadomienia.');
+        showToast('Uprawnienia zostały zablokowane.');
+      } else {
+        showToast('Nie udzielono zgody.');
+      }
+    } catch (err) {
+      setNotifErrorDetails(err?.message || 'Błąd podczas żądania uprawnień.');
+      showToast('Wystąpił błąd.');
+    } finally {
+      setNotifLoading(false);
+      refreshNotificationStatus();
+    }
+  };
 
   const handleEnableNotifications = async () => {
     setNotifErrorDetails(null);
@@ -98,9 +177,8 @@ export function SettingsView({
 
     try {
       const sub = await subscribeToPushNotifications(supabase, profile, family?.id);
-      setNotifPermission(
-        typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'granted'
-      );
+      const currentPerm = await getNotificationPermission();
+      setNotifPermission(currentPerm);
       setPushSubscribed(Boolean(sub));
       showToast('Powiadomienia Web Push w tle zostały aktywowane!');
       addLog('success', 'Pomyślnie włączono i zsynchronizowano Web Push.');
@@ -111,21 +189,28 @@ export function SettingsView({
       showToast('Nie udało się włączyć powiadomień.');
     } finally {
       setNotifLoading(false);
+      refreshNotificationStatus();
     }
   };
 
   const handleSendTestNotification = async () => {
     try {
-      addLog('info', 'Wysyłanie testowego powiadomienia przez chmurę...');
+      addLog('info', 'Wysyłanie testowego powiadomienia...');
       showToast('Wysyłanie powiadomienia testowego...');
 
-      await sendSystemNotification('Rodzinny Planer', 'Test powiadomień systemowych!');
+      const shown = await sendSystemNotification('Rodzinny Planer 🔔', {
+        body: 'Test powiadomień systemowych działa perfekcyjnie!',
+      });
+
+      if (!shown) {
+        addLog('warn', 'Powiadomienie lokalne nie mogło zostać wyświetlone, próba przez chmurę...');
+      }
 
       if (supabase && family?.id) {
         const { data, error } = await supabase.functions.invoke('send-push', {
           body: {
             family_id: family.id,
-            title: 'Test z Chmury (Web Push)',
+            title: 'Test z Chmury (Web Push) 🔔',
             body: 'Powiadomienia w tle z Supabase działają prawidłowo!',
           },
         });
@@ -146,13 +231,14 @@ export function SettingsView({
     if (!confirm('Czy na pewno chcesz wyłączyć powiadomienia Push na tym urządzeniu?')) return;
     setNotifLoading(true);
     try {
-      await unsubscribeFromPushNotifications(supabase, profile);
+      await unsubscribeFromPushNotifications(supabase);
       setPushSubscribed(false);
       showToast('Wyłączono powiadomienia Push na tym urządzeniu.');
     } catch (e) {
       showToast('Błąd wyłączania powiadomień: ' + e.message);
     } finally {
       setNotifLoading(false);
+      refreshNotificationStatus();
     }
   };
 
@@ -506,57 +592,114 @@ export function SettingsView({
           <div className="p-4 pt-3 border-t border-[#33333C] space-y-4 bg-stone-900/40">
             <div className="flex items-center justify-between">
               <span className="text-xs text-stone-400 font-medium">Status urządzenia</span>
-              <button
-                type="button"
-                onClick={() => setShowSqlGuide(!showSqlGuide)}
-                className="text-[11px] text-amber-400 hover:underline flex items-center gap-1"
-              >
-                <HelpCircle size={13} /> Instrukcja chmury
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={refreshNotificationStatus}
+                  className="text-[11px] text-stone-400 hover:text-stone-200 flex items-center gap-1 transition"
+                  title="Odśwież status uprawnień"
+                >
+                  <RefreshCw size={12} className={notifLoading ? 'animate-spin' : ''} /> Odśwież status
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSqlGuide(!showSqlGuide)}
+                  className="text-[11px] text-amber-400 hover:underline flex items-center gap-1"
+                >
+                  <HelpCircle size={13} /> Instrukcja chmury
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div className="bg-stone-900/90 p-3 rounded-xl border border-stone-800 space-y-1">
-                <div className="text-stone-400 font-medium">Uprawnienia systemowe</div>
+              <div className="bg-stone-900/90 p-3 rounded-xl border border-stone-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-stone-400 font-medium">Uprawnienia systemowe</div>
+                  <button
+                    type="button"
+                    onClick={refreshNotificationStatus}
+                    className="text-stone-500 hover:text-stone-300 p-0.5 rounded"
+                    title="Sprawdź ponownie uprawnienia"
+                  >
+                    <RefreshCw size={12} />
+                  </button>
+                </div>
                 <div className="font-semibold flex items-center gap-1.5">
                   {notifPermission === 'granted' && (
                     <>
-                      <CheckCircle size={14} className="text-emerald-400" />{' '}
-                      <span className="text-emerald-400">Zezwolono</span>
+                      <CheckCircle size={15} className="text-emerald-400 shrink-0" />{' '}
+                      <span className="text-emerald-400">Zezwolono (Aktywne)</span>
                     </>
                   )}
                   {notifPermission === 'denied' && (
                     <>
-                      <X size={14} className="text-red-400" /> <span className="text-red-400">Zablokowane</span>
+                      <X size={15} className="text-red-400 shrink-0" /> <span className="text-red-400">Zablokowane</span>
                     </>
                   )}
                   {notifPermission === 'default' && (
                     <>
-                      <AlertCircle size={14} className="text-amber-400" />{' '}
-                      <span className="text-amber-400">Wymaga zgody</span>
+                      <AlertCircle size={15} className="text-amber-400 shrink-0" />{' '}
+                      <span className="text-amber-400">Wymaga zgody w aplikacji</span>
                     </>
                   )}
-                  {notifPermission === 'unsupported' && <span className="text-stone-500">Brak wsparcia</span>}
+                  {notifPermission === 'unsupported' && <span className="text-stone-500">Brak wsparcia w przeglądarce</span>}
                 </div>
+                {notifPermission === 'default' && (
+                  <button
+                    type="button"
+                    onClick={handleRequestPermissionsOnly}
+                    disabled={notifLoading}
+                    className="w-full mt-1.5 py-1.5 px-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5 active:scale-95"
+                  >
+                    <Bell size={12} /> Nadaj uprawnienia teraz
+                  </button>
+                )}
               </div>
 
-              <div className="bg-stone-900/90 p-3 rounded-xl border border-stone-800 space-y-1">
+              <div className="bg-stone-900/90 p-3 rounded-xl border border-stone-800 space-y-2">
                 <div className="text-stone-400 font-medium">Subskrypcja Push (w tle)</div>
                 <div className="font-semibold flex items-center gap-1.5">
                   {pushSubscribed ? (
                     <>
-                      <CheckCircle size={14} className="text-emerald-400" />{' '}
+                      <CheckCircle size={15} className="text-emerald-400 shrink-0" />{' '}
                       <span className="text-emerald-400">Aktywna w chmurze</span>
                     </>
                   ) : (
                     <>
-                      <AlertCircle size={14} className="text-amber-400" />{' '}
+                      <AlertCircle size={15} className="text-amber-400 shrink-0" />{' '}
                       <span className="text-amber-400">Niepołączona</span>
                     </>
                   )}
                 </div>
+                {notifPermission === 'granted' && !pushSubscribed && (
+                  <div className="text-[11px] text-amber-400/90 flex items-center gap-1">
+                    <span>Kliknij poniższy przycisk, aby połączyć urządzenie z chmurą.</span>
+                  </div>
+                )}
               </div>
             </div>
+
+            {notifPermission === 'default' && (
+              <div className="bg-amber-950/40 border border-amber-800/60 p-3 rounded-xl text-xs text-amber-200 space-y-1.5">
+                <div className="font-bold flex items-center gap-1.5 text-amber-300">
+                  <Smartphone size={14} /> Dlaczego wyświetla się &quot;Wymaga zgody&quot; na Androidzie?
+                </div>
+                <p className="leading-relaxed text-[11px] text-amber-200/90">
+                  Nawet jeśli masz włączone powiadomienia w Ustawieniach Androida, system bezpieczeństwa przeglądarki wymaga jednorazowego potwierdzenia zgody w oknie dialogowym. Kliknij <strong className="text-white">„Zezwól na powiadomienia i włącz Web Push”</strong> poniżej.
+                </p>
+              </div>
+            )}
+
+            {notifPermission === 'denied' && (
+              <div className="bg-red-950/40 border border-red-800/60 p-3 rounded-xl text-xs text-red-200 space-y-1.5">
+                <div className="font-bold flex items-center gap-1.5 text-red-300">
+                  <X size={14} /> Powiadomienia są zablokowane
+                </div>
+                <p className="leading-relaxed text-[11px] text-red-200/90">
+                  W przeglądarce lub systemie cofnięto zgodę na powiadomienia dla tej strony. Wejdź w Ustawienia telefonu &rarr; Aplikacje &rarr; Przeglądarka / Rodzinny Planer &rarr; Uprawnienia &rarr; Powiadomienia &rarr; Zezwól, a następnie kliknij przycisk „Odśwież status”.
+                </p>
+              </div>
+            )}
 
             <div className="flex flex-wrap gap-2 pt-1">
               <button
@@ -568,14 +711,17 @@ export function SettingsView({
                 <Smartphone size={14} />{' '}
                 {notifLoading
                   ? 'Aktywowanie...'
+                  : notifPermission === 'default'
+                  ? 'Zezwól na powiadomienia i włącz Web Push'
                   : pushSubscribed
-                  ? 'Odśwież Web Push'
+                  ? 'Odśwież połączenie z chmurą'
                   : 'Włącz Web Push w tle'}
               </button>
 
               <button
                 type="button"
                 onClick={handleSendTestNotification}
+                disabled={notifLoading}
                 className="py-2.5 px-3.5 bg-stone-800 text-stone-200 border border-stone-700 rounded-xl text-xs font-bold hover:bg-stone-700 transition flex items-center justify-center gap-1.5 active:scale-95"
               >
                 <Bell size={14} /> Test

@@ -1,10 +1,10 @@
 import { addLog } from './logger.js';
 
 // Domyślny publiczny klucz VAPID (używany do autoryzacji subskrypcji Web Push w przeglądarce)
-// Można go nadpisać zmienną środowiskową VITE_VAPID_PUBLIC_KEY
+// P-256 (NIST prime256v1) format uncompressed EC point
 export const DEFAULT_VAPID_PUBLIC_KEY = 
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_VAPID_PUBLIC_KEY) ||
-  'BCN_k2UoZ89z3j4Q8i5m4L7eW2qY1vX8Z3j4Q8i5m4L7eW2qY1vX8Z3j4Q8i5m4L7eW2qY1vX8Z3j4Q8i5m4L8=';
+  'BO8-dI3zfjiVL76KjpiwgQYNLvDKGqrPyrWUV4RotrVqMPZsHBaegbv-9vxlKHalZmPTYTl2yd17kxPJdauIjI8';
 
 /**
  * Konwertuje klucz publiczny base64url do Uint8Array dla PushManager.subscribe
@@ -25,8 +25,77 @@ export function urlBase64ToUint8Array(base64String) {
     return outputArray;
   } catch (e) {
     addLog('error', `Błąd parsowania klucza VAPID: ${e.message}`);
-    // Fallback: pusty Uint8Array
     return new Uint8Array(65);
+  }
+}
+
+/**
+ * Zwraca aktualny stan uprawnień do powiadomień w przeglądarce i systemie operacyjnym
+ */
+export async function getNotificationPermission() {
+  if (typeof window === 'undefined') return 'unsupported';
+
+  // 1. Sprawdzenie Notification.permission (standard Web API)
+  if (typeof Notification !== 'undefined' && 'permission' in Notification) {
+    if (Notification.permission === 'granted' || Notification.permission === 'denied') {
+      return Notification.permission;
+    }
+  }
+
+  // 2. Sprawdzenie Permissions API (nowoczesne przeglądarki i Android Chrome/WebView)
+  if (typeof navigator !== 'undefined' && navigator.permissions?.query) {
+    try {
+      const status = await navigator.permissions.query({ name: 'notifications' });
+      if (status.state === 'granted') return 'granted';
+      if (status.state === 'denied') return 'denied';
+      if (status.state === 'prompt') return 'default';
+    } catch {
+      // Ignorujemy błędy query w niektórych wersjach przeglądarek
+    }
+  }
+
+  if (typeof Notification !== 'undefined' && 'permission' in Notification) {
+    return Notification.permission;
+  }
+
+  return 'unsupported';
+}
+
+/**
+ * Bezpiecznie prosi o uprawnienia systemowe (kompatybilne z Androidem, WebView, PWA i starszymi przeglądarkami)
+ */
+export async function requestNotificationPermission() {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    return 'unsupported';
+  }
+
+  try {
+    // Jeśli już mamy zgodę, zwróć natychmiast
+    if (Notification.permission === 'granted') {
+      return 'granted';
+    }
+
+    addLog('info', 'Wywołanie systemowego okna zapytania o uprawnienia powiadomień...');
+
+    // Obsługa zarówno Promise jak i Callback w różnych wersjach silnika Chromium/Android
+    let resolvedPerm = null;
+    const requestPromise = Notification.requestPermission((callbackResult) => {
+      resolvedPerm = callbackResult;
+    });
+
+    if (requestPromise && typeof requestPromise.then === 'function') {
+      const awaited = await requestPromise;
+      const finalPerm = awaited || resolvedPerm || Notification.permission;
+      addLog('info', `Użytkownik odpowiedział na prośbę o powiadomienia: ${finalPerm}`);
+      return finalPerm;
+    }
+
+    const fallbackPerm = resolvedPerm || Notification.permission;
+    addLog('info', `Odpowiedź na zapytanie o powiadomienia (callback): ${fallbackPerm}`);
+    return fallbackPerm;
+  } catch (err) {
+    addLog('warn', `Błąd Notification.requestPermission: ${err?.message || err}`);
+    return Notification.permission || 'default';
   }
 }
 
@@ -92,18 +161,18 @@ export async function subscribeToPushNotifications(supabase, user, familyId) {
 
   addLog('info', 'Rozpoczęcie procedury włączania powiadomień Web Push w tle...');
 
-  // 1. Prośba o uprawnienia systemowe (musi być na samym początku w odpowiedzi na gest)
-  let permission = Notification.permission;
+  // 1. Prośba o uprawnienia systemowe (musi być na samym początku w odpowiedzi na gest użytkownika)
+  let permission = await getNotificationPermission();
   if (permission !== 'granted') {
-    permission = await Notification.requestPermission();
+    permission = await requestNotificationPermission();
   }
   addLog('info', `Status uprawnień systemowych: ${permission}`);
 
   if (permission !== 'granted') {
     throw new Error(
       permission === 'denied'
-        ? 'Zgoda na powiadomienia została zablokowana w systemie lub przeglądarce.'
-        : 'Nie udzielono zgody na powiadomienia.'
+        ? 'Zgoda na powiadomienia została zablokowana w systemie lub przeglądarce. Zezwól na powiadomienia w ustawieniach witryny.'
+        : 'Wymagana jest akceptacja uprawnień do powiadomień w oknie dialogowym.'
     );
   }
 
@@ -124,9 +193,9 @@ export async function subscribeToPushNotifications(supabase, user, familyId) {
         userVisibleOnly: true,
         applicationServerKey: applicationServerKey.length > 0 ? applicationServerKey : undefined,
       });
-      addLog('success', 'Utworzono subskrypcję w przeglądarce!');
+      addLog('success', 'Utworzono subskrypcję Web Push w przeglądarce!');
     } catch (subErr) {
-      addLog('warn', `Próba subskrypcji z kluczem VAPID zwróciła błąd: ${subErr.message}. Próba bez klucza...`);
+      addLog('warn', `Próba subskrypcji z kluczem VAPID zwróciła błąd: ${subErr.message}. Próba alternatywna...`);
       try {
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
