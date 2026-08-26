@@ -26,6 +26,12 @@ import { getInitialSentReminders, recordFamilyNotification } from './utils/pushS
 
 import { AppLogo, Chip, PoweredByFooter, FloatingActionButton } from './components/ui/index.js';
 import {
+  migrateNoteToTipTapFormat,
+  extractTextSummaryFromDoc,
+  extractTasksFromDoc,
+  toggleTaskItemInDoc,
+} from './utils/noteMigration.js';
+import {
   AddEventModal,
   AddTaskModal,
   NoteModal,
@@ -968,17 +974,26 @@ export default function App() {
     });
   };
 
-  const toggleNoteItem = (noteId, itemId) =>
+  const toggleNoteItem = (noteId, itemIdOrIndex) =>
     persist({
       ...data,
-      notes: data.notes.map((n) =>
-        n.id === noteId
-          ? {
-              ...n,
-              items: (n.items || []).map((i) => (i.id === itemId ? { ...i, done: !i.done } : i)),
-            }
-          : n
-      ),
+      notes: data.notes.map((n) => {
+        if (n.id !== noteId) return n;
+        if (n.content && n.content.type === 'doc') {
+          const nextDoc = toggleTaskItemInDoc(n.content, itemIdOrIndex);
+          return {
+            ...n,
+            content: nextDoc,
+            text: extractTextSummaryFromDoc(nextDoc),
+          };
+        }
+        return {
+          ...n,
+          items: (n.items || []).map((i, idx) =>
+            i.id === itemIdOrIndex || idx === itemIdOrIndex ? { ...i, done: !i.done } : i
+          ),
+        };
+      }),
     });
 
   const toggleSubItem = (parentId, itemId, type) => {
@@ -1031,18 +1046,15 @@ export default function App() {
   };
 
   const openConvertNote = (note, type) => {
-    const formattedText = [
-      note.text,
-      note.items?.length > 0 ? note.items.map((i) => `${i.done ? '✓' : '•'} ${i.text}`).join('\n') : '',
-    ]
-      .filter(Boolean)
-      .join('\n\n');
+    const doc = migrateNoteToTipTapFormat(note);
+    const summaryText = extractTextSummaryFromDoc(doc);
+    const tasks = extractTasksFromDoc(doc);
 
     setModalPayload({
       initial: {
-        note: formattedText || note.text || '',
-        text: formattedText || note.text || '',
-        items: note.items || [],
+        note: summaryText,
+        text: summaryText,
+        items: tasks.map((t, idx) => ({ id: `it_mig_${idx}`, text: t.text, done: t.checked })),
       },
       noteId: note.id,
     });

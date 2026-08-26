@@ -12,3 +12,117 @@
     scrollbar-width: none;
   }
 }
+
+/* TipTap Dark Obsidian Editor Styles */
+.tiptap {
+  outline: none;
+}
+
+.tiptap p.is-editor-empty:first-child::before {
+  color: #78716c;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.tiptap ul[data-type="taskList"] {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label {
+  display: flex;
+  align-items: center;
+  user-select: none;
+  cursor: pointer;
+  margin-top: 0.2rem;
+}
+
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  border: 1.5px solid #57534e;
+  border-radius: 0.375rem;
+  background-color: #1c1917;
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+  transition: all 0.15s ease-in-out;
+}
+
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:hover {
+  border-color: #f59e0b;
+}
+
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:checked {
+  background-color: #10b981;
+  border-color: #10b981;
+}
+
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:checked::before {
+  content: "";
+  width: 0.55rem;
+  height: 0.35rem;
+  border-left: 2px solid #ffffff;
+  border-bottom: 2px solid #ffffff;
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"][data-checked="true"] > div {
+  text-decoration: line-through;
+  color: #78716c;
+}
+
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > div {
+  flex: 1 1 auto;
+}
+
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > div > p {
+  margin: 0;
+}
+
+.tiptap blockquote {
+  border-left: 3px solid #f59e0b;
+  padding: 0.35rem 0.75rem;
+  margin: 0.75rem 0;
+  color: #d6d3d1;
+  background-color: rgba(120, 53, 15, 0.15);
+  border-radius: 0 0.5rem 0.5rem 0;
+  font-style: italic;
+}
+
+.tiptap pre {
+  background: #0c0a09;
+  border: 1px solid #292524;
+  border-radius: 0.75rem;
+  color: #fde68a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  font-size: 0.8125rem;
+}
+
+.tiptap pre code {
+  color: inherit;
+  padding: 0;
+  background: none;
+  font-size: 0.8125rem;
+}
+
+.tiptap hr {
+  border: none;
+  border-top: 1px solid #292524;
+  margin: 1.25rem 0;
+}
+
