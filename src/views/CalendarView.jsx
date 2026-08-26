@@ -254,6 +254,7 @@ export function CalendarView({ data, onOpenEvent, selectedDay: propSelectedDay, 
                         <Repeat size={14} className="text-stone-500" />
                       )}
                     </div>
+                    {ev.note && <div className="text-xs mt-1.5 text-stone-400 line-clamp-1 truncate">{ev.note}</div>}
                     <PersonRow people={data.people} personIds={ev.personIds} />
                   </div>
                 );

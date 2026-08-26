@@ -46,6 +46,7 @@ function TaskRow({ t, people, today, onToggle, onDelete, onOpen }) {
           {isOverdue && <span className="text-[11px] font-bold text-red-400">Zaległe!</span>}
         </div>
         <PersonRow people={people} personIds={t.personIds} />
+        {t.note && <div className="text-xs text-stone-400 mt-1.5 line-clamp-1 truncate">{t.note}</div>}
       </div>
       <button
         onClick={(e) => {

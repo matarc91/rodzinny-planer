@@ -7,8 +7,8 @@ import { Chip } from '../ui/Chip.jsx';
 const inputStyle =
   'w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 transition bg-stone-900 text-stone-100';
 
-export function AddWallMessageModal({ people, currentUserId, onClose, onSave }) {
-  const [text, setText] = useState('');
+export function AddWallMessageModal({ people, currentUserId, initial, onClose, onSave }) {
+  const [text, setText] = useState(initial?.text ?? initial?.note ?? '');
   const [personId, setPersonId] = useState(currentUserId || people[0]?.id || '');
   const [color, setColor] = useState(CARD_COLORS[0]);
   const [isPinned, setIsPinned] = useState(false);

@@ -18,14 +18,14 @@ export function WallView({ wall = [], people, onDeleteWallMessage, onTogglePinWa
       {sorted.length === 0 ? (
         <EmptyState text="Brak wiadomości" icon={MessageSquare} />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="columns-1 sm:columns-2 gap-4">
           {sorted.map((msg) => {
             const author = people.find((p) => p.id === msg.personId);
             return (
               <div
                 key={msg.id}
                 style={{ background: msg.color || COLORS.surface, borderColor: msg.isPinned ? COLORS.accent : COLORS.border }}
-                className="border rounded-2xl p-4 flex flex-col justify-between relative"
+                className="break-inside-avoid mb-4 border rounded-2xl p-4 flex flex-col justify-between relative"
               >
                 <div>
                   <div className="flex items-center justify-between mb-2">

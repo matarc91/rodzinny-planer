@@ -1031,7 +1031,21 @@ export default function App() {
   };
 
   const openConvertNote = (note, type) => {
-    setModalPayload({ initial: { note: note.text || '', items: note.items || [] }, noteId: note.id });
+    const formattedText = [
+      note.text,
+      note.items?.length > 0 ? note.items.map((i) => `${i.done ? '✓' : '•'} ${i.text}`).join('\n') : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+    setModalPayload({
+      initial: {
+        note: formattedText || note.text || '',
+        text: formattedText || note.text || '',
+        items: note.items || [],
+      },
+      noteId: note.id,
+    });
     if (type === 'event') setAddEventDate(todayStr());
     setModal(type);
   };
@@ -1339,6 +1353,7 @@ export default function App() {
         <AddWallMessageModal
           people={data.people}
           currentUserId={currentUserId}
+          initial={modalPayload?.initial}
           onClose={closeModal}
           onSave={addWallMessage}
         />
