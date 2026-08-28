@@ -4,6 +4,7 @@ import { COLORS, RECURRENCE_LABELS, reminderLabel } from '../../utils/constants.
 import { ModalShell } from '../ui/ModalShell.jsx';
 import { PersonRow } from '../ui/PersonRow.jsx';
 import { ChecklistContainer } from '../ui/ChecklistContainer.jsx';
+import { RichContentView } from '../ui/RichContentView.jsx';
 
 export function EventDetailModal({
   event,
@@ -119,9 +120,9 @@ export function EventDetailModal({
           {event.note && (
             <div
               style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
-              className="border rounded-xl p-3 text-sm whitespace-pre-wrap text-stone-300"
+              className="border rounded-xl p-3 text-sm text-stone-300"
             >
-              {event.note}
+              <RichContentView content={event.note} />
             </div>
           )}
           {event.items?.length > 0 && (

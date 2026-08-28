@@ -6,6 +6,8 @@ import { PersonPicker } from '../ui/PersonPicker.jsx';
 import { RecurrencePicker } from '../ui/RecurrencePicker.jsx';
 import { ReminderPicker } from '../ui/ReminderPicker.jsx';
 import { ChecklistContainer } from '../ui/ChecklistContainer.jsx';
+import { RichTextEditor } from '../ui/RichTextEditor.jsx';
+import { migrateNoteToTipTapFormat } from '../../utils/noteMigration.js';
 
 const inputStyle =
   'w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 transition bg-stone-900 text-stone-100';
@@ -17,7 +19,9 @@ export function AddTaskModal({ people, currentUserId, initial, editItem, onClose
   const [time, setTime] = useState(editItem?.time || '');
   const [personIds, setPersonIds] = useState(editItem?.personIds || (currentUserId ? [currentUserId] : []));
   const [freq, setFreq] = useState(editItem?.recurrence?.freq || 'none');
-  const [note, setNote] = useState(editItem?.note ?? initial?.note ?? '');
+  const [note, setNote] = useState(() =>
+    migrateNoteToTipTapFormat(editItem?.note ?? initial?.note ?? '')
+  );
   const [items, setItems] = useState(editItem?.items || initial?.items || []);
   const [reminderHours, setReminderHours] = useState(editItem ? (editItem.reminder?.hours ?? null) : 0);
 
@@ -30,7 +34,7 @@ export function AddTaskModal({ people, currentUserId, initial, editItem, onClose
       time,
       personIds,
       recurrence: { freq },
-      note: note.trim(),
+      note: note,
       items,
       reminder: reminderHours === null ? null : { hours: reminderHours },
       completions: editItem?.completions || {},
@@ -91,12 +95,11 @@ export function AddTaskModal({ people, currentUserId, initial, editItem, onClose
           <ReminderPicker value={reminderHours} onChange={setReminderHours} />
         </div>
         <div>
-          <label className="text-xs font-semibold mb-1 block text-stone-400">Notatka</label>
-          <textarea
+          <label className="text-xs font-semibold mb-1 block text-stone-400">Opis / Notatka (Rich Text)</label>
+          <RichTextEditor
             value={note}
-            onChange={(e) => setNote(e.target.value)}
-            style={{ borderColor: COLORS.border }}
-            className={`${inputStyle} h-20 resize-none`}
+            onChange={(doc) => setNote(doc)}
+            placeholder="Szczegółowy opis zadania, instrukcje, sformatowany tekst..."
           />
         </div>
         <div>

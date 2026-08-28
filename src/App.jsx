@@ -30,6 +30,7 @@ import {
   extractTextSummaryFromDoc,
   extractTasksFromDoc,
   toggleTaskItemInDoc,
+  renderTipTapToHtml,
 } from './utils/noteMigration.js';
 import {
   AddEventModal,
@@ -644,8 +645,16 @@ export default function App() {
 
   // Handlers
   const upsertEvent = (ev) => {
-    const noteId = modalPayload?.noteId;
-    const nextNotes = noteId ? data.notes.filter((n) => n.id !== noteId) : data.notes;
+    const convertedNoteId = modalPayload?.convertedNoteId || modalPayload?.noteId;
+    let nextNotes = data.notes;
+    if (convertedNoteId) {
+      const wantDelete = window.confirm(
+        'Pomyślnie utworzono wydarzenie! Czy chcesz usunąć oryginalną, prywatną notatkę?'
+      );
+      if (wantDelete) {
+        nextNotes = (data.notes || []).filter((n) => n.id !== convertedNoteId);
+      }
+    }
     const exists = data.events.some((e) => e.id === ev.id);
     persist({
       ...data,
@@ -684,8 +693,16 @@ export default function App() {
   };
 
   const upsertTask = (t) => {
-    const noteId = modalPayload?.noteId;
-    const nextNotes = noteId ? data.notes.filter((n) => n.id !== noteId) : data.notes;
+    const convertedNoteId = modalPayload?.convertedNoteId || modalPayload?.noteId;
+    let nextNotes = data.notes;
+    if (convertedNoteId) {
+      const wantDelete = window.confirm(
+        'Pomyślnie utworzono zadanie! Czy chcesz usunąć oryginalną, prywatną notatkę?'
+      );
+      if (wantDelete) {
+        nextNotes = (data.notes || []).filter((n) => n.id !== convertedNoteId);
+      }
+    }
     const exists = data.tasks.some((x) => x.id === t.id);
     persist({
       ...data,
@@ -734,7 +751,21 @@ export default function App() {
   };
 
   const addWallMessage = (msg) => {
-    persist({ ...data, wall: [msg, ...(data.wall || [])] });
+    const convertedNoteId = modalPayload?.convertedNoteId || modalPayload?.noteId;
+    let nextNotes = data.notes;
+    if (convertedNoteId) {
+      const wantDelete = window.confirm(
+        'Pomyślnie opublikowano na tablicy! Czy chcesz usunąć oryginalną, prywatną notatkę?'
+      );
+      if (wantDelete) {
+        nextNotes = (data.notes || []).filter((n) => n.id !== convertedNoteId);
+      }
+    }
+    persist({
+      ...data,
+      wall: [msg, ...(data.wall || [])],
+      notes: nextNotes,
+    });
     showToast('Wysłano na tablicę 💬');
     if (family?.id && supabaseClient) {
       const author = data?.people?.find((p) => p.id === msg.personId)?.name || 'Ktoś';
@@ -1048,15 +1079,16 @@ export default function App() {
   const openConvertNote = (note, type) => {
     const doc = migrateNoteToTipTapFormat(note);
     const summaryText = extractTextSummaryFromDoc(doc);
+    const html = renderTipTapToHtml(doc);
     const tasks = extractTasksFromDoc(doc);
 
     setModalPayload({
       initial: {
-        note: summaryText,
-        text: summaryText,
+        note: doc,
+        text: html || summaryText,
         items: tasks.map((t, idx) => ({ id: `it_mig_${idx}`, text: t.text, done: t.checked })),
       },
-      noteId: note.id,
+      convertedNoteId: note.id,
     });
     if (type === 'event') setAddEventDate(todayStr());
     setModal(type);
@@ -1245,6 +1277,7 @@ export default function App() {
           {tab === 'notes' && (
             <NotesView
               notes={visibleNotes}
+              enableWall={Boolean(data.settings?.enableWall)}
               onDelete={deleteNote}
               onConvert={openConvertNote}
               onEdit={openEditNote}

@@ -4,6 +4,7 @@ import { todayStr, isTaskDoneForPeriod } from '../../utils/dateUtils.js';
 import { ModalShell } from '../ui/ModalShell.jsx';
 import { PersonRow } from '../ui/PersonRow.jsx';
 import { ChecklistContainer } from '../ui/ChecklistContainer.jsx';
+import { RichContentView } from '../ui/RichContentView.jsx';
 
 export function TaskDetailModal({ task, people, onClose, onToggle, onDelete, onEdit, onToggleSubItem }) {
   const isDone = isTaskDoneForPeriod(task, todayStr());
@@ -32,9 +33,9 @@ export function TaskDetailModal({ task, people, onClose, onToggle, onDelete, onE
         {task.note && (
           <div
             style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
-            className="border rounded-xl p-3 text-sm whitespace-pre-wrap text-stone-300"
+            className="border rounded-xl p-3 text-sm text-stone-300"
           >
-            {task.note}
+            <RichContentView content={task.note} />
           </div>
         )}
         {task.items?.length > 0 && (

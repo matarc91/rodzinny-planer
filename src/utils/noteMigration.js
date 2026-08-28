@@ -1,8 +1,36 @@
 /**
- * Narzędzie do migracji i transformacji notatek do standardu TipTap Document AST (JSON).
+ * Narzędzie do migracji i transformacji notatek do standardu TipTap Document AST (JSON) oraz HTML.
  * Obsługuje formaty archiwalne (oddzielny text/content + lista items/list)
  * oraz nowoczesny format dokumentowy TipTap.
  */
+
+import { generateHTML } from '@tiptap/html';
+import StarterKit from '@tiptap/starter-kit';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
+
+const tipTapExtensions = [
+  StarterKit.configure({
+    heading: {
+      levels: [1, 2, 3],
+    },
+    bulletList: {
+      keepMarks: true,
+      keepAttributes: false,
+    },
+    orderedList: {
+      keepMarks: true,
+      keepAttributes: false,
+    },
+    blockquote: {},
+    codeBlock: {},
+    horizontalRule: {},
+  }),
+  TaskList,
+  TaskItem.configure({
+    nested: true,
+  }),
+];
 
 export function isTipTapDoc(content) {
   return (
@@ -134,6 +162,19 @@ export function migrateNoteToTipTapFormat(oldNote) {
 }
 
 /**
+ * Konwertuje obiekt TipTap AST (lub dawną notatkę) na bezpieczny kod HTML.
+ */
+export function renderTipTapToHtml(docOrNote) {
+  try {
+    const doc = migrateNoteToTipTapFormat(docOrNote);
+    return generateHTML(doc, tipTapExtensions);
+  } catch (err) {
+    console.error('Błąd generowania HTML z TipTap AST:', err);
+    return extractTextSummaryFromDoc(migrateNoteToTipTapFormat(docOrNote));
+  }
+}
+
+/**
  * Normalizuje cały obiekt notatki w stanie aplikacji (np. po pobraniu z Supabase).
  * Gwarantuje, że notatka posiada poprawne pole `content` w formacie TipTap JSON.
  */
@@ -143,13 +184,12 @@ export function normalizeNoteRecord(note) {
   return {
     ...note,
     content: doc,
-    // Zachowujemy też pole pomocnicze textSummary dla szybkich wyszukiwań i filtrów
     textSummary: extractTextSummaryFromDoc(doc),
   };
 }
 
 /**
- * Rekursywnie wyciąga czysty tekst z dokumentu TipTap do podglądu, powiadomień lub konwersji.
+ * Rekursywnie wyciąga czysty tekst z dokumentu TipTap do podglądu, powiadomień lub wyszukiwania.
  */
 export function extractTextSummaryFromDoc(doc) {
   if (!doc) return '';

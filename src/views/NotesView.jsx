@@ -185,7 +185,7 @@ function TipTapDocRenderer({ doc, noteId, onToggleItem }) {
   return <div className="space-y-0.5">{doc.content.map(renderNode)}</div>;
 }
 
-function NoteCard({ note, onEdit, onDelete, onConvert, onToggleItem }) {
+function NoteCard({ note, enableWall, onEdit, onDelete, onConvert, onToggleItem }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -275,20 +275,22 @@ function NoteCard({ note, onEdit, onDelete, onConvert, onToggleItem }) {
                   <span>Przekształć w Wydarzenie</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleAction(() => {
-                      if (onConvert) {
-                        onConvert(note, 'wall');
-                      }
-                    })
-                  }
-                  className="w-full px-3 py-2 text-left hover:bg-stone-800 flex items-center gap-2.5 transition text-stone-200"
-                >
-                  <MessageSquare size={14} className="text-emerald-400" />
-                  <span>Opublikuj na tablicy</span>
-                </button>
+                {enableWall && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleAction(() => {
+                        if (onConvert) {
+                          onConvert(note, 'wall');
+                        }
+                      })
+                    }
+                    className="w-full px-3 py-2 text-left hover:bg-stone-800 flex items-center gap-2.5 transition text-stone-200"
+                  >
+                    <MessageSquare size={14} className="text-emerald-400" />
+                    <span>Opublikuj na tablicy</span>
+                  </button>
+                )}
 
                 <div className="my-1 border-t border-stone-800" />
 
@@ -325,7 +327,7 @@ function NoteCard({ note, onEdit, onDelete, onConvert, onToggleItem }) {
   );
 }
 
-export function NotesView({ notes, onDelete, onConvert, onEdit, onToggleItem }) {
+export function NotesView({ notes, enableWall = false, onDelete, onConvert, onEdit, onToggleItem }) {
   const sorted = [...notes].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return (
     <div className="space-y-5 animate-fadeIn">
@@ -344,6 +346,7 @@ export function NotesView({ notes, onDelete, onConvert, onEdit, onToggleItem }) 
             <NoteCard
               key={n.id}
               note={n}
+              enableWall={enableWall}
               onEdit={onEdit}
               onDelete={onDelete}
               onConvert={onConvert}

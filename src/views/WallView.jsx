@@ -2,6 +2,7 @@ import { MessageSquare, Pin, Trash2 } from 'lucide-react';
 import { COLORS } from '../utils/constants.js';
 import { Chip } from '../components/ui/Chip.jsx';
 import { EmptyState } from '../components/ui/EmptyState.jsx';
+import { RichContentView } from '../components/ui/RichContentView.jsx';
 
 export function WallView({ wall = [], people, onDeleteWallMessage, onTogglePinWallMessage }) {
   const sorted = [...wall].sort((a, b) =>
@@ -45,7 +46,9 @@ export function WallView({ wall = [], people, onDeleteWallMessage, onTogglePinWa
                       </button>
                     </div>
                   </div>
-                  <p className="text-sm whitespace-pre-wrap my-2 text-stone-100 font-medium">{msg.text}</p>
+                  <div className="my-2">
+                    <RichContentView content={msg.text || msg.content} />
+                  </div>
                 </div>
                 <div className="pt-2 border-t mt-2 flex items-center justify-between border-stone-800/80">
                   <span className="text-[10px] font-mono text-stone-500">
