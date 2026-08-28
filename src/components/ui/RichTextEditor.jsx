@@ -60,7 +60,7 @@ export function RichTextEditor({
     content: initialDoc,
     editorProps: {
       attributes: {
-        class: `prose prose-invert prose-stone max-w-none focus:outline-none ${minHeight} text-sm text-stone-100 leading-snug font-normal p-3 prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-h1:text-base prose-h2:text-sm prose-h3:text-xs prose-blockquote:my-1.5 prose-blockquote:py-1 prose-blockquote:px-3 prose-pre:my-1.5 prose-hr:my-2 [&_ul[data-type="taskList"]]:list-none [&_ul[data-type="taskList"]]:pl-0 [&_ul[data-type="taskList"]]:my-1.5 [&_li[data-type="taskItem"]]:flex [&_li[data-type="taskItem"]]:flex-row [&_li[data-type="taskItem"]]:items-start [&_li[data-type="taskItem"]]:gap-2 [&_li[data-type="taskItem"]]:my-1 [&_li[data-type="taskItem"]]:pl-0 [&_li[data-type="taskItem"]::before]:content-none [&_li[data-type="taskItem"]>label]:flex [&_li[data-type="taskItem"]>label]:items-center [&_li[data-type="taskItem"]>label]:mt-0.5 [&_li[data-type="taskItem"]>label]:shrink-0 [&_li[data-type="taskItem"]>div]:flex-1 [&_li[data-type="taskItem"]_p]:m-0 [&_li[data-type="taskItem"]_p]:p-0`,
+        class: `prose prose-invert prose-stone max-w-none focus:outline-none ${minHeight} text-sm text-stone-100 leading-snug font-normal p-3 prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-h1:text-base prose-h2:text-sm prose-h3:text-xs prose-blockquote:my-1.5 prose-blockquote:py-1 prose-blockquote:px-3 prose-pre:my-1.5 prose-hr:my-2`,
       },
     },
     onUpdate: ({ editor: ed }) => {
