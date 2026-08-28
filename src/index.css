@@ -28,7 +28,8 @@
 
 /* Redukcja globalnych marginesów w edytorze TipTap i podglądach */
 .tiptap p,
-.prose p {
+.prose p,
+.ProseMirror p {
   margin-top: 0.25rem !important;
   margin-bottom: 0.25rem !important;
   line-height: 1.4 !important;
@@ -36,85 +37,126 @@
 
 .tiptap ul,
 .prose ul,
+.ProseMirror ul,
 .tiptap ol,
-.prose ol {
+.prose ol,
+.ProseMirror ol {
   margin-top: 0.25rem !important;
   margin-bottom: 0.25rem !important;
   padding-left: 1.25rem !important;
 }
 
 .tiptap li,
-.prose li {
+.prose li,
+.ProseMirror li {
   margin-top: 0.125rem !important;
   margin-bottom: 0.125rem !important;
 }
 
-.tiptap h1, .prose h1 { margin-top: 0.75rem !important; margin-bottom: 0.35rem !important; }
-.tiptap h2, .prose h2 { margin-top: 0.6rem !important; margin-bottom: 0.25rem !important; }
-.tiptap h3, .prose h3 { margin-top: 0.5rem !important; margin-bottom: 0.2rem !important; }
+.tiptap h1, .prose h1, .ProseMirror h1 { margin-top: 0.75rem !important; margin-bottom: 0.35rem !important; }
+.tiptap h2, .prose h2, .ProseMirror h2 { margin-top: 0.6rem !important; margin-bottom: 0.25rem !important; }
+.tiptap h3, .prose h3, .ProseMirror h3 { margin-top: 0.5rem !important; margin-bottom: 0.2rem !important; }
 
-/* Precyzyjne reguły dla TaskList i Checkboxów w TipTap */
+/* =========================================================
+   Precyzyjne reguły dla TaskList i Checkboxów w TipTap
+   ========================================================= */
+
+/* Usunięcie domyślnych punktorów i wcięć dla listy zadań */
 ul[data-type="taskList"],
 .tiptap ul[data-type="taskList"],
+.ProseMirror ul[data-type="taskList"],
 .prose ul[data-type="taskList"] {
+  list-style: none !important;
   list-style-type: none !important;
   padding: 0 !important;
   padding-left: 0 !important;
   margin: 0.25rem 0 !important;
 }
 
+/* Wiersz zadania w układzie flex (poziomo obok siebie) */
+ul[data-type="taskList"] > li,
 ul[data-type="taskList"] li[data-type="taskItem"],
 .tiptap ul[data-type="taskList"] li[data-type="taskItem"],
-.prose ul[data-type="taskList"] li[data-type="taskItem"] {
+.ProseMirror ul[data-type="taskList"] li[data-type="taskItem"],
+.prose ul[data-type="taskList"] li[data-type="taskItem"],
+.prose li[data-type="taskItem"] {
   display: flex !important;
+  flex-direction: row !important;
   align-items: flex-start !important;
   gap: 0.5rem !important;
   margin-top: 0.25rem !important;
   margin-bottom: 0.25rem !important;
-  list-style-type: none !important;
   padding: 0 !important;
+  padding-left: 0 !important;
+  list-style: none !important;
+  list-style-type: none !important;
 }
 
+/* Usunięcie pseudoelementów prose (kropek/punktów) przed li */
+ul[data-type="taskList"] > li::before,
+ul[data-type="taskList"] li[data-type="taskItem"]::before,
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"]::before,
+.ProseMirror ul[data-type="taskList"] li[data-type="taskItem"]::before,
+.prose ul[data-type="taskList"] li[data-type="taskItem"]::before,
+.prose li[data-type="taskItem"]::before {
+  display: none !important;
+  content: none !important;
+}
+
+/* Etykieta checkboxa */
 ul[data-type="taskList"] li[data-type="taskItem"] > label,
-.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label {
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label,
+.ProseMirror ul[data-type="taskList"] li[data-type="taskItem"] > label,
+.prose li[data-type="taskItem"] > label {
   display: flex !important;
   align-items: center !important;
+  justify-content: center !important;
   user-select: none !important;
   cursor: pointer !important;
   margin: 0 !important;
-  margin-top: 0.125rem !important;
+  margin-top: 0.15rem !important;
+  padding: 0 !important;
   flex-shrink: 0 !important;
 }
 
+/* Wygląd checkboxa - Dark Obsidian z akcentem szmaragdowym */
 ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"],
-.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"] {
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"],
+.ProseMirror ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"],
+.prose li[data-type="taskItem"] > label input[type="checkbox"],
+ul[data-type="taskList"] input[type="checkbox"] {
   appearance: none !important;
   -webkit-appearance: none !important;
-  width: 1.05rem !important;
-  height: 1.05rem !important;
+  width: 1.1rem !important;
+  height: 1.1rem !important;
+  min-width: 1.1rem !important;
+  min-height: 1.1rem !important;
   margin: 0 !important;
-  border: 1.5px solid #57534e !important;
+  border: 1.5px solid #78716c !important;
   border-radius: 0.375rem !important;
   background-color: #1c1917 !important;
   cursor: pointer !important;
-  display: grid !important;
+  display: inline-grid !important;
   place-content: center !important;
   transition: all 0.15s ease-in-out !important;
 }
 
 ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:hover,
-.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:hover {
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:hover,
+.ProseMirror ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:hover {
   border-color: #f59e0b !important;
 }
 
 ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:checked,
-.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:checked {
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:checked,
+.ProseMirror ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:checked {
   background-color: #10b981 !important;
   border-color: #10b981 !important;
 }
 
 ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:checked::before,
-.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:checked::before {
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:checked::before,
+.ProseMirror ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:checked::before {
   content: "" !important;
   width: 0.55rem !important;
   height: 0.35rem !important;
@@ -123,25 +165,35 @@ ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]
   transform: rotate(-45deg) translate(1px, -1px) !important;
 }
 
+/* Kontener na treść tekstu zadania */
 ul[data-type="taskList"] li[data-type="taskItem"] > div,
-.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > div {
-  flex: 1 1 auto !important;
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > div,
+.ProseMirror ul[data-type="taskList"] li[data-type="taskItem"] > div,
+.prose li[data-type="taskItem"] > div {
+  flex: 1 1 0% !important;
   min-width: 0 !important;
   margin: 0 !important;
+  padding: 0 !important;
 }
 
-/* Wymuszenie braku marginesów w paragrafach wewnątrz zadania */
+/* Wymuszenie zerowych marginesów dla paragrafów wewnątrz taskItem */
 ul[data-type="taskList"] li[data-type="taskItem"] > div > p,
-.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > div > p,
 ul[data-type="taskList"] li[data-type="taskItem"] p,
-.tiptap ul[data-type="taskList"] li[data-type="taskItem"] p {
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > div > p,
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] p,
+.ProseMirror ul[data-type="taskList"] li[data-type="taskItem"] > div > p,
+.ProseMirror ul[data-type="taskList"] li[data-type="taskItem"] p,
+.prose li[data-type="taskItem"] > div > p,
+.prose li[data-type="taskItem"] p {
   margin: 0 !important;
   padding: 0 !important;
-  line-height: 1.35 !important;
+  line-height: 1.4 !important;
 }
 
+/* Przekreślenie i stonowanie wykonanego zadania */
 ul[data-type="taskList"] li[data-type="taskItem"][data-checked="true"] > div,
-.tiptap ul[data-type="taskList"] li[data-type="taskItem"][data-checked="true"] > div {
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"][data-checked="true"] > div,
+.ProseMirror ul[data-type="taskList"] li[data-type="taskItem"][data-checked="true"] > div {
   text-decoration: line-through !important;
   color: #78716c !important;
 }
