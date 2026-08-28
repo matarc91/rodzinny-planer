@@ -76,7 +76,7 @@ function TipTapDocRenderer({ doc, noteId, onToggleItem }) {
 
       case 'taskList': {
         return (
-          <div key={index} className="space-y-1.5 my-2">
+          <div key={index} className="space-y-1 my-1.5">
             {(node.content || []).map((taskNode, taskIdx) => {
               const currentTaskIndex = taskCounter++;
               const isChecked = Boolean(taskNode.attrs?.checked);
@@ -85,19 +85,21 @@ function TipTapDocRenderer({ doc, noteId, onToggleItem }) {
                   key={taskIdx}
                   type="button"
                   onClick={() => onToggleItem?.(noteId, currentTaskIndex)}
-                  className="flex items-start gap-2.5 w-full text-left group/task py-0.5 transition"
+                  className="flex items-start gap-2 w-full text-left group/task py-0.5 transition"
                 >
-                  <span
-                    style={{
-                      borderColor: isChecked ? COLORS.success : '#57534e',
-                      backgroundColor: isChecked ? COLORS.success : '#1c1917',
-                    }}
-                    className="w-4 h-4 rounded border mt-0.5 flex items-center justify-center shrink-0 transition hover:border-amber-400"
-                  >
-                    {isChecked && <Check size={10} color="#fff" strokeWidth={3} />}
+                  <span className="flex items-center justify-center w-4 h-[18px] shrink-0">
+                    <span
+                      style={{
+                        borderColor: isChecked ? COLORS.success : '#78716c',
+                        backgroundColor: isChecked ? COLORS.success : '#1c1917',
+                      }}
+                      className="w-3.5 h-3.5 rounded border flex items-center justify-center transition group-hover/task:border-amber-400"
+                    >
+                      {isChecked && <Check size={9} color="#fff" strokeWidth={3.5} />}
+                    </span>
                   </span>
                   <span
-                    className={`text-xs leading-snug flex-1 transition ${
+                    className={`text-xs leading-[18px] flex-1 transition ${
                       isChecked ? 'line-through text-stone-500' : 'text-stone-200 font-medium'
                     }`}
                   >
@@ -118,7 +120,7 @@ function TipTapDocRenderer({ doc, noteId, onToggleItem }) {
         return (
           <ul key={index} className="list-disc list-inside space-y-1 my-1.5 text-stone-300 text-xs">
             {(node.content || []).map((li, liIdx) => (
-              <li key={liIdx}>
+              <li key={liIdx} className="leading-[18px]">
                 {(li.content || []).map((p, pIdx) => (
                   <span key={pIdx}>
                     <RenderInlineContent content={p.content} />
@@ -134,7 +136,7 @@ function TipTapDocRenderer({ doc, noteId, onToggleItem }) {
         return (
           <ol key={index} className="list-decimal list-inside space-y-1 my-1.5 text-stone-300 text-xs">
             {(node.content || []).map((li, liIdx) => (
-              <li key={liIdx}>
+              <li key={liIdx} className="leading-[18px]">
                 {(li.content || []).map((p, pIdx) => (
                   <span key={pIdx}>
                     <RenderInlineContent content={p.content} />
