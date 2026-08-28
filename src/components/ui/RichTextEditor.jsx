@@ -60,7 +60,7 @@ export function RichTextEditor({
     content: initialDoc,
     editorProps: {
       attributes: {
-        class: `prose prose-invert prose-stone max-w-none focus:outline-none ${minHeight} text-sm text-stone-100 leading-relaxed font-normal p-3.5`,
+        class: `prose prose-invert prose-stone max-w-none focus:outline-none ${minHeight} text-sm text-stone-100 leading-snug font-normal p-3 prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-h1:text-base prose-h2:text-sm prose-h3:text-xs prose-blockquote:my-1.5 prose-blockquote:py-1 prose-blockquote:px-3 prose-pre:my-1.5 prose-hr:my-2`,
       },
     },
     onUpdate: ({ editor: ed }) => {

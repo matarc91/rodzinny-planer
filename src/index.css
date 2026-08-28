@@ -26,76 +26,130 @@
   pointer-events: none;
 }
 
-.tiptap ul[data-type="taskList"] {
-  list-style: none;
-  padding: 0;
-  margin: 0.5rem 0;
+/* Redukcja globalnych marginesów w edytorze TipTap i podglądach */
+.tiptap p,
+.prose p {
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.25rem !important;
+  line-height: 1.4 !important;
 }
 
-.tiptap ul[data-type="taskList"] li[data-type="taskItem"] {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  margin-bottom: 0.35rem;
+.tiptap ul,
+.prose ul,
+.tiptap ol,
+.prose ol {
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.25rem !important;
+  padding-left: 1.25rem !important;
 }
 
+.tiptap li,
+.prose li {
+  margin-top: 0.125rem !important;
+  margin-bottom: 0.125rem !important;
+}
+
+.tiptap h1, .prose h1 { margin-top: 0.75rem !important; margin-bottom: 0.35rem !important; }
+.tiptap h2, .prose h2 { margin-top: 0.6rem !important; margin-bottom: 0.25rem !important; }
+.tiptap h3, .prose h3 { margin-top: 0.5rem !important; margin-bottom: 0.2rem !important; }
+
+/* Precyzyjne reguły dla TaskList i Checkboxów w TipTap */
+ul[data-type="taskList"],
+.tiptap ul[data-type="taskList"],
+.prose ul[data-type="taskList"] {
+  list-style-type: none !important;
+  padding: 0 !important;
+  padding-left: 0 !important;
+  margin: 0.25rem 0 !important;
+}
+
+ul[data-type="taskList"] li[data-type="taskItem"],
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"],
+.prose ul[data-type="taskList"] li[data-type="taskItem"] {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 0.5rem !important;
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.25rem !important;
+  list-style-type: none !important;
+  padding: 0 !important;
+}
+
+ul[data-type="taskList"] li[data-type="taskItem"] > label,
 .tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label {
-  display: flex;
-  align-items: center;
-  user-select: none;
-  cursor: pointer;
-  margin-top: 0.2rem;
+  display: flex !important;
+  align-items: center !important;
+  user-select: none !important;
+  cursor: pointer !important;
+  margin: 0 !important;
+  margin-top: 0.125rem !important;
+  flex-shrink: 0 !important;
 }
 
+ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"],
 .tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"] {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 1.05rem;
-  height: 1.05rem;
-  border: 1.5px solid #57534e;
-  border-radius: 0.375rem;
-  background-color: #1c1917;
-  cursor: pointer;
-  display: grid;
-  place-content: center;
-  transition: all 0.15s ease-in-out;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  width: 1.05rem !important;
+  height: 1.05rem !important;
+  margin: 0 !important;
+  border: 1.5px solid #57534e !important;
+  border-radius: 0.375rem !important;
+  background-color: #1c1917 !important;
+  cursor: pointer !important;
+  display: grid !important;
+  place-content: center !important;
+  transition: all 0.15s ease-in-out !important;
 }
 
+ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:hover,
 .tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:hover {
-  border-color: #f59e0b;
+  border-color: #f59e0b !important;
 }
 
+ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:checked,
 .tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:checked {
-  background-color: #10b981;
-  border-color: #10b981;
+  background-color: #10b981 !important;
+  border-color: #10b981 !important;
 }
 
+ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:checked::before,
 .tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input[type="checkbox"]:checked::before {
-  content: "";
-  width: 0.55rem;
-  height: 0.35rem;
-  border-left: 2px solid #ffffff;
-  border-bottom: 2px solid #ffffff;
-  transform: rotate(-45deg) translate(1px, -1px);
+  content: "" !important;
+  width: 0.55rem !important;
+  height: 0.35rem !important;
+  border-left: 2px solid #ffffff !important;
+  border-bottom: 2px solid #ffffff !important;
+  transform: rotate(-45deg) translate(1px, -1px) !important;
 }
 
-.tiptap ul[data-type="taskList"] li[data-type="taskItem"][data-checked="true"] > div {
-  text-decoration: line-through;
-  color: #78716c;
-}
-
+ul[data-type="taskList"] li[data-type="taskItem"] > div,
 .tiptap ul[data-type="taskList"] li[data-type="taskItem"] > div {
-  flex: 1 1 auto;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  margin: 0 !important;
 }
 
-.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > div > p {
-  margin: 0;
+/* Wymuszenie braku marginesów w paragrafach wewnątrz zadania */
+ul[data-type="taskList"] li[data-type="taskItem"] > div > p,
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > div > p,
+ul[data-type="taskList"] li[data-type="taskItem"] p,
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] p {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1.35 !important;
+}
+
+ul[data-type="taskList"] li[data-type="taskItem"][data-checked="true"] > div,
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"][data-checked="true"] > div {
+  text-decoration: line-through !important;
+  color: #78716c !important;
 }
 
 .tiptap blockquote {
   border-left: 3px solid #f59e0b;
   padding: 0.35rem 0.75rem;
-  margin: 0.75rem 0;
+  margin: 0.5rem 0;
   color: #d6d3d1;
   background-color: rgba(120, 53, 15, 0.15);
   border-radius: 0 0.5rem 0.5rem 0;
@@ -108,8 +162,8 @@
   border-radius: 0.75rem;
   color: #fde68a;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  padding: 0.75rem 1rem;
-  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  margin: 0.5rem 0;
   font-size: 0.8125rem;
 }
 
@@ -123,6 +177,6 @@
 .tiptap hr {
   border: none;
   border-top: 1px solid #292524;
-  margin: 1.25rem 0;
+  margin: 0.75rem 0;
 }
 

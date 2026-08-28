@@ -28,9 +28,7 @@ import { AppLogo, Chip, PoweredByFooter, FloatingActionButton } from './componen
 import {
   migrateNoteToTipTapFormat,
   extractTextSummaryFromDoc,
-  extractTasksFromDoc,
   toggleTaskItemInDoc,
-  renderTipTapToHtml,
 } from './utils/noteMigration.js';
 import {
   AddEventModal,
@@ -1079,14 +1077,12 @@ export default function App() {
   const openConvertNote = (note, type) => {
     const doc = migrateNoteToTipTapFormat(note);
     const summaryText = extractTextSummaryFromDoc(doc);
-    const html = renderTipTapToHtml(doc);
-    const tasks = extractTasksFromDoc(doc);
 
     setModalPayload({
       initial: {
         note: doc,
-        text: html || summaryText,
-        items: tasks.map((t, idx) => ({ id: `it_mig_${idx}`, text: t.text, done: t.checked })),
+        content: doc,
+        text: summaryText,
       },
       convertedNoteId: note.id,
     });

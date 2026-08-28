@@ -3,21 +3,27 @@ import { Pin } from 'lucide-react';
 import { COLORS, CARD_COLORS, uid } from '../../utils/constants.js';
 import { ModalShell } from '../ui/ModalShell.jsx';
 import { Chip } from '../ui/Chip.jsx';
-
-const inputStyle =
-  'w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 transition bg-stone-900 text-stone-100';
+import { RichTextEditor } from '../ui/RichTextEditor.jsx';
+import {
+  migrateNoteToTipTapFormat,
+  extractTextSummaryFromDoc,
+} from '../../utils/noteMigration.js';
 
 export function AddWallMessageModal({ people, currentUserId, initial, onClose, onSave }) {
-  const [text, setText] = useState(initial?.text ?? initial?.note ?? '');
+  const [contentDoc, setContentDoc] = useState(() =>
+    migrateNoteToTipTapFormat(initial?.content ?? initial?.note ?? initial?.text ?? '')
+  );
   const [personId, setPersonId] = useState(currentUserId || people[0]?.id || '');
   const [color, setColor] = useState(CARD_COLORS[0]);
   const [isPinned, setIsPinned] = useState(false);
 
   const save = () => {
-    if (text.trim()) {
+    const summary = extractTextSummaryFromDoc(contentDoc);
+    if (summary.trim()) {
       onSave({
         id: uid('w'),
-        text: text.trim(),
+        content: contentDoc,
+        text: summary.trim(),
         personId,
         color,
         isPinned,
@@ -28,16 +34,15 @@ export function AddWallMessageModal({ people, currentUserId, initial, onClose, o
   };
 
   return (
-    <ModalShell title="Wiadomość na tablicy" onClose={onClose}>
+    <ModalShell title="Wiadomość na tablicy" onClose={onClose} maxWidth="sm:max-w-lg">
       <div className="space-y-4">
         <div>
-          <textarea
-            autoFocus
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Wiadomość..."
-            style={{ borderColor: COLORS.border }}
-            className={`${inputStyle} h-28 resize-none`}
+          <label className="text-xs font-semibold mb-1.5 block text-stone-400">Treść wiadomości</label>
+          <RichTextEditor
+            value={contentDoc}
+            onChange={(doc) => setContentDoc(doc)}
+            placeholder="Wpisz treść na tablicę... # Ogłoszenie, - [ ] Zadanie, > Cytat..."
+            minHeight="min-h-[120px]"
           />
         </div>
         <div>

@@ -5,7 +5,6 @@ import { ModalShell } from '../ui/ModalShell.jsx';
 import { PersonPicker } from '../ui/PersonPicker.jsx';
 import { RecurrencePicker } from '../ui/RecurrencePicker.jsx';
 import { ReminderPicker } from '../ui/ReminderPicker.jsx';
-import { ChecklistContainer } from '../ui/ChecklistContainer.jsx';
 import { RichTextEditor } from '../ui/RichTextEditor.jsx';
 import { migrateNoteToTipTapFormat } from '../../utils/noteMigration.js';
 
@@ -22,7 +21,6 @@ export function AddTaskModal({ people, currentUserId, initial, editItem, onClose
   const [note, setNote] = useState(() =>
     migrateNoteToTipTapFormat(editItem?.note ?? initial?.note ?? '')
   );
-  const [items, setItems] = useState(editItem?.items || initial?.items || []);
   const [reminderHours, setReminderHours] = useState(editItem ? (editItem.reminder?.hours ?? null) : 0);
 
   const save = () => {
@@ -35,7 +33,7 @@ export function AddTaskModal({ people, currentUserId, initial, editItem, onClose
       personIds,
       recurrence: { freq },
       note: note,
-      items,
+      items: editItem?.items || [],
       reminder: reminderHours === null ? null : { hours: reminderHours },
       completions: editItem?.completions || {},
       createdAt: editItem?.createdAt || todayStr(),
@@ -44,7 +42,7 @@ export function AddTaskModal({ people, currentUserId, initial, editItem, onClose
   };
 
   return (
-    <ModalShell title={isEdit ? 'Edytuj zadanie' : 'Nowe zadanie'} onClose={onClose}>
+    <ModalShell title={isEdit ? 'Edytuj zadanie' : 'Nowe zadanie'} onClose={onClose} maxWidth="sm:max-w-lg">
       <div className="space-y-4">
         <div>
           <label className="text-xs font-semibold mb-1 block text-stone-400">Zadanie</label>
@@ -52,6 +50,7 @@ export function AddTaskModal({ people, currentUserId, initial, editItem, onClose
             autoFocus
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+            placeholder="Co jest do zrobienia?"
             style={{ borderColor: COLORS.border }}
             className={inputStyle}
           />
@@ -95,20 +94,12 @@ export function AddTaskModal({ people, currentUserId, initial, editItem, onClose
           <ReminderPicker value={reminderHours} onChange={setReminderHours} />
         </div>
         <div>
-          <label className="text-xs font-semibold mb-1 block text-stone-400">Opis / Notatka (Rich Text)</label>
+          <label className="text-xs font-semibold mb-1 block text-stone-400">Opis / Notatka / Checklista</label>
           <RichTextEditor
             value={note}
             onChange={(doc) => setNote(doc)}
-            placeholder="Szczegółowy opis zadania, instrukcje, sformatowany tekst..."
-          />
-        </div>
-        <div>
-          <label className="text-xs font-semibold mb-1 block text-stone-400">Checklista</label>
-          <ChecklistContainer
-            items={items}
-            onToggleItem={(id) => setItems((p) => p.map((i) => (i.id === id ? { ...i, done: !i.done } : i)))}
-            onAddItem={(text) => setItems((p) => [...p, { id: uid('it'), text, done: false }])}
-            onRemoveItem={(id) => setItems((p) => p.filter((i) => i.id !== id))}
+            placeholder="Szczegółowy opis zadania, checklista (- [ ] ), sformatowany tekst..."
+            minHeight="min-h-[120px]"
           />
         </div>
         <button
