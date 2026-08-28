@@ -194,6 +194,18 @@ export function normalizeNoteRecord(note) {
 export function extractTextSummaryFromDoc(doc) {
   if (!doc) return '';
   if (typeof doc === 'string') return doc;
+  if (typeof doc !== 'object') return String(doc);
+
+  if (doc.text && typeof doc.text === 'string') return doc.text;
+  if (doc.content && typeof doc.content === 'string') return doc.content;
+
+  if (isTipTapDoc(doc.content)) {
+    return extractTextSummaryFromDoc(doc.content);
+  }
+  if (isTipTapDoc(doc.contentJson)) {
+    return extractTextSummaryFromDoc(doc.contentJson);
+  }
+
   if (!doc.content || !Array.isArray(doc.content)) return '';
 
   const extract = (node) => {

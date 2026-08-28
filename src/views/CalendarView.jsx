@@ -19,6 +19,7 @@ import { Chip } from '../components/ui/Chip.jsx';
 import { PersonRow } from '../components/ui/PersonRow.jsx';
 import { Section } from '../components/ui/Section.jsx';
 import { EmptyState } from '../components/ui/EmptyState.jsx';
+import { extractTextSummaryFromDoc } from '../utils/noteMigration.js';
 
 export function CalendarView({ data, onOpenEvent, selectedDay: propSelectedDay, onSelectDay }) {
   const [monthAnchor, setMonthAnchor] = useState(todayStr());
@@ -254,7 +255,11 @@ export function CalendarView({ data, onOpenEvent, selectedDay: propSelectedDay, 
                         <Repeat size={14} className="text-stone-500" />
                       )}
                     </div>
-                    {ev.note && <div className="text-xs mt-1.5 text-stone-400 line-clamp-1 truncate">{ev.note}</div>}
+                    {extractTextSummaryFromDoc(ev.note) ? (
+                      <div className="text-xs mt-1.5 text-stone-400 line-clamp-1 truncate">
+                        {extractTextSummaryFromDoc(ev.note)}
+                      </div>
+                    ) : null}
                     <PersonRow people={data.people} personIds={ev.personIds} />
                   </div>
                 );

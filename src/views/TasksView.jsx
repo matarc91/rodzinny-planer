@@ -6,6 +6,7 @@ import { Chip } from '../components/ui/Chip.jsx';
 import { PersonRow } from '../components/ui/PersonRow.jsx';
 import { Section } from '../components/ui/Section.jsx';
 import { EmptyState } from '../components/ui/EmptyState.jsx';
+import { extractTextSummaryFromDoc } from '../utils/noteMigration.js';
 
 function TaskRow({ t, people, today, onToggle, onDelete, onOpen }) {
   const isDone = isTaskDoneForPeriod(t, today);
@@ -46,7 +47,11 @@ function TaskRow({ t, people, today, onToggle, onDelete, onOpen }) {
           {isOverdue && <span className="text-[11px] font-bold text-red-400">Zaległe!</span>}
         </div>
         <PersonRow people={people} personIds={t.personIds} />
-        {t.note && <div className="text-xs text-stone-400 mt-1.5 line-clamp-1 truncate">{t.note}</div>}
+        {extractTextSummaryFromDoc(t.note) ? (
+          <div className="text-xs text-stone-400 mt-1.5 line-clamp-1 truncate">
+            {extractTextSummaryFromDoc(t.note)}
+          </div>
+        ) : null}
       </div>
       <button
         onClick={(e) => {

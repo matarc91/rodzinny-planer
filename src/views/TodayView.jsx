@@ -5,6 +5,7 @@ import { Chip } from '../components/ui/Chip.jsx';
 import { PersonRow } from '../components/ui/PersonRow.jsx';
 import { Section } from '../components/ui/Section.jsx';
 import { EmptyState } from '../components/ui/EmptyState.jsx';
+import { extractTextSummaryFromDoc } from '../utils/noteMigration.js';
 
 export function TodayView({ data, onOpenEvent, onOpenTask, onToggleTask }) {
   const today = todayStr();
@@ -49,7 +50,9 @@ export function TodayView({ data, onOpenEvent, onOpenTask, onToggleTask }) {
                 <Pin size={16} className="text-amber-400 shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs text-amber-300/80 font-bold mb-0.5">{author?.name || 'Domownik'}</div>
-                  <p className="text-sm font-medium text-stone-100 whitespace-pre-wrap">{msg.text}</p>
+                  <p className="text-sm font-medium text-stone-100 whitespace-pre-wrap">
+                    {extractTextSummaryFromDoc(msg.text || msg.content)}
+                  </p>
                 </div>
                 <Chip person={author} />
               </div>
@@ -148,7 +151,11 @@ export function TodayView({ data, onOpenEvent, onOpenTask, onToggleTask }) {
                       </span>
                     )}
                   </div>
-                  {ev.note && <div className="text-xs mt-1.5 line-clamp-1 text-stone-400">{ev.note}</div>}
+                  {extractTextSummaryFromDoc(ev.note) ? (
+                    <div className="text-xs mt-1.5 line-clamp-1 text-stone-400">
+                      {extractTextSummaryFromDoc(ev.note)}
+                    </div>
+                  ) : null}
                   <PersonRow people={data.people} personIds={ev.personIds} />
                 </div>
               );

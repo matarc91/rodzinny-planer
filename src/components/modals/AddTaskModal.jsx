@@ -12,7 +12,7 @@ const inputStyle =
   'w-full border rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 transition bg-stone-900 text-stone-100';
 
 export function AddTaskModal({ people, currentUserId, initial, editItem, onClose, onSave }) {
-  const isEdit = !editItem;
+  const isEdit = Boolean(editItem?.id || editItem);
   const [title, setTitle] = useState(editItem?.title || '');
   const [dueDate, setDueDate] = useState(editItem?.dueDate || todayStr());
   const [time, setTime] = useState(editItem?.time || '');
