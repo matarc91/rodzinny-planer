@@ -113,6 +113,7 @@ export function ManageCategoriesModal({ categories = [], onClose, onSave }) {
                     <div className="relative flex-1">
                       <input
                         type="number"
+                        inputMode="decimal"
                         step="1"
                         min="0"
                         value={editLimit}
@@ -230,6 +231,7 @@ export function ManageCategoriesModal({ categories = [], onClose, onSave }) {
             <div className="relative">
               <input
                 type="number"
+                inputMode="decimal"
                 step="1"
                 min="0"
                 required

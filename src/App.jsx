@@ -4,12 +4,10 @@ import {
   Calendar,
   CheckSquare,
   StickyNote,
-  MessageSquare,
-  ShoppingCart,
-  PiggyBank,
   Settings,
   Sparkles,
   RefreshCw,
+  MoreHorizontal,
 } from 'lucide-react';
 import { COLORS, FONT_IMPORT, emptyData, createDefaultMonthBudget, createDefaultBudgetGoals } from './utils/constants.js';
 import {
@@ -24,7 +22,7 @@ import { getSupabaseClient } from './utils/supabaseClient.js';
 import { addLog } from './utils/logger.js';
 import { getInitialSentReminders, recordFamilyNotification } from './utils/pushService.js';
 
-import { AppLogo, Chip, PoweredByFooter, FloatingActionButton } from './components/ui/index.js';
+import { AppLogo, Chip, PoweredByFooter, FloatingActionButton, MoreMenuSheet } from './components/ui/index.js';
 import {
   migrateNoteToTipTapFormat,
   extractTextSummaryFromDoc,
@@ -78,6 +76,7 @@ export default function App() {
     }
     return 'today';
   });
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [selectedBudgetMonth, setSelectedBudgetMonth] = useState(() => todayStr().slice(0, 7));
   const [modal, setModal] = useState(() => {
     if (typeof window !== 'undefined' && window.location) {
@@ -1188,15 +1187,14 @@ export default function App() {
 
   const currentPerson = data?.people?.find((p) => p.id === currentUserId);
 
-  const TABS = [
+  const PRIMARY_TABS = [
     { id: 'today', label: 'Dziś', icon: Clock },
     { id: 'calendar', label: 'Kalendarz', icon: Calendar },
     { id: 'tasks', label: 'Zadania', icon: CheckSquare },
-    { id: 'shopping', label: 'Zakupy', icon: ShoppingCart },
     { id: 'notes', label: 'Notatki', icon: StickyNote },
-    ...(data.settings?.enableWall ? [{ id: 'wall', label: 'Tablica', icon: MessageSquare }] : []),
-    ...(data.settings?.enableBudget !== false ? [{ id: 'budget', label: 'Budżet', icon: PiggyBank }] : []),
   ];
+  const isMoreActive = ['shopping', 'wall', 'budget', 'settings'].includes(tab);
+  const pendingShoppingCount = (data?.shopping || []).filter((s) => !s.isCompleted).length;
 
   return (
     <div style={{ background: COLORS.bg, fontFamily: 'Inter, sans-serif' }} className="min-h-screen flex flex-col text-stone-100">
@@ -1251,14 +1249,16 @@ export default function App() {
         </button>
       </header>
 
-      <main className="flex-1 flex flex-col justify-between overflow-y-auto px-4 pt-4 pb-24 max-w-2xl mx-auto w-full">
+      <main className="flex-1 flex flex-col justify-between overflow-y-auto px-4 pt-4 pb-28 max-w-2xl mx-auto w-full">
         <div className="flex-1 w-full">
           {tab === 'today' && (
             <TodayView
               data={data}
+              currentPerson={currentPerson}
               onOpenEvent={openDetailEvent}
               onOpenTask={setDetailTask}
               onToggleTask={toggleTask}
+              onGoToShopping={() => setTab('shopping')}
             />
           )}
           {tab === 'calendar' && (
@@ -1267,7 +1267,6 @@ export default function App() {
               selectedDay={addEventDate}
               onSelectDay={setAddEventDate}
               onOpenEvent={openDetailEvent}
-              onAddEvent={openAddEvent}
             />
           )}
           {tab === 'tasks' && (
@@ -1349,18 +1348,20 @@ export default function App() {
         onAddBudget={() => openAddBudget(selectedBudgetMonth)}
       />
 
+      {/* Dolny pasek nawigacji 4+1 */}
       <nav
         style={{ background: COLORS.surface, borderColor: COLORS.border }}
         className="border-t fixed bottom-0 left-0 right-0 z-40 shadow-xl pb-safe"
       >
-        <div className="max-w-md mx-auto flex items-center justify-around overflow-x-auto no-scrollbar">
-          {TABS.map(({ id, label, icon: Icon }) => {
+        <div className="max-w-md mx-auto flex items-center justify-around px-2">
+          {PRIMARY_TABS.map(({ id, label, icon: Icon }) => {
             const active = tab === id;
             return (
               <button
                 key={id}
+                type="button"
                 onClick={() => setTab(id)}
-                className="flex-1 min-w-[60px] flex flex-col items-center gap-1.5 py-3 transition"
+                className="flex-1 flex flex-col items-center gap-1.5 py-3 transition cursor-pointer"
               >
                 <Icon size={20} color={active ? COLORS.accent : COLORS.inkSoft} strokeWidth={active ? 2.5 : 2} />
                 <span
@@ -1372,8 +1373,53 @@ export default function App() {
               </button>
             );
           })}
+
+          {/* Przycisk 5: Więcej */}
+          <button
+            type="button"
+            onClick={() => setIsMoreMenuOpen(true)}
+            className="flex-1 flex flex-col items-center gap-1.5 py-3 transition cursor-pointer relative"
+          >
+            <div className="relative">
+              <MoreHorizontal
+                size={20}
+                color={isMoreActive ? COLORS.accent : COLORS.inkSoft}
+                strokeWidth={isMoreActive ? 2.5 : 2}
+              />
+              {pendingShoppingCount > 0 && !isMoreActive && (
+                <span className="absolute -top-1 -right-1.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-stone-900 animate-pulse" />
+              )}
+            </div>
+            <span
+              style={{
+                color: isMoreActive ? COLORS.accent : COLORS.inkSoft,
+                fontWeight: isMoreActive ? 700 : 500,
+              }}
+              className="text-[10px] tracking-wide truncate max-w-[65px]"
+            >
+              {isMoreActive
+                ? tab === 'shopping'
+                  ? 'Zakupy'
+                  : tab === 'wall'
+                  ? 'Tablica'
+                  : tab === 'budget'
+                  ? 'Budżet'
+                  : 'Ustawienia'
+                : 'Więcej'}
+            </span>
+          </button>
         </div>
       </nav>
+
+      {/* Wysuwany arkusz Więcej modułów */}
+      <MoreMenuSheet
+        isOpen={isMoreMenuOpen}
+        onClose={() => setIsMoreMenuOpen(false)}
+        currentTab={tab}
+        onSelectTab={setTab}
+        settings={data?.settings}
+        pendingShoppingCount={pendingShoppingCount}
+      />
 
       {modal === 'event' && (
         <AddEventModal

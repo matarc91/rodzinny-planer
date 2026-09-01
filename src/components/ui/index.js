@@ -10,3 +10,4 @@ export { ReminderPicker } from './ReminderPicker.jsx';
 export { AppLogo } from './AppLogo.jsx';
 export { PoweredByFooter } from './PoweredByFooter.jsx';
 export { FloatingActionButton } from './FloatingActionButton.jsx';
+export { MoreMenuSheet } from './MoreMenuSheet.jsx';

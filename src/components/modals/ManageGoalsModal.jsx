@@ -170,6 +170,7 @@ export function ManageGoalsModal({
                       <div className="relative">
                         <input
                           type="number"
+                          inputMode="decimal"
                           step="1"
                           min="1"
                           value={editTarget}
@@ -352,6 +353,7 @@ export function ManageGoalsModal({
                 <div className="relative">
                   <input
                     type="number"
+                    inputMode="decimal"
                     step="1"
                     min="1"
                     required={!newIsInfinite}

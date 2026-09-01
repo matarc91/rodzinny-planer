@@ -7,7 +7,25 @@ import { Section } from '../components/ui/Section.jsx';
 import { EmptyState } from '../components/ui/EmptyState.jsx';
 import { extractTextSummaryFromDoc } from '../utils/noteMigration.js';
 
-export function TodayView({ data, onOpenEvent, onOpenTask, onToggleTask }) {
+function getGreeting(name) {
+  const hour = new Date().getHours();
+  let timeGreeting = 'Dzień dobry';
+  let icon = '☀️';
+  if (hour >= 18 || hour < 5) {
+    timeGreeting = 'Dobry wieczór';
+    icon = '🌙';
+  } else if (hour >= 12 && hour < 18) {
+    timeGreeting = 'Dzień dobry';
+    icon = '🌤️';
+  }
+
+  if (name) {
+    return `${timeGreeting}, ${name}! ${icon}`;
+  }
+  return `${timeGreeting}! ${icon}`;
+}
+
+export function TodayView({ data, currentPerson, onOpenEvent, onOpenTask, onToggleTask, onGoToShopping }) {
   const today = todayStr();
   const events = data.events
     .filter((ev) => occursOnDate(ev, today))
@@ -31,7 +49,7 @@ export function TodayView({ data, onOpenEvent, onOpenTask, onToggleTask }) {
           {new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}
         </div>
         <h2 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-2xl font-bold mt-0.5">
-          Dziś w domu
+          {getGreeting(currentPerson?.name)}
         </h2>
       </div>
 
@@ -90,8 +108,9 @@ export function TodayView({ data, onOpenEvent, onOpenTask, onToggleTask }) {
 
       {pendingShopping.length > 0 && (
         <div
+          onClick={onGoToShopping}
           style={{ background: '#192820', borderColor: '#2E563E' }}
-          className="border rounded-2xl p-3.5 shadow-2xs flex items-center justify-between gap-3"
+          className="border rounded-2xl p-3.5 shadow-2xs flex items-center justify-between gap-3 cursor-pointer hover:border-emerald-500/60 transition group"
         >
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
