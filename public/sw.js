@@ -169,7 +169,7 @@ self.addEventListener('push', (event) => {
       const options = {
         body: data.body,
         icon: data.icon || '/favicon.svg',
-        badge: data.badge || '/favicon.svg',
+        badge: data.badge || '/badge-72.png',
         tag: notificationTag,
         renotify: false, // Blokuje ponowne dzwonienie/wibracje dla tego samego zdarzenia
         requireInteraction: false,

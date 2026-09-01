@@ -371,6 +371,18 @@ async function sendPushToFamily(
     )
   );
 
+  // Automatyczne czyszczenie wygasłych lub odinstalowanych subskrypcji (HTTP 404 / 410 Gone)
+  for (let i = 0; i < results.length; i++) {
+    const res = results[i];
+    if (res.status === "rejected") {
+      const err = res.reason;
+      if (err?.statusCode === 404 || err?.statusCode === 410) {
+        console.info(`Usuwanie wygasłej subskrypcji Push: ${finalSubs[i].endpoint}`);
+        await supabase.from("push_subscriptions").delete().eq("endpoint", finalSubs[i].endpoint);
+      }
+    }
+  }
+
   return {
     success: true,
     delivered: results.filter((r: any) => r.status === "fulfilled").length,

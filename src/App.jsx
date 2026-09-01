@@ -473,6 +473,19 @@ export default function App() {
         });
       }
 
+      // 3. LISTA ZAKUPÓW
+      const oldShoppingMap = new Map((oldData.shopping || []).map((s) => [s.id, s]));
+      (newData.shopping || []).forEach((newItem) => {
+        if (!oldShoppingMap.has(newItem.id)) {
+          deliverNotification(
+            'Lista zakupów 🛒',
+            `Nowy produkt na liście: "${newItem.text}"`,
+            `Dodano do listy zakupów: "${newItem.text}" 🛒`
+          );
+          hasNotified = true;
+        }
+      });
+
       if (!hasNotified) {
         showToast('Zsynchronizowano zmiany od domownika 🔄');
       }
