@@ -63,10 +63,10 @@
       ]
     },
     {
-      "name": "Jadłospis i posiłki",
-      "short_name": "Posiłki",
-      "description": "Zobacz i zaplanuj posiłki na ten tydzień",
-      "url": "/?tab=meals",
+      "name": "Wspólna lista zakupów",
+      "short_name": "Zakupy",
+      "description": "Szybkie przeglądanie i odhaczanie listy zakupów",
+      "url": "/?tab=shopping",
       "icons": [
         {
           "src": "/favicon.svg",

@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
 
 export function AppLogo({ className = 'w-8 h-8 rounded-xl', iconSize = 18 }) {
-  const [logoSrc, setLogoSrc] = useState('/logo.png');
+  const [logoSrc, setLogoSrc] = useState('/logo.svg');
   const [imgError, setImgError] = useState(false);
 
   const handleError = () => {
-    if (logoSrc === '/logo.png') {
-      setLogoSrc('/logo.svg');
+    if (logoSrc === '/logo.svg') {
+      setLogoSrc('/logo.png');
     } else {
       setImgError(true);
     }

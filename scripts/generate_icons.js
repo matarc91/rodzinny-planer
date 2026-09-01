@@ -1,4 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+/* global Buffer, process */
+import fs from 'fs';
+import path from 'path';
+import sharp from 'sharp';
+
+const SVG_LOGO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <!-- Tło squircle z gradientem Obsidian Dark -->
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -80,3 +85,67 @@
     <circle cx="294" cy="340" r="7.5" fill="#FDE68A" opacity="0.95"/>
   </g>
 </svg>
+`;
+
+// Monochromatyczna wersja badge'a do powiadomień systemowych
+const SVG_BADGE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <path d="M 20 44 L 48 22 L 76 44 L 70 49 L 48 31 L 26 49 Z" fill="#FFFFFF"/>
+  <path d="M 28 47 L 28 72 C 28 76 32 80 36 80 L 60 80 C 64 80 68 76 68 72 L 68 47 L 62 52 L 62 72 C 62 74 60 76 58 76 L 38 76 C 36 76 34 74 34 72 L 34 52 Z" fill="#FFFFFF"/>
+  <path d="M 48 40 C 48 49 51 53 58 54 C 51 55 48 59 48 68 C 48 59 45 55 38 54 C 45 53 48 49 48 40 Z" fill="#FFFFFF"/>
+</svg>`;
+
+async function run() {
+  const publicDir = path.resolve('public');
+  if (!fs.existsSync(publicDir)) {
+    fs.mkdirSync(publicDir, { recursive: true });
+  }
+
+  // 1. Zapis wektorowych SVG
+  fs.writeFileSync(path.join(publicDir, 'favicon.svg'), SVG_LOGO.trim(), 'utf8');
+  fs.writeFileSync(path.join(publicDir, 'logo.svg'), SVG_LOGO.trim(), 'utf8');
+  console.log('✓ Zapisano public/favicon.svg oraz public/logo.svg');
+
+  // 2. Generowanie PNG o różnych rozmiarach
+  const svgBuffer = Buffer.from(SVG_LOGO);
+
+  // 512x512 PWA Icon / Splash Screen
+  await sharp(svgBuffer)
+    .resize(512, 512)
+    .png({ quality: 100 })
+    .toFile(path.join(publicDir, 'icon-512.png'));
+  console.log('✓ Wygenerowano public/icon-512.png (512x512)');
+
+  // 512x512 Logo PNG
+  await sharp(svgBuffer)
+    .resize(512, 512)
+    .png({ quality: 100 })
+    .toFile(path.join(publicDir, 'logo.png'));
+  console.log('✓ Wygenerowano public/logo.png (512x512)');
+
+  // 192x192 PWA Icon
+  await sharp(svgBuffer)
+    .resize(192, 192)
+    .png({ quality: 100 })
+    .toFile(path.join(publicDir, 'icon-192.png'));
+  console.log('✓ Wygenerowano public/icon-192.png (192x192)');
+
+  // 72x72 Notification Badge
+  const badgeBuffer = Buffer.from(SVG_BADGE);
+  await sharp(badgeBuffer)
+    .resize(72, 72)
+    .png({ quality: 100 })
+    .toFile(path.join(publicDir, 'badge-72.png'));
+  console.log('✓ Wygenerowano public/badge-72.png (72x72)');
+
+  // 96x96 Notification Badge
+  await sharp(badgeBuffer)
+    .resize(96, 96)
+    .png({ quality: 100 })
+    .toFile(path.join(publicDir, 'badge.png'));
+  console.log('✓ Wygenerowano public/badge.png (96x96)');
+}
+
+run().catch((err) => {
+  console.error('Błąd generowania ikon:', err);
+  process.exit(1);
+});

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, ArrowRight, UserPlus, X } from 'lucide-react';
 import { Chip } from '../components/ui/Chip.jsx';
+import { AppLogo } from '../components/ui/AppLogo.jsx';
 import { PoweredByFooter } from '../components/ui/PoweredByFooter.jsx';
 import { PERSON_PALETTE, AVATAR_EMOJIS, uid, COLORS } from '../utils/constants.js';
 
@@ -55,6 +56,7 @@ export function ProfileSelection({ supabase, profile, data, onProfileSelected, o
   return (
     <div className="min-h-screen flex flex-col items-center justify-between p-6 bg-[#121214] text-stone-100 animate-fadeIn">
       <div className="w-full max-w-sm flex-1 flex flex-col items-center justify-center">
+        <AppLogo className="w-16 h-16 rounded-2xl shadow-lg shadow-amber-900/20 mb-6" iconSize={32} />
         <div className="w-full bg-[#1E1E22] p-6 rounded-3xl border border-[#33333C] shadow-2xl space-y-4">
           <div>
             <h2 style={{ fontFamily: 'Fraunces' }} className="text-2xl font-bold mb-1">
