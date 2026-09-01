@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Repeat } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Repeat, Plus } from 'lucide-react';
 import { COLORS, MONTHS, WEEKDAYS } from '../utils/constants.js';
 import {
   todayStr,
@@ -21,7 +21,7 @@ import { Section } from '../components/ui/Section.jsx';
 import { EmptyState } from '../components/ui/EmptyState.jsx';
 import { extractTextSummaryFromDoc } from '../utils/noteMigration.js';
 
-export function CalendarView({ data, onOpenEvent, selectedDay: propSelectedDay, onSelectDay }) {
+export function CalendarView({ data, onOpenEvent, selectedDay: propSelectedDay, onSelectDay, onAddEvent }) {
   const [monthAnchor, setMonthAnchor] = useState(todayStr());
   const [internalSelectedDay, setInternalSelectedDay] = useState(todayStr());
   const selectedDay = propSelectedDay || internalSelectedDay;
@@ -217,9 +217,29 @@ export function CalendarView({ data, onOpenEvent, selectedDay: propSelectedDay, 
           day: 'numeric',
           month: 'long',
         })}
+        action={
+          <button
+            type="button"
+            onClick={() => onAddEvent?.(selectedDay)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition cursor-pointer shadow-2xs"
+          >
+            <Plus size={14} /> Dodaj
+          </button>
+        }
       >
         {dayEvents.length === 0 ? (
-          <EmptyState text="Brak wydarzeń w tym dniu" />
+          <div className="space-y-3">
+            <EmptyState text="Brak wydarzeń w tym dniu" />
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => onAddEvent?.(selectedDay)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-stone-800/90 hover:bg-stone-800 text-stone-200 border border-stone-700/80 hover:border-amber-500/40 transition cursor-pointer shadow-xs"
+              >
+                <Plus size={14} className="text-amber-400" /> Dodaj wydarzenie na ten dzień
+              </button>
+            </div>
+          </div>
         ) : (
           <div className="space-y-2">
             {dayEvents

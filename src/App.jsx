@@ -1064,7 +1064,8 @@ export default function App() {
   };
 
   const openAddEvent = (dateStr) => {
-    setAddEventDate(dateStr || todayStr());
+    const targetDate = dateStr || (tab === 'calendar' && addEventDate ? addEventDate : todayStr());
+    setAddEventDate(targetDate);
     setModalPayload(null);
     setModal('event');
   };
@@ -1260,6 +1261,7 @@ export default function App() {
               selectedDay={addEventDate}
               onSelectDay={setAddEventDate}
               onOpenEvent={openDetailEvent}
+              onAddEvent={openAddEvent}
             />
           )}
           {tab === 'tasks' && (
@@ -1327,7 +1329,7 @@ export default function App() {
       <FloatingActionButton
         currentTab={tab}
         settings={data.settings}
-        onAddEvent={() => openAddEvent(todayStr())}
+        onAddEvent={() => openAddEvent(tab === 'calendar' ? addEventDate : todayStr())}
         onAddTask={() => openAddTask(todayStr())}
         onAddNote={() => setModal('note')}
         onAddWall={() => setModal('wall')}
