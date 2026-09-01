@@ -1,10 +1,17 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "https://esm.sh/web-push@3.6.7";
 
-// Klucze VAPID skonfigurowane w Secrets
-const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY") || "BO8-dI3zfjiVL76KjpiwgQYNLvDKGqrPyrWUV4RotrVqMPZsHBaegbv-9vxlKHalZmPTYTl2yd17kxPJdauIjI8";
-const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") || "3wjNsNQ5_kfV5jb90DQ57VG0e35dRBLWSucOP1qmYQs";
+// ====================================================================
+// KONFIGURACJA KLUCZY VAPID
+// ====================================================================
+// Klucze pobierane ze zmiennych środowiskowych (Supabase Secrets)
+// z bezpiecznym fallbackiem na klucze projektu
+const VAPID_PUBLIC_KEY =
+  Deno.env.get("VAPID_PUBLIC_KEY") ||
+  "BO8-dI3zfjiVL76KjpiwgQYNLvDKGqrPyrWUV4RotrVqMPZsHBaegbv-9vxlKHalZmPTYTl2yd17kxPJdauIjI8";
+const VAPID_PRIVATE_KEY =
+  Deno.env.get("VAPID_PRIVATE_KEY") ||
+  "3wjNsNQ5_kfV5jb90DQ57VG0e35dRBLWSucOP1qmYQs";
 const VAPID_SUBJECT = "mailto:kontakt@syncup.pl";
 
 if (VAPID_PRIVATE_KEY) {
@@ -18,9 +25,12 @@ if (VAPID_PRIVATE_KEY) {
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
-// Funkcja zwracająca aktualną datę i czas w polskiej strefie czasowej (Europe/Warsaw)
+// ====================================================================
+// POMOCNIK CZASU (Strefa czasowa Polska: Europe/Warsaw)
+// ====================================================================
 function getPolishDateTime() {
   const now = new Date();
   const dtf = new Intl.DateTimeFormat("en-CA", {
@@ -50,17 +60,20 @@ function getPolishDateTime() {
   const dateStr = `${map.year}-${map.month}-${map.day}`;
   const timeStr = `${map.hour}:${map.minute}`;
 
-  // Obiekt Date reprezentujący polski czas lokalny
+  // Obiekt Date reprezentujący czas lokalny w Polsce
   const localDate = new Date(year, month - 1, day, hour, minute, second);
 
   // Jutro w polskim czasie
   const tomorrowDate = new Date(year, month - 1, day + 1, hour, minute, second);
-  const tomorrowStr = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, '0')}-${String(tomorrowDate.getDate()).padStart(2, '0')}`;
+  const tomorrowStr = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, "0")}-${String(tomorrowDate.getDate()).padStart(2, "0")}`;
 
   return { dateStr, timeStr, localDate, tomorrowStr };
 }
 
-serve(async (req) => {
+// ====================================================================
+// GŁÓWNY HANDLER SUPABASE EDGE FUNCTION (Deno.serve)
+// ====================================================================
+Deno.serve(async (req) => {
   // Obsługa preflight CORS
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -74,7 +87,7 @@ serve(async (req) => {
     );
 
     // =========================================================================
-    // TRYB 1: CRON_CHECK (Automatyczne sprawdzanie terminów w chmurze co minutę)
+    // TRYB 1: CRON_CHECK (Automatyczne sprawdzanie terminów w tle co 1 minutę)
     // =========================================================================
     if (rawBody.mode === "cron_check") {
       const { dateStr: today, tomorrowStr: tomorrow, localDate: nowLocal } = getPolishDateTime();
@@ -85,9 +98,9 @@ serve(async (req) => {
         .select("family_id, data");
 
       if (stateErr || !familyStates) {
-        return new Response(JSON.stringify({ error: stateErr?.message || "No states" }), { 
+        return new Response(JSON.stringify({ error: stateErr?.message || "Brak stanów rodzin" }), {
           status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
@@ -100,7 +113,7 @@ serve(async (req) => {
         const sentReminderKeys = { ...(data.sentReminderKeys || {}) };
         let stateModified = false;
 
-        // 1. Sprawdzanie wydarzeń
+        // 1. Sprawdzanie przypomnień o WYDARZENIACH
         const events = data.events || [];
         for (const ev of events) {
           const reminderHours = ev.reminder?.hours ?? ev.reminderHours;
@@ -112,22 +125,20 @@ serve(async (req) => {
             }
 
             let isMatchingDate = false;
-            if (targetDate >= ev.date) {
-              const freq = ev.recurrence?.freq || 'none';
-              if (freq === 'none') {
-                if (ev.endDate && ev.endDate >= ev.date) {
-                  isMatchingDate = targetDate >= ev.date && targetDate <= ev.endDate;
-                } else {
-                  isMatchingDate = targetDate === ev.date;
-                }
-              } else if (freq === 'daily') {
+            const freq = ev.recurrence?.freq || "none";
+
+            if (freq === "none") {
+              // Dla wydarzeń jednorazowych przypomnienie dotyczy dnia rozpoczęcia
+              isMatchingDate = targetDate === ev.date;
+            } else if (targetDate >= ev.date) {
+              if (freq === "daily") {
                 isMatchingDate = true;
-              } else if (freq === 'weekly') {
+              } else if (freq === "weekly") {
                 isMatchingDate = new Date(targetDate).getDay() === new Date(ev.date).getDay();
-              } else if (freq === 'biweekly') {
+              } else if (freq === "biweekly") {
                 const diffDays = Math.round((new Date(targetDate).getTime() - new Date(ev.date).getTime()) / (1000 * 60 * 60 * 24));
                 isMatchingDate = diffDays >= 0 && diffDays % 14 === 0;
-              } else if (freq === 'quadweekly') {
+              } else if (freq === "quadweekly") {
                 const diffDays = Math.round((new Date(targetDate).getTime() - new Date(ev.date).getTime()) / (1000 * 60 * 60 * 24));
                 isMatchingDate = diffDays >= 0 && diffDays % 28 === 0;
               }
@@ -135,23 +146,21 @@ serve(async (req) => {
 
             if (isMatchingDate) {
               const timeStr = ev.time || "09:00";
-              const [yh, mh, dh] = targetDate.split('-').map(Number);
-              const [hh, mm] = timeStr.split(':').map(Number);
+              const [yh, mh, dh] = targetDate.split("-").map(Number);
+              const [hh, mm] = timeStr.split(":").map(Number);
               const eventDate = new Date(yh, mh - 1, dh, hh, mm, 0);
 
-              const reminderDate = new Date(eventDate.getTime() - (Number(reminderHours) * 60 * 60 * 1000));
+              const reminderDate = new Date(eventDate.getTime() - Number(reminderHours) * 60 * 60 * 1000);
               const diffMinutes = (nowLocal.getTime() - reminderDate.getTime()) / (60 * 1000);
 
-              // Sprawdzamy okno czasowe (maksymalnie 4 minuty)
+              // Okno tolerancji: 0 do 4 minut od planowanego czasu przypomnienia
               if (diffMinutes >= 0 && diffMinutes <= 4.0) {
                 const logKey = `cron_ev_${ev.id}_${targetDate}_${reminderHours}_${timeStr}`;
 
-                // BLOKADA 1: Czy wysłano już w stanie rodziny?
-                if (sentReminderKeys[logKey]) {
-                  continue;
-                }
+                // Blokada 1: Czy wysłano w pamięci stanu rodziny?
+                if (sentReminderKeys[logKey]) continue;
 
-                // BLOKADA 2: Czy wysłano w tabeli sent_push_logs?
+                // Blokada 2: Czy wysłano w tabeli sent_push_logs?
                 const isAlreadySent = await hasLogKey(supabase, logKey);
                 if (isAlreadySent) {
                   sentReminderKeys[logKey] = new Date().toISOString();
@@ -159,17 +168,18 @@ serve(async (req) => {
                   continue;
                 }
 
-                // Oznaczamy natychmiast, aby żaden współbieżny proces nie powtórzył wysyłki
+                // Oznaczamy natychmiast
                 sentReminderKeys[logKey] = new Date().toISOString();
                 stateModified = true;
                 await markLogKey(supabase, logKey);
 
                 const title = "Nadchodzące wydarzenie 🔔";
-                const body = reminderHours === 0
-                  ? `Nadszedł czas wydarzenia: "${ev.title}" (${timeStr})`
-                  : `Przypomnienie: "${ev.title}" o ${timeStr}`;
+                const body =
+                  reminderHours === 0
+                    ? `Nadszedł czas wydarzenia: "${ev.title}" (${timeStr})`
+                    : `Przypomnienie: "${ev.title}" o ${timeStr}`;
 
-                logs.push(`Wysyłanie wydarzenia: ${ev.title} (${logKey}) do rodziny ${familyId}`);
+                logs.push(`Wysłano przypomnienie o wydarzeniu: ${ev.title} (${logKey})`);
                 await sendPushToFamily(supabase, familyId, title, body, undefined, "/", ev.personIds, logKey);
                 sentCount++;
               }
@@ -177,35 +187,31 @@ serve(async (req) => {
           }
         }
 
-        // 2. Sprawdzanie zadań
+        // 2. Sprawdzanie przypomnień o ZADANIACH
         const tasks = data.tasks || [];
         for (const t of tasks) {
           const reminderHours = t.reminder?.hours ?? t.reminderHours;
           if (reminderHours === null || reminderHours === undefined) continue;
 
-          // Jeśli zadanie jest już oznaczone jako zrobione, pomijamy
+          // Jeśli zadanie jest już zrobione, pomijamy
           const completions = t.completions || {};
-          if (completions[today] || completions['once']) continue;
+          if (completions[today] || completions["once"]) continue;
 
           const targetDateStr = t.dueDate || today;
           if (targetDateStr === today || targetDateStr === tomorrow) {
             const timeStr = t.time || "09:00";
-            const [yh, mh, dh] = targetDateStr.split('-').map(Number);
-            const [hh, mm] = timeStr.split(':').map(Number);
+            const [yh, mh, dh] = targetDateStr.split("-").map(Number);
+            const [hh, mm] = timeStr.split(":").map(Number);
             const taskDate = new Date(yh, mh - 1, dh, hh, mm, 0);
 
-            const reminderDate = new Date(taskDate.getTime() - (Number(reminderHours) * 60 * 60 * 1000));
+            const reminderDate = new Date(taskDate.getTime() - Number(reminderHours) * 60 * 60 * 1000);
             const diffMinutes = (nowLocal.getTime() - reminderDate.getTime()) / (60 * 1000);
 
             if (diffMinutes >= 0 && diffMinutes <= 4.0) {
               const logKey = `cron_task_${t.id}_${targetDateStr}_${reminderHours}_${timeStr}`;
 
-              // BLOKADA 1: Czy wysłano już w stanie rodziny?
-              if (sentReminderKeys[logKey]) {
-                continue;
-              }
+              if (sentReminderKeys[logKey]) continue;
 
-              // BLOKADA 2: Czy wysłano w tabeli sent_push_logs?
               const isAlreadySent = await hasLogKey(supabase, logKey);
               if (isAlreadySent) {
                 sentReminderKeys[logKey] = new Date().toISOString();
@@ -213,26 +219,26 @@ serve(async (req) => {
                 continue;
               }
 
-              // Oznaczamy natychmiast, aby żaden współbieżny proces nie powtórzył wysyłki
               sentReminderKeys[logKey] = new Date().toISOString();
               stateModified = true;
               await markLogKey(supabase, logKey);
 
               const title = "Przypomnienie o zadaniu 📝";
-              const body = reminderHours === 0
-                ? `Nadszedł czas na zadanie: "${t.title}"`
-                : `Przypomnienie: "${t.title}" (termin: ${timeStr})`;
+              const body =
+                reminderHours === 0
+                  ? `Nadszedł czas na zadanie: "${t.title}"`
+                  : `Przypomnienie: "${t.title}" (termin: ${timeStr})`;
 
-              logs.push(`Wysyłanie zadania: ${t.title} (${logKey}) do rodziny ${familyId}`);
+              logs.push(`Wysłano przypomnienie o zadaniu: ${t.title} (${logKey})`);
               await sendPushToFamily(supabase, familyId, title, body, undefined, "/", t.personIds, logKey);
               sentCount++;
             }
           }
         }
 
-        // Jeśli wysłano jakiekolwiek przypomnienie, aktualizujemy sentReminderKeys w family_state
+        // Aktualizacja kluczy w family_state
         if (stateModified) {
-          // Usuwamy klucze starsze niż 7 dni żeby nie powiększać stanu bez końca
+          // Czyścimy klucze starsze niż 7 dni
           const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
           for (const [k, time] of Object.entries(sentReminderKeys)) {
             if (new Date(time as string).getTime() < sevenDaysAgo) {
@@ -246,19 +252,22 @@ serve(async (req) => {
         }
       }
 
-      return new Response(JSON.stringify({ 
-        success: true, 
-        mode: "cron_check", 
-        sentCount, 
-        polishTime: nowLocal.toISOString(),
-        logs 
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          mode: "cron_check",
+          sentCount,
+          polishTime: nowLocal.toISOString(),
+          logs,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     // =========================================================================
-    // TRYB 2: BEZPOŚREDNIE POWIADOMIENIE LUB WEBHOOK
+    // TRYB 2: BEZPOŚREDNIE POWIADOMIENIE (ZDARZENIE W APLIKACJI)
     // =========================================================================
     const record = rawBody.record || rawBody;
     const title = record.title || "Rodzinny Planer 🔔";
@@ -283,14 +292,17 @@ serve(async (req) => {
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: err?.message || String(err) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
 
+// ====================================================================
+// WYSYŁANIE POWIADOMIENIA PUSH DO DOMOWNIKÓW
+// ====================================================================
 async function sendPushToFamily(
   supabase: any,
   family_id?: string,
@@ -307,21 +319,23 @@ async function sendPushToFamily(
   }
 
   if (!family_id) {
-    return { success: false, message: "Brak family_id" };
+    return { success: false, message: "Brak parametru family_id" };
   }
 
-  // 1. Pobieramy wszystkie subskrypcje powiązane z daną rodziną
-  let query = supabase.from("push_subscriptions").select("*").eq("family_id", family_id);
-  const { data: subscriptions, error } = await query;
+  // 1. Pobieramy subskrypcje powiązane z rodziną
+  const { data: subscriptions, error } = await supabase
+    .from("push_subscriptions")
+    .select("*")
+    .eq("family_id", family_id);
 
   if (error || !subscriptions || subscriptions.length === 0) {
     return { success: true, message: "Brak aktywnych subskrypcji dla tej rodziny", delivered: 0, total: 0 };
   }
 
-  // 2. Wykluczamy autora akcji (twórcę), aby nie wysyłać powiadomienia do samego siebie
+  // 2. Wykluczamy autora akcji (nie wysyłamy powiadomienia do samego siebie)
   let targetSubs = subscriptions.filter((sub: any) => !author_user_id || sub.user_id !== author_user_id);
 
-  // 3. Jeśli podano target_person_ids, filtrujemy według przypisanych członków rodziny
+  // 3. Jeśli określono target_person_ids, filtrujemy według przypisanych profili
   if (target_person_ids && Array.isArray(target_person_ids) && target_person_ids.length > 0) {
     const { data: profiles } = await supabase
       .from("profiles")
@@ -338,7 +352,7 @@ async function sendPushToFamily(
     }
   }
 
-  // 4. De-duplikacja subskrypcji po unikalnym endpoint (zapobiega podwójnym powiadomieniom na to samo urządzenie)
+  // 4. De-duplikacja subskrypcji po unikalnym endpoint (ochrona przed wielokrotnym dzwonieniem)
   const uniqueSubsMap = new Map<string, any>();
   for (const sub of targetSubs) {
     if (sub.endpoint && !uniqueSubsMap.has(sub.endpoint)) {
@@ -348,12 +362,19 @@ async function sendPushToFamily(
   const finalSubs = Array.from(uniqueSubsMap.values());
 
   if (finalSubs.length === 0) {
-    return { success: true, message: "Brak odbiorców po wykluczeniu autora i filtracji person_id", delivered: 0, total: subscriptions.length };
+    return {
+      success: true,
+      message: "Brak odbiorców po wykluczeniu autora i filtracji profili",
+      delivered: 0,
+      total: subscriptions.length,
+    };
   }
 
   const payload = JSON.stringify({
     title: title || "Rodzinny Planer 🔔",
     body: body || "Nowe powiadomienie",
+    icon: "/favicon.svg",
+    badge: "/badge-72.png",
     url: url || "/",
     tag: tag || "rodzinny-planer-notif",
     timestamp: Date.now(),
@@ -371,7 +392,7 @@ async function sendPushToFamily(
     )
   );
 
-  // Automatyczne czyszczenie wygasłych lub odinstalowanych subskrypcji (HTTP 404 / 410 Gone)
+  // 5. Automatyczne usuwanie wygasłych lub odinstalowanych tokenów (HTTP 404 Not Found / 410 Gone)
   for (let i = 0; i < results.length; i++) {
     const res = results[i];
     if (res.status === "rejected") {
@@ -390,7 +411,7 @@ async function sendPushToFamily(
   };
 }
 
-// Pomocnicza funkcja sprawdzająca czy klucz wysyłki został już zapisany w sent_push_logs
+// Sprawdzanie unikalnego klucza w sent_push_logs
 async function hasLogKey(supabase: any, logKey: string): Promise<boolean> {
   try {
     const { data, error } = await supabase
@@ -408,7 +429,7 @@ async function hasLogKey(supabase: any, logKey: string): Promise<boolean> {
   return false;
 }
 
-// Pomocnicza funkcja zapisująca wysłany klucz w sent_push_logs
+// Zapis unikalnego klucza w sent_push_logs
 async function markLogKey(supabase: any, logKey: string): Promise<void> {
   try {
     await supabase
