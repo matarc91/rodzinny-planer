@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { COLORS } from '../../utils/constants.js';
-import { uid } from '../../utils/constants.js';
+import { COLORS, uid } from '../../utils/constants.js';
 import { ModalShell } from '../ui/ModalShell.jsx';
 import { PersonPicker } from '../ui/PersonPicker.jsx';
 import { RecurrencePicker } from '../ui/RecurrencePicker.jsx';

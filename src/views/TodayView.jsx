@@ -1,6 +1,6 @@
-import { Pin, AlertCircle, Utensils, Calendar, CheckSquare } from 'lucide-react';
+import { Pin, AlertCircle, ShoppingCart, Calendar, CheckSquare } from 'lucide-react';
 import { COLORS } from '../utils/constants.js';
-import { todayStr, occursOnDate, getMonday, weekdayIdx, isTaskDoneForPeriod } from '../utils/dateUtils.js';
+import { todayStr, occursOnDate, isTaskDoneForPeriod } from '../utils/dateUtils.js';
 import { Chip } from '../components/ui/Chip.jsx';
 import { PersonRow } from '../components/ui/PersonRow.jsx';
 import { Section } from '../components/ui/Section.jsx';
@@ -21,9 +21,7 @@ export function TodayView({ data, onOpenEvent, onOpenTask, onToggleTask }) {
   const overdue = data.tasks.filter(
     (t) => (t.recurrence?.freq || 'none') === 'none' && t.dueDate < today && !isTaskDoneForPeriod(t, today)
   );
-  const todayMeal = data.settings?.enableMeals
-    ? data.meals?.[getMonday(today)]?.[weekdayIdx(today)] || null
-    : null;
+  const pendingShopping = (data.shopping || []).filter((s) => !s.isCompleted);
   const pinnedWall = data.settings?.enableWall ? (data.wall || []).filter((w) => w.isPinned) : [];
 
   return (
@@ -90,30 +88,27 @@ export function TodayView({ data, onOpenEvent, onOpenTask, onToggleTask }) {
         </Section>
       )}
 
-      {todayMeal && (todayMeal.lunch || todayMeal.dinner || todayMeal.breakfast) && (
-        <div style={{ background: COLORS.accentSoft, borderColor: '#5C4A28' }} className="border rounded-2xl p-4 shadow-2xs">
-          <div className="flex items-center gap-2 mb-2 font-bold text-sm text-amber-300">
-            <Utensils size={16} /> Dzisiejsze menu
+      {pendingShopping.length > 0 && (
+        <div
+          style={{ background: '#192820', borderColor: '#2E563E' }}
+          className="border rounded-2xl p-3.5 shadow-2xs flex items-center justify-between gap-3"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+              <ShoppingCart size={16} />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-emerald-300">Lista zakupów</div>
+              <div className="text-xs text-stone-300">
+                {pendingShopping.length === 1
+                  ? '1 rzecz do kupienia'
+                  : `${pendingShopping.length} pozycji do kupienia`}
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-            {todayMeal.breakfast && (
-              <div>
-                <span className="font-semibold text-amber-400/80">Śniadanie:</span>{' '}
-                <span className="text-stone-200">{todayMeal.breakfast}</span>
-              </div>
-            )}
-            {todayMeal.lunch && (
-              <div>
-                <span className="font-semibold text-amber-400/80">Obiad:</span>{' '}
-                <span className="text-amber-200 font-bold">{todayMeal.lunch}</span>
-              </div>
-            )}
-            {todayMeal.dinner && (
-              <div>
-                <span className="font-semibold text-amber-400/80">Kolacja:</span>{' '}
-                <span className="text-stone-200">{todayMeal.dinner}</span>
-              </div>
-            )}
+          <div className="text-xs font-semibold text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-500/30">
+            {pendingShopping.slice(0, 2).map((s) => s.text).join(', ')}
+            {pendingShopping.length > 2 && '...'}
           </div>
         </div>
       )}

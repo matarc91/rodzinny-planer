@@ -96,9 +96,9 @@ export function AddWallMessageModal({ people, currentUserId, initial, onClose, o
         <button
           onClick={save}
           style={{ background: COLORS.accent, color: '#121214' }}
-          className="w-full rounded-xl py-3 text-sm font-bold shadow hover:opacity-90 transition mt-2"
+          className="w-full rounded-xl py-3 text-sm font-bold shadow hover:opacity-90 transition mt-2 cursor-pointer"
         >
-          Przypnij
+          {isPinned ? 'Przypnij na górze tablicy' : 'Opublikuj wiadomość'}
         </button>
       </div>
     </ModalShell>

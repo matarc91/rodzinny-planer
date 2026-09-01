@@ -5,7 +5,7 @@ import {
   CheckSquare,
   StickyNote,
   MessageSquare,
-  Utensils,
+  ShoppingCart,
   PiggyBank,
   Settings,
   Sparkles,
@@ -44,9 +44,9 @@ import {
   TodayView,
   CalendarView,
   TasksView,
+  ShoppingView,
   NotesView,
   WallView,
-  MealsView,
   BudgetView,
   SettingsView,
   ResetPasswordScreen,
@@ -72,7 +72,7 @@ export default function App() {
     if (typeof window !== 'undefined' && window.location) {
       const p = new URLSearchParams(window.location.search);
       const t = p.get('tab');
-      if (t && ['today', 'calendar', 'tasks', 'notes', 'wall', 'meals', 'budget', 'settings'].includes(t)) {
+      if (t && ['today', 'calendar', 'tasks', 'shopping', 'notes', 'wall', 'budget', 'settings'].includes(t)) {
         return t;
       }
     }
@@ -632,6 +632,13 @@ export default function App() {
         profile={profile}
         data={data}
         onProfileSelected={(pid) => setProfile({ ...profile, person_id: pid })}
+        onCreatePerson={async (newPerson) => {
+          const updatedPeople = [...(data.people || []), newPerson];
+          await persist({ ...data, people: updatedPeople });
+          await supabaseClient.from('profiles').update({ person_id: newPerson.id }).eq('id', profile.id);
+          setProfile({ ...profile, person_id: newPerson.id });
+          showToast(`Witaj w rodzinie, ${newPerson.name}! 👋`);
+        }}
       />
     );
 
@@ -818,8 +825,7 @@ export default function App() {
     }
   };
 
-  const updateMeal = (mondayKey, weekMeals) =>
-    persist({ ...data, meals: { ...(data.meals || {}), [mondayKey]: weekMeals } });
+  const updateShopping = (nextList) => persist({ ...data, shopping: nextList });
 
   const updateSettings = (newSettings) => persist({ ...data, settings: newSettings });
 
@@ -1186,9 +1192,9 @@ export default function App() {
     { id: 'today', label: 'Dziś', icon: Clock },
     { id: 'calendar', label: 'Kalendarz', icon: Calendar },
     { id: 'tasks', label: 'Zadania', icon: CheckSquare },
+    { id: 'shopping', label: 'Zakupy', icon: ShoppingCart },
     { id: 'notes', label: 'Notatki', icon: StickyNote },
     ...(data.settings?.enableWall ? [{ id: 'wall', label: 'Tablica', icon: MessageSquare }] : []),
-    ...(data.settings?.enableMeals ? [{ id: 'meals', label: 'Posiłki', icon: Utensils }] : []),
     ...(data.settings?.enableBudget !== false ? [{ id: 'budget', label: 'Budżet', icon: PiggyBank }] : []),
   ];
 
@@ -1290,8 +1296,14 @@ export default function App() {
               onTogglePinWallMessage={togglePinWallMessage}
             />
           )}
-          {tab === 'meals' && data.settings?.enableMeals && (
-            <MealsView meals={data.meals} onUpdateMeal={updateMeal} />
+          {tab === 'shopping' && (
+            <ShoppingView
+              shopping={data.shopping || []}
+              people={data.people || []}
+              currentUserId={currentUserId}
+              onUpdateShopping={updateShopping}
+              showToast={showToast}
+            />
           )}
           {tab === 'budget' && data.settings?.enableBudget !== false && (
             <BudgetView
@@ -1331,6 +1343,7 @@ export default function App() {
         settings={data.settings}
         onAddEvent={() => openAddEvent(tab === 'calendar' ? addEventDate : todayStr())}
         onAddTask={() => openAddTask(todayStr())}
+        onAddShopping={() => setTab('shopping')}
         onAddNote={() => setModal('note')}
         onAddWall={() => setModal('wall')}
         onAddBudget={() => openAddBudget(selectedBudgetMonth)}

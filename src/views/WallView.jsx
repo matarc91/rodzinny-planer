@@ -4,9 +4,11 @@ import { Chip } from '../components/ui/Chip.jsx';
 import { EmptyState } from '../components/ui/EmptyState.jsx';
 import { RichContentView } from '../components/ui/RichContentView.jsx';
 
-export function WallView({ wall = [], people, onDeleteWallMessage, onTogglePinWallMessage }) {
-  const sorted = [...wall].sort((a, b) =>
-    a.isPinned !== b.isPinned ? (a.isPinned ? -1 : 1) : b.createdAt.localeCompare(a.createdAt)
+export function WallView({ wall = [], people = [], onDeleteWallMessage, onTogglePinWallMessage }) {
+  const sorted = [...(wall || [])].sort((a, b) =>
+    a.isPinned !== b.isPinned
+      ? (a.isPinned ? -1 : 1)
+      : (b.createdAt || '').localeCompare(a.createdAt || '')
   );
   return (
     <div className="space-y-5 animate-fadeIn">

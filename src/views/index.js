@@ -1,6 +1,7 @@
 export { TodayView } from './TodayView.jsx';
 export { CalendarView } from './CalendarView.jsx';
 export { TasksView } from './TasksView.jsx';
+export { ShoppingView } from './ShoppingView.jsx';
 export { NotesView } from './NotesView.jsx';
 export { WallView } from './WallView.jsx';
 export { MealsView } from './MealsView.jsx';

@@ -113,6 +113,18 @@ export function createDefaultBudgetGoals() {
   ];
 }
 
+export const SHOPPING_CATEGORIES = [
+  { id: 'produce', name: 'Warzywa i Owoce', icon: '🥦', color: '#5AD8A6' },
+  { id: 'dairy', name: 'Nabiał', icon: '🧀', color: '#F6BD16' },
+  { id: 'bakery', name: 'Pieczywo', icon: '🍞', color: '#FF9D4D' },
+  { id: 'meat', name: 'Mięso i Ryby', icon: '🥩', color: '#F65D79' },
+  { id: 'pantry', name: 'Sypkie i Przetwory', icon: '🥫', color: '#A770EF' },
+  { id: 'drinks', name: 'Napoje', icon: '🧃', color: '#6DC8EC' },
+  { id: 'frozen', name: 'Mrożonki', icon: '🧊', color: '#5B8FF9' },
+  { id: 'household', name: 'Chemia i Dom', icon: '🧼', color: '#36B37E' },
+  { id: 'other', name: 'Inne', icon: '🛒', color: '#A0A0AB' },
+];
+
 export function emptyData() {
   const currentMonthKey = new Date().toISOString().slice(0, 7); // np. '2026-08'
   return {
@@ -125,11 +137,12 @@ export function emptyData() {
     tasks: [],
     notes: [],
     wall: [],
-    meals: {},
+    shopping: [],
     budget: {
       [currentMonthKey]: createDefaultMonthBudget(),
     },
     budgetGoals: createDefaultBudgetGoals(),
-    settings: { enableMeals: true, enableWall: true, enableBudget: true },
+    settings: { enableShopping: true, enableWall: true, enableBudget: true },
   };
 }
+

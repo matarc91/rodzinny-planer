@@ -329,8 +329,8 @@ function NoteCard({ note, enableWall, onEdit, onDelete, onConvert, onToggleItem 
   );
 }
 
-export function NotesView({ notes, enableWall = false, onDelete, onConvert, onEdit, onToggleItem }) {
-  const sorted = [...notes].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+export function NotesView({ notes = [], enableWall = false, onDelete, onConvert, onEdit, onToggleItem }) {
+  const sorted = [...(notes || [])].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   return (
     <div className="space-y-5 animate-fadeIn">
       <div className="px-1">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, X, Calendar, CheckSquare, StickyNote, MessageSquare, PiggyBank } from 'lucide-react';
+import { Plus, X, Calendar, CheckSquare, ShoppingCart, StickyNote, MessageSquare, PiggyBank } from 'lucide-react';
 import { COLORS } from '../../utils/constants.js';
 
 export function FloatingActionButton({
@@ -7,6 +7,7 @@ export function FloatingActionButton({
   settings = {},
   onAddEvent,
   onAddTask,
+  onAddShopping,
   onAddNote,
   onAddWall,
   onAddBudget,
@@ -20,8 +21,8 @@ export function FloatingActionButton({
     setIsOpen(false);
   }
 
-  // Ukryj przycisk w ustawieniach i posiłkach
-  if (currentTab === 'settings' || currentTab === 'meals') {
+  // Ukryj przycisk w ustawieniach i liście zakupów (tam jest stały pasek dodawania)
+  if (currentTab === 'settings' || currentTab === 'shopping') {
     return null;
   }
 
@@ -63,6 +64,17 @@ export function FloatingActionButton({
       borderColor: 'border-emerald-500/30',
       textColor: 'text-emerald-400',
       action: () => handleAction(onAddTask),
+      show: true,
+    },
+    {
+      id: 'shopping',
+      label: 'Produkt do kupienia',
+      icon: ShoppingCart,
+      color: '#10B981',
+      bgColor: 'bg-emerald-500/15',
+      borderColor: 'border-emerald-500/30',
+      textColor: 'text-emerald-400',
+      action: () => handleAction(onAddShopping),
       show: true,
     },
     {

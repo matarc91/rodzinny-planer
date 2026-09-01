@@ -9,6 +9,9 @@
 -- Wklej poniższy kod w: Supabase Dashboard -> SQL Editor -> New Query -> Run
 -- ====================================================================
 
+-- 0. USUNIĘCIE ARCHIWALNYCH TABEL (likwiduje ostrzeżenia RLS dla starych tabel)
+DROP TABLE IF EXISTS public.family_data CASCADE;
+
 -- 1. TABELA: families (Gospodarstwa domowe / grupy rodzinne)
 CREATE TABLE IF NOT EXISTS public.families (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

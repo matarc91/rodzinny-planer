@@ -460,23 +460,6 @@ export function SettingsView({
         </div>
         <div className="flex items-center justify-between py-1 pt-2 border-t border-stone-800">
           <div>
-            <div className="text-sm font-semibold text-stone-200">Posiłki (Jadłospis)</div>
-            <div className="text-xs text-stone-400">Tygodniowy planer obiadów i posiłków.</div>
-          </div>
-          <button
-            type="button"
-            onClick={() => onUpdateSettings({ ...settings, enableMeals: !settings.enableMeals })}
-            className="p-1 transition active:scale-90"
-          >
-            {settings.enableMeals ? (
-              <ToggleRight size={32} className="text-amber-400" />
-            ) : (
-              <ToggleLeft size={32} className="text-stone-600" />
-            )}
-          </button>
-        </div>
-        <div className="flex items-center justify-between py-1 pt-2 border-t border-stone-800">
-          <div>
             <div className="text-sm font-semibold text-stone-200">Planowanie Budżetu</div>
             <div className="text-xs text-stone-400">Miesięczny podział przychodów, stałych kosztów i limitów.</div>
           </div>
