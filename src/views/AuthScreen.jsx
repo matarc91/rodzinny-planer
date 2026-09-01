@@ -126,23 +126,6 @@ export function AuthScreen({ supabase }) {
           throw new Error('Wprowadź poprawny adres e-mail.');
         }
 
-        // Weryfikacja czy użytkownik istnieje w tabeli profiles
-        try {
-          const { data: existingProfiles, error: checkErr } = await supabase
-            .from('profiles')
-            .select('id, email')
-            .eq('email', cleanEmail);
-
-          if (!checkErr && existingProfiles && existingProfiles.length === 0) {
-            throw new Error('Nie znaleziono zarejestrowanego użytkownika o podanym adresie e-mail.');
-          }
-        } catch (checkErr) {
-          if (checkErr.message?.includes('Nie znaleziono zarejestrowanego użytkownika')) {
-            throw checkErr;
-          }
-          // Jeśli zapytanie do profiles nie ma kolumny email lub RLS blokuje, kontynuujemy z resetPasswordForEmail
-        }
-
         const { error: err } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
           redirectTo: window.location.origin,
         });

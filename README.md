@@ -28,6 +28,15 @@ Szczegółowy opis architektury systemu, schematu bazy danych, mechanizmów sync
 
 ---
 
+## 🗄️ Konfiguracja Bazy Danych i Bezpieczeństwa (Supabase & RLS)
+
+Aby skonfigurować bazę danych, włączyć pełne bezpieczeństwo **Row-Level Security (RLS)** i wyeliminować ostrzeżenia Supabase:
+1. Otwórz swój projekt w **Supabase Dashboard**,
+2. Przejdź do zakładki **SQL Editor** -> **New Query**,
+3. Wklej i uruchom zawartość pliku [`supabase_complete_setup.sql`](./supabase_complete_setup.sql).
+
+---
+
 ## 🚀 Uruchomienie
 
 ```bash
