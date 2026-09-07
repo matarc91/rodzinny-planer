@@ -1,18 +1,19 @@
-# Architektura i Funkcjonalności Aplikacji: Rodzinny Planer (v3.1.0)
+# Architektura i Dokumentacja Techniczna: Rodzinny Planer (v3.2.0)
 
-Kompleksowa dokumentacja techniczna, architektoniczna oraz funkcjonalna aplikacji **Rodzinny Planer** – nowoczesnego, wieloplatformowego asystenta organizacji życia rodzinnego.
+Kompleksowa dokumentacja techniczna, architektoniczna oraz funkcjonalna aplikacji **Rodzinny Planer** – nowoczesnego, wieloplatformowego asystenta organizacji życia rodzinnego z synchronizacją czasu rzeczywistego (Realtime), zabezpieczeniami Row-Level Security (RLS) oraz powiadomieniami Web Push.
 
 ---
 
 ## 1. Przegląd Systemu (System Overview)
 
-**Rodzinny Planer** to aplikacja internetowa (PWA) czasu rzeczywistego, zaprojektowana z myślą o ułatwieniu codziennej koordynacji obowiązków domowych, budżetu, kalendarza, planowania posiłków oraz komunikacji wewnątrz rodziny.
+**Rodzinny Planer** to aplikacja internetowa klasy Progressive Web App (PWA) działająca w czasie rzeczywistym, zaprojektowana z myślą o ułatwieniu codziennej koordynacji obowiązków domowych, budżetu, kalendarza, wspólnych zakupów oraz komunikacji wewnątrz rodziny.
 
-### Główne cele projektu:
-- **Wspólna przestrzeń:** Jeden scentralizowany punkt dostępu dla wszystkich domowników (rodzice, dzieci, współlokatorzy).
-- **Czas rzeczywisty (Realtime):** Natychmiastowa synchronizacja zmian między urządzeniami wszystkich członków rodziny.
-- **Wieloplatformowość (PWA & Web Push):** Działa na telefonach z systemem Android, iOS oraz komputerach stacjonarnych z obsługą powiadomień w tle.
-- **Prywatność i bezpieczeństwo:** Dedykowana izolacja danych rodzinnych z wykorzystaniem Row Level Security (RLS) w PostgreSQL/Supabase.
+### Główne filary systemu:
+- **Wspólna przestrzeń:** Scentralizowany punkt dostępu dla wszystkich domowników (rodzice, dzieci, współlokatorzy).
+- **Czas rzeczywisty (Realtime):** Natychmiastowa synchronizacja zmian między urządzeniami wszystkich członków rodziny bez konieczności przeładowywania strony.
+- **Wieloplatformowość (PWA & Web Push):** Dedykowany interfejs zoptymalizowany pod smartfony (iOS, Android) oraz komputery z pełną obsługą instalacji na ekranie głównym i powiadomień w tle.
+- **Bezpieczeństwo i Izolacja:** Pełna izolacja danych grup rodzinnych z wykorzystaniem polityk **Row-Level Security (RLS)** w bazie PostgreSQL/Supabase.
+- **Design System *Dark Obsidian*:** Ekskluzywna ciemna paleta kolorystyczna (`#121214`, `#1A1A1E`) z ciepłymi bursztynowo-złotymi (`#F59E0B`, `#FCD34D`) i szmaragdowymi (`#10B981`) akcentami.
 
 ---
 
@@ -20,10 +21,13 @@ Kompleksowa dokumentacja techniczna, architektoniczna oraz funkcjonalna aplikacj
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        FRONTEND (React 18 + Vite)                      │
+│                        FRONTEND (React 19 + Vite)                      │
 │   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌────────────┐ │
-│   │  TailwindCSS │  │ Lucide Icons │  │  PWA / SW.js │  │ Logger API │ │
+│   │  TailwindCSS │  │ Lucide Icons │  │  PWA / SW.js │  │ Sharp/Icons│ │
 │   └──────────────┘  └──────────────┘  └──────────────┘  └────────────┘ │
+│   ┌──────────────────────────────────────────────────────────────────┐ │
+│   │     Nawigacja 4+1 (Dziś, Kalendarz, Zadania, Notatki + Więcej)   │ │
+│   └──────────────────────────────────────────────────────────────────┘ │
 └───────────────────────────────────▲────────────────────────────────────┘
                                     │ HTTPS / WSS (WebSockets)
                                     ▼
@@ -33,248 +37,376 @@ Kompleksowa dokumentacja techniczna, architektoniczna oraz funkcjonalna aplikacj
 │   │                      Supabase Auth (JWT)                       │   │
 │   └────────────────────────────────────────────────────────────────┘   │
 │   ┌─────────────────────────┐           ┌──────────────────────────┐   │
-│   │  PostgreSQL (RLS, JSON) │ ◄───────► │  Realtime Engine (WS)    │   │
+│   │  PostgreSQL (RLS, JSONB)│ ◄───────► │  Realtime Engine (WS)    │   │
+│   │  Tabela: family_state   │           │  Kanał: realtime:public  │   │
 │   └─────────────────────────┘           └──────────────────────────┘   │
 │   ┌────────────────────────────────────────────────────────────────┐   │
-│   │         Supabase Edge Functions (Deno + web-push VAPID)        │   │
+│   │     Supabase Edge Functions (Deno.serve + web-push VAPID)      │   │
+│   │     - Wysyłka Push, CRON minutowy, auto-czyszczenie 410/404    │   │
 │   └────────────────────────────────────────────────────────────────┘   │
 └───────────────────────────────────▲────────────────────────────────────┘
-                                    │ Web Push Protocol
+                                    │ Web Push Protocol (VAPID P-256)
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│                    URZĄDZENIA KOŃCOWE (Android / iOS)                  │
-│       Powiadomienia Push w tle, Badges, Dźwięki i Wibracje             │
+│                    URZĄDZENIA KOŃCOWE (Android / iOS / PC)             │
+│       Powiadomienia Push w tle, Badges PNG, Dźwięki i Wibracje         │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Stos technologiczny:
-- **Warstwa UI:** React 18, Vite, Tailwind CSS (estetyka *Dark Obsidian* z akcentami Amber i Emerald), Lucide React.
-- **Zarządzanie stanem:** React Hooks (`useMemo`, `useCallback`, `useReducer`), lokalny bufor stanu z automatyczną synchronizacją do bazy danych.
-- **Baza danych i uwierzytelnianie:** Supabase (PostgreSQL 15+, Supabase Auth, Realtime Postgres Changes).
-- **Mechanizm Push:** Service Worker (`public/sw.js`), Web Push API z kluczami kryptograficznymi **VAPID P-256 (NIST prime256v1)**.
-- **Funkcje Serverless:** Supabase Edge Functions (`supabase_edge_function_send_push.ts`) w środowisku Deno.
+- **Warstwa UI:** React 19, Vite, Tailwind CSS, Lucide React, TipTap Editor.
+- **Zarządzanie stanem i cache:** React Hooks (`useCallback`, `useMemo`, `useRef`), optymistyczne aktualizacje UI, lokalny cache `sentReminderKeys` oraz Service Worker Cache.
+- **Baza danych i autoryzacja:** Supabase (PostgreSQL 15+, Supabase Auth, Row-Level Security, Realtime Replication).
+- **Silnik Web Push:** Service Worker (`public/sw.js`), Web Push API z certyfikowanymi kluczami **VAPID P-256 (NIST prime256v1)**.
+- **Funkcje Serverless:** Supabase Edge Functions (`supabase_edge_function_send_push.ts`) oparte na natywnym `Deno.serve`.
+- **Generowanie zasobów graficznych:** Node.js + `sharp` (`scripts/generate_icons.js`).
 
 ---
 
-## 3. Schemat Bazy Danych i Model Danych
+## 3. Schemat Bazy Danych i Bezpieczeństwo (RLS)
 
-Struktura bazy danych opiera się na separacji grup rodzinnych i bezpiecznym dostępie przez mechanizm RLS:
+Model danych został zoptymalizowany pod kątem szybkości zapytań, integralności relacyjnej i pełnego bezpieczeństwa.
+
+```mermaid
+erDiagram
+    auth_users ||--o{ profiles : "identyfikuje"
+    families ||--o{ profiles : "posiada domowników"
+    families ||--|| family_state : "przechowuje stan"
+    families ||--o{ push_subscriptions : "posiada urządzenia"
+    push_subscriptions ||--o{ auth_users : "należy do użytkownika"
+    sent_push_logs ||--|| push_subscriptions : "rejestruje wysyłki"
+
+    families {
+        uuid id PK
+        text name
+        text join_code UK
+        timestamptz created_at
+        uuid created_by FK
+    }
+
+    profiles {
+        uuid id PK
+        uuid family_id FK
+        text person_id
+        text email
+        timestamptz updated_at
+    }
+
+    family_state {
+        uuid family_id PK
+        jsonb data
+        timestamptz updated_at
+    }
+
+    push_subscriptions {
+        bigserial id PK
+        uuid user_id FK
+        uuid family_id FK
+        text endpoint UK
+        text p256dh
+        text auth
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    sent_push_logs {
+        bigserial id PK
+        text log_key UK
+        timestamptz sent_at
+    }
+```
 
 ### 1. `families`
 Główna tabela reprezentująca gospodarstwo domowe / grupę rodzinną.
-- `id` (UUID, Primary Key)
-- `name` (TEXT) – nazwa rodziny (np. *„Rodzina Kowalskich”*)
-- `join_code` (TEXT, UNIQUE) – 6-znakowy unikalny kod dołączania nowych członków
-- `created_at` (TIMESTAMPTZ)
-- `created_by` (UUID) – identyfikator założyciela rodziny
+- `id` (`UUID`, Primary Key, `gen_random_uuid()`)
+- `name` (`TEXT`) – nazwa rodziny (np. *„Rodzina Kowalskich”*)
+- `join_code` (`TEXT`, UNIQUE) – unikalny 6-znakowy kod dołączania nowych członków
+- `created_at` (`TIMESTAMPTZ`)
+- `created_by` (`UUID`, Foreign Key do `auth.users.id`)
 
-### 2. `family_members`
-Relacja łącząca konto użytkownika (`auth.users`) z rodziną.
-- `id` (UUID, Primary Key)
-- `family_id` (UUID, Foreign Key do `families.id`)
-- `user_id` (UUID, Foreign Key do `auth.users.id`)
-- `role` (TEXT) – rola w rodzinie (`owner`, `parent`, `child`, `member`)
-- `person_id` (TEXT) – przypisany profil fizycznego członka rodziny
-- `joined_at` (TIMESTAMPTZ)
+### 2. `profiles`
+Profile użytkowników łączące konta Supabase Auth z grupami rodzinnymi i fizycznymi osobami w aplikacji.
+- `id` (`UUID`, Primary Key, Foreign Key do `auth.users.id`)
+- `family_id` (`UUID`, Foreign Key do `families.id`)
+- `person_id` (`TEXT`) – identyfikator przypisanego domownika (np. `p_123456`)
+- `email` (`TEXT`) – adres e-mail konta
+- `updated_at` (`TIMESTAMPTZ`)
 
-### 3. `family_data`
-Struktura dokumentowa przechowująca stan modułów operacyjnych rodziny w formacie JSONB:
-- `family_id` (UUID, Primary Key)
-- `calendar_events` (JSONB) – tablica wydarzeń w kalendarzu
-- `tasks` (JSONB) – tablica zadań i checklist
-- `budget` (JSONB) – słownik budżetów miesięcznych (`YYYY-MM`) zawierający:
-  - `income` (wpływy)
-  - `fixedCosts` (koszty stałe)
-  - `expenses` (wydatki bieżące z podziałem na kategorie)
-  - `categories` (zdefiniowane limity kategorii)
-- `budget_goals` (JSONB) – globalne cele oszczędnościowe i inwestycyjne
-- `meal_plan` (JSONB) – plan posiłków w ujęciu tygodniowym
-- `recipes` (JSONB) – książka przepisów kulinarnych
-- `notes` (JSONB) – tablica notatek
-- `wall_messages` (JSONB) – wpisy i wiadomości na tablicy rodzinnej
-- `people` (JSONB) – lista profili domowników (imię, awatar, kolor, punkty)
+### 3. `family_state`
+Dokumentowa tabela przechowująca stan wszystkich modułów rodziny w strukturze `JSONB`:
+- `family_id` (`UUID`, Primary Key, Foreign Key do `families.id`)
+- `data` (`JSONB`) – kompletny stan rodziny:
+  - `people` (`Array`) – lista domowników (id, imię, kolor, awatar, punkty),
+  - `events` (`Array`) – wydarzenia w kalendarzu (daty, godziny, powtarzalność, przypisane osoby, przypomnienia),
+  - `tasks` (`Array`) – zadania, checklisty, terminy, osoby odpowiedzialne,
+  - `shopping` (`Array`) – wspólna lista zakupów z 9 kategoriami,
+  - `budget` (`Object`) – słownik budżetów miesięcznych (`YYYY-MM`: dochody, koszty stałe, wydatki bieżące),
+  - `budgetGoals` (`Array`) – cele oszczędnościowe kwotowe i otwarte (∞),
+  - `notes` (`Array`) – notatki z formatowaniem TipTap,
+  - `wall` (`Array`) – wiadomości i wpisy na tablicy (lodówce),
+  - `settings` (`Object`) – konfiguracja aktywnych modułów,
+  - `sentReminderKeys` (`Object`) – rejestr wyemitowanych przypomnień zapobiegający duplikatom.
+- `updated_at` (`TIMESTAMPTZ`)
 
 ### 4. `push_subscriptions`
-Kolekcja aktywnych tokenów subskrypcji Web Push dla poszczególnych urządzeń:
-- `id` (BIGINT / UUID, Primary Key)
-- `user_id` (UUID) – użytkownik
-- `family_id` (UUID) – powiązana rodzina
-- `endpoint` (TEXT, UNIQUE) – unikalny endpoint dostawcy powiadomień (Google FCM, Mozilla, Apple)
-- `p256dh` (TEXT) – klucz publiczny klienta
-- `auth` (TEXT) – klucz autoryzacyjny
-- `updated_at` (TIMESTAMPTZ)
+Kolekcja aktywnych tokenów subskrypcji Web Push dla telefonów i przeglądarek:
+- `id` (`BIGSERIAL`, Primary Key)
+- `user_id` (`UUID`, Foreign Key do `auth.users.id`)
+- `family_id` (`UUID`, Foreign Key do `families.id`)
+- `endpoint` (`TEXT`, UNIQUE) – unikalny adres URL serwera Web Push (FCM, Apple APNs, Mozilla)
+- `p256dh` (`TEXT`) – klucz publiczny klienta
+- `auth` (`TEXT`) – klucz autoryzacyjny
+- `created_at` / `updated_at` (`TIMESTAMPTZ`)
+
+### 5. `sent_push_logs`
+Tabela logów zapobiegająca wielokrotnej wysyłce tego samego powiadomienia w oknie czasowym:
+- `id` (`BIGSERIAL`, Primary Key)
+- `log_key` (`TEXT`, UNIQUE) – unikalny klucz zdarzenia (np. `cron_ev_123_2026-09-08_1_09:00`)
+- `sent_at` (`TIMESTAMPTZ`)
+
+### Polityki Bezpieczeństwa (Row-Level Security):
+Wszystkie tabele mają **włączone RLS**. Dostęp do danych jest zabezpieczony funkcją pomocniczą:
+```sql
+CREATE OR REPLACE FUNCTION public.get_current_user_family_id()
+RETURNS UUID AS $$
+  SELECT family_id FROM public.profiles WHERE id = auth.uid() LIMIT 1;
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+```
+Użytkownik ma dostęp **wyłącznie** do rekordów powiązanych z jego `family_id`.
 
 ---
 
-## 4. Szczegółowy Opis Modułów Funkcjonalnych
+## 4. Architektura UI i Nawigacji (Układ 4+1)
 
-### 4.1. Widok „Dzisiaj” (TodayView)
-*Pulpit główny i centrum dowodzenia bieżącego dnia.*
-- **Wybór aktywnego profilu:** Szybkie przełączanie kontekstu (kto w danej chwili korzysta z aplikacji).
-- **Statystyki dnia:** Liczba zaplanowanych zadań, spotkań i bilans dnia.
-- **Szybkie akcje:** Błyskawiczne dodawanie zadania, wydatku, wydarzenia lub notatki jednym kliknięciem.
-- **Plan dnia w pigułce:** Zintegrowana oś czasu z zadaniami na dziś, nadchodzącymi wydarzeniami oraz zaplanowanym menu obiadowym.
-
-### 4.2. Zadania i Obowiązki (TasksView)
-*Zarządzanie listami to-do, podziałem obowiązków i gamifikacją.*
-- **System ról i przypisań:** Możliwość przypisania zadania do konkretnej osoby lub całej rodziny.
-- **Gamifikacja (Punkty i Nagrody):** Za ukończenie zadań domownicy zdobywają punkty, które zasilają ich profil.
-- **Podział na kategorie:** Dom, Szkoła, Zakupy, Praca, Osobiste.
-- **Filtrowanie i Sortowanie:** Po terminie wykonania, priorytecie, osobie odpowiedzialnej i statusie ukończenia.
-- **Podzadania (Subtasks):** Rozbijanie złożonych czynności na mniejsze etapy z paskiem postępu.
-
-### 4.3. Kalendarz Rodzinny (CalendarView)
-*Wizualizacja harmonogramu całej rodziny w jednym miejscu.*
-- **Elastyczne widoki:** Widok pełnego miesiąca, agendy tygodniowej oraz listy nadchodzących zdarzeń.
-- **Kolorystyka per osoba:** Każde wydarzenie jest automatycznie oznaczane kolorem przypisanego członka rodziny.
-- **Wydarzenia całodniowe i godzinowe:** Obsługa ram czasowych, lokalizacji, opisów i powiadomień przypominających.
-- **Filtrowanie:** Szybkie wyodrębnienie kalendarza wybranej osoby.
-
-### 4.4. Budżet i Finanse (BudgetView v3.1.0)
-*Kompleksowe zarządzanie domowymi finansami i oszczędnościami.*
-- **Podsumowanie finansowe miesiąca:**
-  - Przychody, Stałe koszty, Wydatki bieżące, Bilans netto oraz wskaźnik oszczędności.
-- **Kategorie wydatków z limitami:**
-  - Konfigurowalne kategorie (np. Jedzenie, Rozrywka, Rachunki, Transport).
-  - Paski postępu ostrzegające o zbliżaniu się lub przekroczeniu założonego limitu.
-- **Cele Finansowe (Moduł Długoterminowy):**
-  - Definiowanie celów kwotowych (np. *„Wakacje w Grecji” – 8 000 zł*) oraz celów otwartych/bez limitu (ze wskaźnikiem nieskończoności **∞**).
-  - Globalna kumulacja oszczędności – postęp celu nie zeruje się wraz z nowym miesiącem.
-  - Dedykowany przycisk *„+ Dodaj wydatek na ten cel”* ułatwiający szybkie odkładanie środków.
-- **Modal transakcji z podziałem na 4 sekcje:**
-  1. **Wydatek** (kategoria budżetowa, kwota, data, osoba, opis).
-  2. **Stały koszt** (comiesięczne zobowiązania: kredyty, czynsz, subskrypcje).
-  3. **Cele** (wpłata/wydatek przypisany do konkretnego celu finansowego).
-  4. **Przychód** (pensja, premie, inne wpływy).
-- **Historia i Filtrowanie Operacji:** Możliwość filtrowania transakcji według typu: *Wszystkie*, *Wydatki*, *Stałe koszty*, *Cele*, *Przychody*.
-
-### 4.5. Planer Posiłków i Przepisy (MealsView)
-*Organizacja domowej kuchni i zakupów spożywczych.*
-- **Tygodniowe Menu:** Rozpiska dań na 7 dni z podziałem na Śniadanie, Drugie śniadanie, Obiad, Podwieczorek i Kolację.
-- **Książka Przepisów:** Baza rodzinnych przepisów ze składnikami, czasem przygotowania i instrukcją krok po kroku.
-- **Inteligentna Lista Zakupów:** Automatyczne generowanie listy zakupów na podstawie zaplanowanych posiłków i brakujących składników.
-
-### 4.6. Tablica Rodzinna (WallView)
-*Interaktywna, wirtualna tablica ogłoszeń i wspomnień.*
-- **Wiadomości i notatki:** Szybkie zostawianie wiadomości dla innych domowników (jak karteczki na lodówce).
-- **Emotikony i Reakcje:** Możliwość reagowania na wpisy serduszkami, kciukami w górę i komentarzami.
-- **Przypinanie ogłoszeń:** Ważne komunikaty mogą być przypięte na samej górze tablicy.
-
-### 4.7. Notatki i Dokumenty (NotesView)
-*Podręczny notes na ważne informacje, kody, wymiary i pomysły.*
-- **Kolorowe fiszki:** Wizualna organizacja za pomocą barwnych etykiet.
-- **Formatowanie i listy kontrolne:** Tworzenie notatek tekstowych oraz list do odhaczania.
-- **Wyszukiwarka:** Szybkie przeszukiwanie treści notatek i tytułów.
-
-### 4.8. Ustawienia, Bezpieczeństwo i Powiadomienia (SettingsView)
-*Centrum konfiguracji konta, rodziny i diagnostyki urządzenia.*
-- **Zarządzanie profilem rodziny:** Edycja nazwy, udostępnianie kodu zaproszenia (`join_code`), zarządzanie członkami.
-- **Silnik Web Push (Android / iOS / Desktop):**
-  - Monitorowanie statusu uprawnień systemowych w czasie rzeczywistym (`granted`, `denied`, `default`).
-  - Dedykowany przycisk *„Nadaj uprawnienia teraz / Zezwól na powiadomienia”*.
-  - Synchronizacja tokenów subskrypcji z bazą danych Supabase.
-  - Funkcja wysyłania testowych powiadomień przez chmurę.
-- **Dziennik Zdarzeń (App Logs):** Wbudowana konsola diagnostyczna rejestrująca zdarzenia sieciowe, operacje na bazie i błędy w czasie rzeczywistym.
-
----
-
-## 5. Przepływ Danych i Synchronizacja Czasu Rzeczywistego
+W wersji 3.2.0 wdrożono zoptymalizowaną architekturę nawigacji mobilnej, zgodną z wytycznymi iOS Human Interface Guidelines i Material 3:
 
 ```
-[Użytkownik A wykonuje akcję (np. ukończenie zadania)]
-                       │
-                       ▼
-         [Lokalna aktualizacja stanu w React]
-                       │
-                       ▼
-       [Zapis do tabeli 'family_data' w Supabase]
-                       │
-                       ▼
-       [PostgreSQL trigger / Realtime Broadcast]
-                       │
-         ┌─────────────┴─────────────┐
-         ▼                           ▼
-[WebSocket do Użytkownika B]   [Supabase Edge Function: send-push]
-         │                                   │
-         ▼                                   ▼
-[Natychmiastowe odświeżenie UI]   [Wysłanie powiadomienia Web Push]
-                                             │
-                                             ▼
-                                  [Service Worker w telefonie]
-                                  [Wyświetlenie powiadomienia 🔔]
+┌────────────────────────────────────────────────────────────────────────┐
+│                        NAGŁÓWEK (Sticky Header)                        │
+│   [Logo]  Nazwa Rodziny    [Chip Aktywnego Profilu]    [⚙ Ustawienia]  │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│                        GŁÓWNY OBSZAR ROBOCZY                           │
+│     (Dziś / Kalendarz / Zadania / Notatki / Zakupy / Tablica / Budżet) │
+│                                                                        │
+│                                                [ + Pływający FAB ]     │
+├────────────────────────────────────────────────────────────────────────┤
+│                     DOLNY PASEK NAWIGACJI (4+1)                        │
+│   ┌────────┐   ┌───────────┐   ┌─────────┐   ┌─────────┐   ┌────────┐  │
+│   │ ⏰ Dziś │   │ 📅 Kalend.│   │ ✅Zadania│   │ 📝Notatki│   │ ⋯Więcej│  │
+│   └────────┘   └───────────┘   └─────────┘   └─────────┘   └────┬───┘  │
+└─────────────────────────────────────────────────────────────────┼──────┘
+                                                                  │
+                                      ┌───────────────────────────▼──────┐
+                                      │   Wysuwany Arkusz (Bottom Sheet) │
+                                      │   🛒 Wspólna Lista Zakupów (3)   │
+                                      │   📌 Tablica Rodzinna (Lodówka)  │
+                                      │   💰 Budżet i Cele Finansowe     │
+                                      │   ⚙️ Ustawienia i Profile         │
+                                      └──────────────────────────────────┘
 ```
+
+### Podział modułów:
+1. **Główny pasek dolny (zawsze widoczny pod kciukiem):**
+   - ⏰ **Dziś (`today`):** Pulpit dnia, powitanie kontekstowe, podsumowanie agendy i szybki podgląd zakupów.
+   - 📅 **Kalendarz (`calendar`):** Widok siatki miesiąca, wydarzenia per osoba z wielokolorowymi gradientami, czysty interfejs bez zduplikowanych przycisków (obsługa przez FAB).
+   - ✅ **Zadania (`tasks`):** Zadania domowe, filtry domowników, cykle powtarzalności i punkty.
+   - 📝 **Notatki (`notes`):** Podręczne notatki z edytorem TipTap, listami kontrolnymi i wyszukiwarką.
+   - ⋯ **Więcej (`more`):** Przycisk otwierający nowoczesny arkusz Dark Obsidian z pozostałymi modułami oraz wskaźnikiem powiadomień.
+2. **Moduły w arkuszu „Więcej” (`MoreMenuSheet`):**
+   - 🛒 **Lista Zakupów (`shopping`):** Nowy moduł wspólnej listy zakupów z 9 kategoriami i licznikiem *"X do kupienia"*.
+   - 📌 **Tablica (`wall`):** Wirtualne karteczki na lodówce, przypinanie ważnych wiadomości.
+   - 💰 **Budżet (`budget`):** Limity miesięczne, historia transakcji z `inputMode="decimal"`, długoterminowe cele oszczędnościowe (kwotowe i bez limitu ∞).
+   - ⚙️ **Ustawienia (`settings`):** Zarządzanie domownikami, uprawnienia Web Push, zmiana haseł, diagnostyka.
 
 ---
 
-## 6. Struktura Katalogów Projektu
+## 5. Szczegółowy Opis Modułów
+
+### 5.1. Pulpit „Dziś” ([`TodayView.jsx`](file:///c:/Users/arcis/Projekty/rodzinny-planer/src/views/TodayView.jsx))
+- **Kontekstowe Powitanie:** Dynamiczny nagłówek dopasowany do pory dnia i profilu (*„Dzień dobry, Aniu! ☀️”*, *„Dobry wieczór, Kuba! 🌙”*).
+- **Zintegrowana Agenda:** Wydarzenia z kalendarza na dzisiejszy dzień posortowane chronologicznie.
+- **Zadania i Zaległości:** Lista zadań na dziś wraz z wyróżnieniem zadań przeterminowanych.
+- **Widżet Zakupów:** Klikalny kafelek z listą niekupionych produktów i przejściem do zakupów.
+- **Przypięte wiadomości:** Wyróżnione wpisy z lodówki na samej górze.
+
+### 5.2. Wspólna Lista Zakupów ([`ShoppingView.jsx`](file:///c:/Users/arcis/Projekty/rodzinny-planer/src/views/ShoppingView.jsx))
+- **9 Intuicyjnych Kategorii:** Warzywa i owoce, Pieczywo, Nabiał, Mięso i ryby, Napoje, Przekąski i słodycze, Chemia i dom, Kosmetyki i higiena, Inne.
+- **Inteligentne Auto-dopasowanie:** Automatyczne wykrywanie kategorii na podstawie wpisywanego tekstu (np. *„mleko”* -> Nabiał, *„chleb”* -> Pieczywo, *„jabłka”* -> Warzywa i owoce).
+- **Tryb Sklepowy:** Szybkie odhaczanie produktów do koszyka w czasie rzeczywistym.
+- **Filtry i Wyszukiwanie:** Szybkie filtrowanie po nazwie oraz podział na sekcje *„Do kupienia”* i *„W koszyku”*.
+- **Czyszczenie koszyka:** Jedno kliknięcie usuwa wszystkie kupione pozycje.
+
+### 5.3. Kalendarz Rodzinny ([`CalendarView.jsx`](file:///c:/Users/arcis/Projekty/rodzinny-planer/src/views/CalendarView.jsx))
+- **Siatka Miesiąca:** Nowoczesny kalendarz z nawigacją miesiąc do miesiąca.
+- **Wielodniowe i Wielopodmiotowe Badge:** Wydarzenia rozciągające się na kilka dni oraz gradienty w kolorach przypisanych osób.
+- **Minimalistyczny UX:** Usunięto zbędne zduplikowane przyciski w nagłówkach – dodawanie wydarzeń odbywa się przez globalny przycisk `+` (FAB).
+
+### 5.4. Budżet i Finanse ([`BudgetView.jsx`](file:///c:/Users/arcis/Projekty/rodzinny-planer/src/views/BudgetView.jsx))
+- **Podsumowanie Miesiąca:** Przychody, koszty stałe, wydatki bieżące, bilans i wskaźnik oszczędności.
+- **Kategorie z Limitami:** Paski postępu informujące o stopniu wykorzystania budżetu.
+- **Długoterminowe Cele Oszczędnościowe:** Cele kwotowe oraz cele otwarte (∞) z globalną kumulacją środków niezależną od zmiany miesiąca.
+- **Klawiatura mobilna `inputMode="decimal"`:** Szybkie i bezbłędne wprowadzanie kwot na smartfonach.
+
+### 5.5. Tablica Rodzinna ([`WallView.jsx`](file:///c:/Users/arcis/Projekty/rodzinny-planer/src/views/WallView.jsx))
+- **Wiadomości na Lodówce:** Kolorowe karteczki z wiadomościami dla domowników.
+- **Przypinanie (`Pin`):** Ważne komunikaty pozostają na stałe na górze tablicy oraz na pulpicie „Dziś”.
+
+### 5.6. Notatki ([`NotesView.jsx`](file:///c:/Users/arcis/Projekty/rodzinny-planer/src/views/NotesView.jsx))
+- **Format TipTap:** Bogate notatki tekstowe z listami to-do.
+- **Konwersja na zadanie:** Możliwość zamiany prywatnej notatki na oficjalne zadanie dla rodziny.
+
+---
+
+## 6. Architektura Powiadomień Web Push i Service Workera
+
+System powiadomień zapewnia niezawodne dostarczanie alertów o nadchodzących wydarzeniach i zadaniach nawet przy wyłączonej aplikacji.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Użytkownik as Domownik (Telefon)
+    participant SW as Service Worker (sw.js)
+    participant Client as Aplikacja React
+    participant DB as Supabase PostgreSQL
+    participant Edge as Supabase Edge Function (send-push)
+    participant FCM as Web Push Gateway (Apple / Google)
+
+    Użytkownik->>Client: Zezwala na powiadomienia (VAPID)
+    Client->>SW: Rejestracja subskrypcji Push
+    Client->>DB: Zapis tokenu w push_subscriptions
+
+    alt Zdarzenie w aplikacji (np. nowe zadanie)
+        Client->>Edge: Wywołanie send-push (direct)
+        Edge->>DB: Pobranie subskrypcji rodziny
+        Edge->>FCM: Wysłanie szyfrowanej ramki Web Push
+        FCM->>SW: Doręczenie push event
+        SW->>Użytkownik: Wyświetlenie powiadomienia 🔔
+    else Zdalny harmonogram CRON (co minutę)
+        Edge->>DB: Odczyt family_state + sent_push_logs
+        Edge->>Edge: Sprawdzenie terminów (strefa Europe/Warsaw)
+        Edge->>FCM: Wysłanie powiadomień do przypisanych osób
+        FCM->>SW: Doręczenie push event
+        SW->>Użytkownik: Wyświetlenie powiadomienia 🔔
+    end
+```
+
+### Zabezpieczenia i optymalizacje Web Push:
+1. **Automatyczne usuwanie wygasłych subskrypcji (HTTP 410 Gone / 404 Not Found):** Funkcja Edge natychmiast czyści martwe tokeny z bazy.
+2. **Potrójna ochrona przed duplikatami:**
+   - Cache tagów w Service Workerze (12 godzin),
+   - Znaczniki `sentReminderKeys` w dokumencie `family_state`,
+   - Unikalne klucze w tabeli `sent_push_logs`.
+3. **Monochromatyczny Badge (`/badge-72.png`):** Krystalicznie czysta ikona w pasku stanu systemu Android.
+4. **Wymóg PWA na iOS:** Na systemach iOS (16.4+) powiadomienia działają po dodaniu aplikacji do ekranu początkowego (*Add to Home Screen*).
+
+---
+
+## 7. Branding i System Ikon
+
+W wersji 3.2.0 wdrożono unikalny system identyfikacji wizualnej:
+- **Koncepcja:** *„Złota Przystań i Iskra Rodziny”* (połączenie geometrycznego dachu domu, 4-ramiennej gwiazdy harmonii i punktów domowników na tle ciemnego squircla).
+- **Zasoby wektorowe i rastrowe:**
+  - [`public/favicon.svg`](file:///c:/Users/arcis/Projekty/rodzinny-planer/public/favicon.svg) & [`public/logo.svg`](file:///c:/Users/arcis/Projekty/rodzinny-planer/public/logo.svg) – skalowalne ikony wektorowe SVG,
+  - [`public/icon-512.png`](file:///c:/Users/arcis/Projekty/rodzinny-planer/public/icon-512.png) – ikona PWA w wysokiej rozdzielczości (512×512),
+  - [`public/icon-192.png`](file:///c:/Users/arcis/Projekty/rodzinny-planer/public/icon-192.png) – ikona pulpitu mobilnego (192×192),
+  - [`public/badge-72.png`](file:///c:/Users/arcis/Projekty/rodzinny-planer/public/badge-72.png) & [`public/badge.png`](file:///c:/Users/arcis/Projekty/rodzinny-planer/public/badge.png) – zoptymalizowane ikony powiadomień,
+  - [`scripts/generate_icons.js`](file:///c:/Users/arcis/Projekty/rodzinny-planer/scripts/generate_icons.js) – zautomatyzowany skrypt generujący komplet zasobów za pomocą biblioteki `sharp`.
+
+---
+
+## 8. Struktura Katalogów Projektu
 
 ```
 rodzinny-planer/
 ├── public/
-│   ├── favicon.svg               # Ikona aplikacji
-│   ├── manifest.json             # Manifest PWA
-│   └── sw.js                     # Service Worker do obsługi cache i powiadomień w tle
+│   ├── favicon.svg                   # Wektorowa ikona przeglądarki
+│   ├── logo.svg                      # Główne logo wektorowe aplikacji
+│   ├── logo.png                      # Logo rastrowe HD (512x512)
+│   ├── icon-192.png                  # Ikona PWA 192x192
+│   ├── icon-512.png                  # Ikona PWA 512x512
+│   ├── badge-72.png                  # Monochromatyczny badge powiadomień Android
+│   ├── manifest.json                 # Manifest PWA ze skrótami (Wydarzenie, Zadanie, Zakupy, Tablica)
+│   └── sw.js                         # Service Worker z obsługą cache i Web Push
+├── scripts/
+│   └── generate_icons.js             # Generator ikon bazujący na sharp
 ├── src/
-│   ├── assets/                   # Pliki graficzne i ikony
 │   ├── components/
-│   │   ├── modals/               # Okna modalne (transakcje, zadania, cele, kategorie itp.)
-│   │   │   ├── ManageGoalsModal.jsx
-│   │   │   ├── TransactionModal.jsx
-│   │   │   ├── AddTaskModal.jsx
+│   │   ├── modals/                   # Okna dialogowe
 │   │   │   ├── AddEventModal.jsx
-│   │   │   └── ...
-│   │   └── ui/                   # Komponenty atomowe (Button, ModalShell, Chip itp.)
+│   │   │   ├── AddTaskModal.jsx
+│   │   │   ├── AddWallMessageModal.jsx
+│   │   │   ├── EditPersonModal.jsx
+│   │   │   ├── ManageCategoriesModal.jsx
+│   │   │   ├── ManageGoalsModal.jsx
+│   │   │   └── TransactionModal.jsx
+│   │   └── ui/                       # Komponenty atomowe UI
+│   │       ├── AppLogo.jsx           # Dynamiczny komponent renderujący logo
+│   │       ├── Chip.jsx              # Pigułka profilu użytkownika
+│   │       ├── EmptyState.jsx        # Wizualizacja pustych stanów
+│   │       ├── FloatingActionButton.jsx # Pływający przycisk dodawania (FAB)
+│   │       ├── MoreMenuSheet.jsx     # Wysuwany arkusz dodatkowych modułów (4+1)
+│   │       ├── PersonPicker.jsx      # Selektor domowników
+│   │       ├── PoweredByFooter.jsx   # Stopka aplikacji
+│   │       └── Section.jsx           # Karta sekcji z nagłówkiem
 │   ├── utils/
-│   │   ├── constants.js          # Stałe kolorów, domyślne konfiguracje, kategorie
-│   │   ├── dateUtils.js          # Formatery dat i kalendarza
-│   │   ├── logger.js             # Rejestrator logów i diagnostyki
-│   │   ├── pushService.js        # Wrapper usług powiadomień Push
-│   │   └── supabaseClient.js     # Klient Supabase z obsługą sesji
-│   ├── views/                    # Główne ekrany aplikacji
-│   │   ├── TodayView.jsx         # Pulpit „Dzisiaj”
-│   │   ├── TasksView.jsx         # Zadania i obowiązki
-│   │   ├── CalendarView.jsx      # Kalendarz rodzinny
-│   │   ├── BudgetView.jsx        # Budżet, finanse i cele
-│   │   ├── MealsView.jsx         # Planer posiłków i przepisy
-│   │   ├── WallView.jsx          # Tablica rodzinna
-│   │   ├── NotesView.jsx         # Notatki
-│   │   ├── SettingsView.jsx      # Ustawienia i powiadomienia
-│   │   └── AuthScreen.jsx        # Logowanie i rejestracja
-│   ├── App.jsx                   # Główny kontroler aplikacji i routing widoków
-│   ├── main.jsx                  # Punkt wejścia React
-│   └── pushManager.js            # Niskopoziomowa obsługa rejestracji VAPID / Web Push
-├── supabase_edge_function_send_push.ts # Kod funkcji brzegowej Supabase do wysyłania Push
-├── supabase_notifications_setup.sql    # Skrypt SQL definiujący tabele powiadomień
+│   │   ├── constants.js              # Stałe, kolory Dark Obsidian, kategorie zakupów
+│   │   ├── dateUtils.js              # Pomocniki operacji na datach i kalendarzu
+│   │   ├── logger.js                 # Rejestrator logów diagnostycznych
+│   │   ├── noteMigration.js          # Narzędzia migracji i parsowania TipTap
+│   │   ├── pushService.js            # Serwis wywoływania powiadomień
+│   │   └── supabaseClient.js         # Klient Supabase z obsługą sesji
+│   ├── views/                        # Główne widoki aplikacji
+│   │   ├── AuthScreen.jsx            # Logowanie, rejestracja i reset hasła
+│   │   ├── BudgetView.jsx            # Budżet domowy i cele finansowe
+│   │   ├── CalendarView.jsx          # Kalendarz rodzinny
+│   │   ├── NotesView.jsx             # Notatki z listami zadań
+│   │   ├── ProfileSelection.jsx      # Ekran powitalny wyboru / tworzenia profilu
+│   │   ├── SettingsView.jsx          # Ustawienia, domownicy i diagnostyka Push
+│   │   ├── ShoppingView.jsx          # Wspólna lista zakupów (9 kategorii)
+│   │   ├── TodayView.jsx             # Pulpit dnia z kontekstowym powitaniem
+│   │   └── WallView.jsx              # Tablica rodzinna (lodówka)
+│   ├── App.jsx                       # Główny kontroler aplikacji, Realtime Sync i stan
+│   ├── main.jsx                      # Punkt startowy React
+│   └── pushManager.js                # Obsługa rejestracji VAPID w przeglądarce
+├── supabase_complete_setup.sql       # Kompletny skrypt SQL bazy z RLS
+├── supabase_edge_function_send_push.ts # Funkcja Deno.serve do wysyłki Web Push
 ├── package.json
 └── README.md
 ```
 
 ---
 
-## 7. Instrukcja Uruchomienia i Wdrożenia
+## 9. Instrukcja Uruchomienia i Wdrożenia
 
-### Wymagania wstępne:
-- Node.js 18+ lub Bun
-- Konto w Supabase (ze skonfigurowanym projektem)
+### Wymagania:
+- Node.js 18+ (zalecany Node.js 20+)
+- Konto w [Supabase](https://supabase.com)
 
-### Uruchomienie lokalne:
+### 1. Uruchomienie lokalne:
 ```bash
-# 1. Klonowanie repozytorium i instalacja zależności
+# Klonowanie repozytorium i instalacja zależności
 npm install
 
-# 2. Utworzenie pliku ze zmiennymi środowiskowymi (.env.local)
-VITE_SUPABASE_URL=twoj-projekt.supabase.co
+# Utworzenie pliku .env.local
+VITE_SUPABASE_URL=https://twoj-projekt.supabase.co
 VITE_SUPABASE_ANON_KEY=twoj-anon-key
-VITE_VAPID_PUBLIC_KEY=twoj-klucz-publiczny-vapid
+VITE_VAPID_PUBLIC_KEY=BO8-dI3zfjiVL76KjpiwgQYNLvDKGqrPyrWUV4RotrVqMPZsHBaegbv-9vxlKHalZmPTYTl2yd17kxPJdauIjI8
 
-# 3. Uruchomienie serwera deweloperskiego
+# Uruchomienie deweloperskie
 npm run dev
 ```
 
-### Budowanie wersji produkcyjnej:
+### 2. Generowanie ikon (w razie zmiany logo):
 ```bash
+node scripts/generate_icons.js
+```
+
+### 3. Budowanie produkcyjne:
+```bash
+npm run lint
 npm run build
 ```
 
 ---
-*Dokumentacja wygenerowana dla wersji: **Rodzinny Planer v3.1.0**.*
+*Dokumentacja zaktualizowana dla wersji: **Rodzinny Planer v3.2.0**.*
