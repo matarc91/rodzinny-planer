@@ -14,6 +14,7 @@ import {
   SlidersHorizontal,
   Target,
   Plus,
+  Pencil,
 } from 'lucide-react';
 import { format, addMonths, parseISO } from 'date-fns';
 import { COLORS, MONTHS, createDefaultMonthBudget, createDefaultBudgetGoals } from '../utils/constants.js';
@@ -38,8 +39,9 @@ export function BudgetView({
     onMonthChange?.(newKey);
   };
 
-  const [activeModal, setActiveModal] = useState(null); // 'add-transaction' | 'manage-categories' | 'manage-goals' | null
+  const [activeModal, setActiveModal] = useState(null); // 'add-transaction' | 'edit-transaction' | 'manage-categories' | 'manage-goals' | null
   const [selectedGoalForTx, setSelectedGoalForTx] = useState(null);
+  const [editingTransaction, setEditingTransaction] = useState(null);
   const [filterType, setFilterType] = useState('all'); // 'all' | 'expense' | 'fixedCost' | 'income'
 
   // Dane bieżącego miesiąca
@@ -197,25 +199,45 @@ export function BudgetView({
     };
   }, [budgetState, budgetGoals]);
 
-  // Zapis nowej transakcji
-  const handleSaveTransaction = (type, item) => {
-    if (!currentMonthBudget) return;
+  // Zapis nowej lub edytowanej transakcji
+  const handleSaveTransaction = (type, item, meta = {}) => {
+    const nextBudgetState = { ...budgetState };
 
-    const updatedMonth = { ...currentMonthBudget };
-    if (type === 'expense') {
-      updatedMonth.expenses = [item, ...(updatedMonth.expenses || [])];
-    } else if (type === 'fixedCost') {
-      updatedMonth.fixedCosts = [...(updatedMonth.fixedCosts || []), item];
-    } else if (type === 'income') {
-      updatedMonth.incomes = [...(updatedMonth.incomes || []), item];
+    // Jeśli to była EDYCJA -> usuń stary rekord z pierwotnego miesiąca i typu
+    if (meta.isEdit && meta.originalItem) {
+      const origMonthKey = meta.originalMonthKey || monthKey;
+      const origType = meta.originalItem.type || (meta.originalItem.goalId ? 'expense' : meta.originalType);
+
+      if (nextBudgetState[origMonthKey]) {
+        const oldMonth = { ...nextBudgetState[origMonthKey] };
+        if (origType === 'expense' || origType === 'goal') {
+          oldMonth.expenses = (oldMonth.expenses || []).filter((x) => x.id !== meta.originalItem.id);
+        } else if (origType === 'fixedCost') {
+          oldMonth.fixedCosts = (oldMonth.fixedCosts || []).filter((x) => x.id !== meta.originalItem.id);
+        } else if (origType === 'income') {
+          oldMonth.incomes = (oldMonth.incomes || []).filter((x) => x.id !== meta.originalItem.id);
+        }
+        nextBudgetState[origMonthKey] = oldMonth;
+      }
     }
+
+    // Określ miesiąc docelowy na podstawie daty (jeśli wpis zawiera date np. '2026-09-15') lub aktualny monthKey
+    const targetMonthKey = item.date && item.date.length >= 7 ? item.date.slice(0, 7) : monthKey;
+    const targetMonth = nextBudgetState[targetMonthKey] || createDefaultMonthBudget();
+    const updatedTargetMonth = { ...targetMonth };
+
+    if (type === 'expense' || type === 'goal') {
+      updatedTargetMonth.expenses = [item, ...(updatedTargetMonth.expenses || [])];
+    } else if (type === 'fixedCost') {
+      updatedTargetMonth.fixedCosts = [item, ...(updatedTargetMonth.fixedCosts || [])];
+    } else if (type === 'income') {
+      updatedTargetMonth.incomes = [item, ...(updatedTargetMonth.incomes || [])];
+    }
+    nextBudgetState[targetMonthKey] = updatedTargetMonth;
 
     onUpdateData({
       ...data,
-      budget: {
-        ...budgetState,
-        [monthKey]: updatedMonth,
-      },
+      budget: nextBudgetState,
     });
   };
 
@@ -858,9 +880,9 @@ export function BudgetView({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2.5 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <span
-                        className={`font-mono text-sm sm:text-base font-bold ${
+                        className={`font-mono text-sm sm:text-base font-bold mr-1 ${
                           isIncome ? 'text-emerald-400' : 'text-stone-100'
                         }`}
                       >
@@ -869,11 +891,24 @@ export function BudgetView({
                       </span>
 
                       <button
+                        type="button"
+                        onClick={() => {
+                          setEditingTransaction(tx);
+                          setActiveModal('edit-transaction');
+                        }}
+                        className="p-2 rounded-lg text-stone-500 hover:text-amber-400 hover:bg-stone-800 transition cursor-pointer"
+                        title="Edytuj operację"
+                      >
+                        <Pencil size={15} />
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => handleDeleteItem(tx.type, tx.id)}
-                        className="p-2 rounded-lg text-stone-500 hover:text-rose-400 hover:bg-stone-800 transition"
+                        className="p-2 rounded-lg text-stone-500 hover:text-rose-400 hover:bg-stone-800 transition cursor-pointer"
                         title="Usuń wpis"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={15} />
                       </button>
                     </div>
                   </div>
@@ -890,18 +925,20 @@ export function BudgetView({
         </>
       )}
 
-      {/* MODAL DODAWANIA TRANSAKCJI */}
-      {activeModal === 'add-transaction' && (
+      {/* MODAL DODAWANIA I EDYCJI TRANSAKCJI */}
+      {(activeModal === 'add-transaction' || activeModal === 'edit-transaction') && (
         <TransactionModal
-          monthKey={monthKey}
+          monthKey={editingTransaction?.date ? editingTransaction.date.slice(0, 7) : monthKey}
           categories={currentMonthBudget?.categories || []}
           goals={budgetGoals}
           people={people}
           currentPersonId={currentPersonId}
           initialGoalId={selectedGoalForTx}
+          initialTransaction={activeModal === 'edit-transaction' ? editingTransaction : null}
           onClose={() => {
             setActiveModal(null);
             setSelectedGoalForTx(null);
+            setEditingTransaction(null);
           }}
           onSave={handleSaveTransaction}
         />

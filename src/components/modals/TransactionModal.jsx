@@ -15,19 +15,50 @@ export function TransactionModal({
   people = [],
   currentPersonId = null,
   initialGoalId = null,
+  initialTransaction = null,
   onClose,
   onSave,
   initialType = 'expense',
 }) {
-  const [type, setType] = useState(() => (initialGoalId ? 'goal' : initialType)); // 'expense' | 'fixedCost' | 'goal' | 'income'
-  const [amount, setAmount] = useState('');
-  const [title, setTitle] = useState('');
-  const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
-  const [goalId, setGoalId] = useState(initialGoalId || goals[0]?.id || '');
-  const [personId, setPersonId] = useState(currentPersonId || people[0]?.id || null);
+  const isEditing = Boolean(initialTransaction);
+
+  const [type, setType] = useState(() => {
+    if (initialTransaction) {
+      if (initialTransaction.goalId) return 'goal';
+      if (initialTransaction.type === 'fixedCost') return 'fixedCost';
+      if (initialTransaction.type === 'income') return 'income';
+      return 'expense';
+    }
+    return initialGoalId ? 'goal' : initialType;
+  });
+
+  const [amount, setAmount] = useState(() => {
+    if (initialTransaction?.amount !== undefined && initialTransaction?.amount !== null) {
+      return String(initialTransaction.amount);
+    }
+    return '';
+  });
+
+  const [title, setTitle] = useState(() => {
+    return initialTransaction?.description || initialTransaction?.title || '';
+  });
+
+  const [categoryId, setCategoryId] = useState(() => {
+    return initialTransaction?.categoryId || categories[0]?.id || '';
+  });
+
+  const [goalId, setGoalId] = useState(() => {
+    return initialTransaction?.goalId || initialGoalId || goals[0]?.id || '';
+  });
+
+  const [personId, setPersonId] = useState(() => {
+    if (initialTransaction) return initialTransaction.personId || null;
+    return currentPersonId || people[0]?.id || null;
+  });
 
   // Domyślna data: jeśli dziś należy do wybranego miesiąca -> dzisiaj, w przeciwnym razie 1. dzień wybranego miesiąca
   const [date, setDate] = useState(() => {
+    if (initialTransaction?.date) return initialTransaction.date;
     const today = todayStr();
     if (monthKey && today.startsWith(monthKey)) {
       return today;
@@ -40,10 +71,17 @@ export function TransactionModal({
     const numAmount = parseFloat(amount.replace(',', '.'));
     if (isNaN(numAmount) || numAmount <= 0) return;
 
+    const txId = initialTransaction?.id || (type === 'fixedCost' ? uid('fc') : type === 'income' ? uid('inc') : uid('exp'));
+    const createdAt = initialTransaction?.createdAt || new Date().toISOString();
+
+    let savedItem = null;
+    let savedType = type;
+
     if (type === 'expense') {
       const selectedCategory = categories.find((c) => c.id === categoryId);
-      onSave('expense', {
-        id: uid('exp'),
+      savedType = 'expense';
+      savedItem = {
+        id: txId,
         amount: numAmount,
         date: date || `${monthKey}-01`,
         categoryId: categoryId || 'other',
@@ -53,12 +91,14 @@ export function TransactionModal({
         goalIcon: null,
         description: title.trim(),
         personId: personId || null,
-        createdAt: new Date().toISOString(),
-      });
+        createdAt,
+        updatedAt: isEditing ? new Date().toISOString() : undefined,
+      };
     } else if (type === 'goal') {
       const selectedGoal = goals.find((g) => g.id === goalId) || (goals.length > 0 ? goals[0] : null);
-      onSave('expense', {
-        id: uid('exp'),
+      savedType = 'expense'; // w bazie cele zapisywane są w expenses z polem goalId
+      savedItem = {
+        id: txId,
         amount: numAmount,
         date: date || `${monthKey}-01`,
         categoryId: 'goal',
@@ -68,25 +108,39 @@ export function TransactionModal({
         goalIcon: selectedGoal ? selectedGoal.icon : '🎯',
         description: title.trim(),
         personId: personId || null,
-        createdAt: new Date().toISOString(),
-      });
+        createdAt,
+        updatedAt: isEditing ? new Date().toISOString() : undefined,
+      };
     } else if (type === 'fixedCost') {
       if (!title.trim()) return;
-      onSave('fixedCost', {
-        id: uid('fc'),
+      savedType = 'fixedCost';
+      savedItem = {
+        id: txId,
         title: title.trim(),
         amount: numAmount,
         personId: personId || null,
-        createdAt: new Date().toISOString(),
-      });
+        createdAt,
+        updatedAt: isEditing ? new Date().toISOString() : undefined,
+      };
     } else if (type === 'income') {
       if (!title.trim()) return;
-      onSave('income', {
-        id: uid('inc'),
+      savedType = 'income';
+      savedItem = {
+        id: txId,
         title: title.trim(),
         amount: numAmount,
         personId: personId || null,
-        createdAt: new Date().toISOString(),
+        createdAt,
+        updatedAt: isEditing ? new Date().toISOString() : undefined,
+      };
+    }
+
+    if (savedItem) {
+      onSave(savedType, savedItem, {
+        isEdit: isEditing,
+        originalItem: initialTransaction,
+        originalType: initialTransaction?.type || (initialTransaction?.goalId ? 'goal' : initialType),
+        originalMonthKey: monthKey,
       });
     }
 
@@ -94,6 +148,12 @@ export function TransactionModal({
   };
 
   const getTitle = () => {
+    if (isEditing) {
+      if (type === 'expense') return 'Edytuj wydatek';
+      if (type === 'fixedCost') return 'Edytuj koszt stały';
+      if (type === 'goal') return 'Edytuj wpłatę na cel';
+      return 'Edytuj przychód';
+    }
     if (type === 'expense') return 'Dodaj wydatek';
     if (type === 'fixedCost') return 'Dodaj stały koszt';
     if (type === 'goal') return 'Dodaj wydatek na cel';
@@ -363,10 +423,15 @@ export function TransactionModal({
           style={{ background: COLORS.accent, color: '#121214' }}
           className="w-full rounded-xl py-3 text-sm font-bold shadow hover:opacity-90 transition mt-2 cursor-pointer"
         >
-          {type === 'expense' && 'Zapisz wydatek'}
-          {type === 'fixedCost' && 'Dodaj koszt stały'}
-          {type === 'goal' && 'Zapisz wydatek na cel'}
-          {type === 'income' && 'Dodaj przychód'}
+          {isEditing
+            ? 'Zapisz zmiany w operacji'
+            : type === 'expense'
+            ? 'Zapisz wydatek'
+            : type === 'fixedCost'
+            ? 'Dodaj koszt stały'
+            : type === 'goal'
+            ? 'Zapisz wydatek na cel'
+            : 'Dodaj przychód'}
         </button>
       </form>
     </ModalShell>

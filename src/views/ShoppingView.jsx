@@ -6,10 +6,12 @@ import {
   Trash2,
   Filter,
   Tag,
+  Pencil,
 } from 'lucide-react';
 import { COLORS, SHOPPING_CATEGORIES, uid } from '../utils/constants.js';
 import { Chip } from '../components/ui/Chip.jsx';
 import { EmptyState } from '../components/ui/EmptyState.jsx';
+import { ModalShell } from '../components/ui/ModalShell.jsx';
 
 // Słownik automatycznego wykrywania kategorii na podstawie słów kluczowych
 const KEYWORD_CATEGORY_MAP = {
@@ -45,6 +47,7 @@ export function ShoppingView({
   const [activeCategoryFilter, setActiveCategoryFilter] = useState('all');
   const [viewFilter, setViewFilter] = useState('active'); // 'active' | 'completed' | 'all'
   const [quantityText, setQuantityText] = useState('');
+  const [editingItem, setEditingItem] = useState(null);
 
   // Auto-kategoria wyliczana podczas pisania
   const autoCategory = useMemo(() => {
@@ -83,6 +86,15 @@ export function ShoppingView({
     setSelectedCategory(null);
     setQuantityText('');
     showToast?.('Dodano do listy zakupów! 🛒');
+  };
+
+  const handleSaveEditItem = (updatedItem) => {
+    const updated = shopping.map((item) =>
+      item.id === updatedItem.id ? updatedItem : item
+    );
+    onUpdateShopping(updated);
+    setEditingItem(null);
+    showToast?.('Zaktualizowano pozycję na liście 🛒');
   };
 
   const toggleItem = (itemId) => {
@@ -403,18 +415,32 @@ export function ShoppingView({
                         </div>
                       )}
 
-                      {/* Usunięcie pozycji */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteItem(item.id);
-                        }}
-                        className="p-1.5 text-stone-500 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg transition"
-                        title="Usuń z listy"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                      {/* Akcje pozycji */}
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingItem(item);
+                          }}
+                          className="p-1.5 text-stone-500 hover:text-amber-400 hover:bg-stone-800 rounded-lg transition"
+                          title="Edytuj pozycję"
+                        >
+                          <Pencil size={15} />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteItem(item.id);
+                          }}
+                          className="p-1.5 text-stone-500 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg transition"
+                          title="Usuń z listy"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -423,7 +449,134 @@ export function ShoppingView({
           ))}
         </div>
       )}
+
+      {/* Modal edycji pozycji */}
+      {editingItem && (
+        <EditShoppingItemModal
+          item={editingItem}
+          people={people}
+          onClose={() => setEditingItem(null)}
+          onSave={handleSaveEditItem}
+        />
+      )}
     </div>
+  );
+}
+
+function EditShoppingItemModal({ item, people = [], onClose, onSave }) {
+  const [text, setText] = useState(item.text || '');
+  const [quantity, setQuantity] = useState(item.quantity || '');
+  const [category, setCategory] = useState(item.category || 'other');
+  const [personId, setPersonId] = useState(item.personId || '');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!text.trim()) return;
+    onSave({
+      ...item,
+      text: text.trim(),
+      quantity: quantity.trim() || null,
+      category,
+      personId: personId || null,
+      updatedAt: new Date().toISOString(),
+    });
+  };
+
+  return (
+    <ModalShell title="Edytuj pozycję na liście" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="text-xs font-semibold mb-1 block text-stone-400">Nazwa produktu</label>
+          <input
+            type="text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            className="w-full border border-stone-700 rounded-xl px-3.5 py-2.5 text-sm bg-stone-900 text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-500/80 focus:ring-2 focus:ring-amber-500/20 transition"
+            required
+            autoFocus
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold mb-1 block text-stone-400">Ilość / waga</label>
+          <input
+            type="text"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            placeholder="np. 2 szt, 1 kg, 1 opakowanie"
+            className="w-full border border-stone-700 rounded-xl px-3.5 py-2.5 text-sm bg-stone-900 text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-500/80 focus:ring-2 focus:ring-amber-500/20 transition"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold mb-1.5 block text-stone-400">Kategoria / Dział</label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
+            {SHOPPING_CATEGORIES.map((cat) => {
+              const isSelected = category === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setCategory(cat.id)}
+                  style={{
+                    background: isSelected ? `${cat.color}22` : 'transparent',
+                    borderColor: isSelected ? cat.color : '#33333C',
+                    color: isSelected ? cat.color : '#A0A0AB',
+                  }}
+                  className={`p-2 rounded-xl border text-xs font-medium flex items-center gap-2 transition ${
+                    isSelected ? 'font-bold' : 'hover:border-stone-600'
+                  }`}
+                >
+                  <span className="text-base">{cat.icon}</span>
+                  <span className="truncate">{cat.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {people?.length > 0 && (
+          <div>
+            <label className="text-xs font-semibold mb-1.5 block text-stone-400">Kto dodał / poprosił</label>
+            <div className="flex flex-wrap gap-2">
+              {people.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setPersonId(personId === p.id ? null : p.id)}
+                  className={`px-3 py-1.5 rounded-full border text-xs font-medium flex items-center gap-1.5 transition ${
+                    personId === p.id
+                      ? 'bg-amber-400 text-stone-950 font-bold border-amber-400'
+                      : 'bg-stone-800 text-stone-300 border-stone-700 hover:border-stone-600'
+                  }`}
+                >
+                  <Chip person={p} size="sm" />
+                  <span>{p.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-3 border-t border-stone-800">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-stone-400 hover:bg-stone-800 transition"
+          >
+            Anuluj
+          </button>
+          <button
+            type="submit"
+            disabled={!text.trim()}
+            style={{ background: COLORS.accent, color: '#121214' }}
+            className="px-4 py-2 rounded-xl font-bold text-xs transition disabled:opacity-40 shadow-sm"
+          >
+            Zapisz zmiany
+          </button>
+        </div>
+      </form>
+    </ModalShell>
   );
 }
 

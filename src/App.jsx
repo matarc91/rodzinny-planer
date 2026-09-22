@@ -778,13 +778,18 @@ export default function App() {
         nextNotes = (data.notes || []).filter((n) => n.id !== convertedNoteId);
       }
     }
+    const isEdit = (data.wall || []).some((w) => w.id === msg.id);
+    const nextWall = isEdit
+      ? (data.wall || []).map((w) => (w.id === msg.id ? msg : w))
+      : [msg, ...(data.wall || [])];
+
     persist({
       ...data,
-      wall: [msg, ...(data.wall || [])],
+      wall: nextWall,
       notes: nextNotes,
     });
-    showToast('Wysłano na tablicę 💬');
-    if (family?.id && supabaseClient) {
+    showToast(isEdit ? 'Zaktualizowano wiadomość 💬' : 'Wysłano na tablicę 💬');
+    if (family?.id && supabaseClient && !isEdit) {
       const author = data?.people?.find((p) => p.id === msg.personId)?.name || 'Ktoś';
       const targetPersonIds = (data?.people || []).filter((p) => p.id !== msg.personId).map((p) => p.id);
       recordFamilyNotification(supabaseClient, {
@@ -1137,28 +1142,44 @@ export default function App() {
     setModal('budget');
   };
 
-  const handleSaveBudgetTransaction = (type, item) => {
-    const targetMonthKey = item.date ? item.date.slice(0, 7) : selectedBudgetMonth || todayStr().slice(0, 7);
-    const budgetState = data?.budget || {};
-    const curMonthBudget = budgetState[targetMonthKey] || createDefaultMonthBudget();
+  const handleSaveBudgetTransaction = (type, item, meta = {}) => {
+    const nextBudgetState = { ...(data?.budget || {}) };
+
+    if (meta.isEdit && meta.originalItem) {
+      const origMonthKey = meta.originalMonthKey || selectedBudgetMonth;
+      const origType = meta.originalItem.type || (meta.originalItem.goalId ? 'expense' : meta.originalType);
+
+      if (nextBudgetState[origMonthKey]) {
+        const oldMonth = { ...nextBudgetState[origMonthKey] };
+        if (origType === 'expense' || origType === 'goal') {
+          oldMonth.expenses = (oldMonth.expenses || []).filter((x) => x.id !== meta.originalItem.id);
+        } else if (origType === 'fixedCost') {
+          oldMonth.fixedCosts = (oldMonth.fixedCosts || []).filter((x) => x.id !== meta.originalItem.id);
+        } else if (origType === 'income') {
+          oldMonth.incomes = (oldMonth.incomes || []).filter((x) => x.id !== meta.originalItem.id);
+        }
+        nextBudgetState[origMonthKey] = oldMonth;
+      }
+    }
+
+    const targetMonthKey = item.date && item.date.length >= 7 ? item.date.slice(0, 7) : selectedBudgetMonth || todayStr().slice(0, 7);
+    const curMonthBudget = nextBudgetState[targetMonthKey] || createDefaultMonthBudget();
     const updatedMonth = { ...curMonthBudget };
-    if (type === 'expense') {
+    if (type === 'expense' || type === 'goal') {
       updatedMonth.expenses = [item, ...(updatedMonth.expenses || [])];
     } else if (type === 'fixedCost') {
-      updatedMonth.fixedCosts = [...(updatedMonth.fixedCosts || []), item];
+      updatedMonth.fixedCosts = [item, ...(updatedMonth.fixedCosts || [])];
     } else if (type === 'income') {
-      updatedMonth.incomes = [...(updatedMonth.incomes || []), item];
+      updatedMonth.incomes = [item, ...(updatedMonth.incomes || [])];
     }
+    nextBudgetState[targetMonthKey] = updatedMonth;
 
     persist({
       ...data,
-      budget: {
-        ...budgetState,
-        [targetMonthKey]: updatedMonth,
-      },
+      budget: nextBudgetState,
     });
     closeModal();
-    showToast('Wpis został zapisany w budżecie!');
+    showToast(meta.isEdit ? 'Zaktualizowano wpis w budżecie!' : 'Wpis został zapisany w budżecie!');
   };
 
   const closeModal = () => {
@@ -1306,6 +1327,7 @@ export default function App() {
               people={data.people}
               onDeleteWallMessage={deleteWallMessage}
               onTogglePinWallMessage={togglePinWallMessage}
+              onEditWallMessage={(msg) => setModal('wall', { initial: msg })}
             />
           )}
           {tab === 'shopping' && (
@@ -1475,7 +1497,7 @@ export default function App() {
       )}
       {modal === 'budget' && (
         <TransactionModal
-          monthKey={selectedBudgetMonth}
+          monthKey={modalPayload?.item?.date ? modalPayload.item.date.slice(0, 7) : selectedBudgetMonth}
           categories={
             data?.budget?.[selectedBudgetMonth]?.categories ||
             createDefaultMonthBudget().categories
@@ -1483,6 +1505,8 @@ export default function App() {
           goals={data?.budgetGoals || createDefaultBudgetGoals()}
           people={data.people}
           currentPersonId={currentUserId}
+          initialTransaction={modalPayload?.initialTransaction || modalPayload?.item || null}
+          initialType={modalPayload?.initialType || 'expense'}
           onClose={closeModal}
           onSave={handleSaveBudgetTransaction}
         />

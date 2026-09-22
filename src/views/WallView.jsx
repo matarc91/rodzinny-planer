@@ -1,10 +1,10 @@
-import { MessageSquare, Pin, Trash2 } from 'lucide-react';
+import { MessageSquare, Pin, Trash2, Pencil } from 'lucide-react';
 import { COLORS } from '../utils/constants.js';
 import { Chip } from '../components/ui/Chip.jsx';
 import { EmptyState } from '../components/ui/EmptyState.jsx';
 import { RichContentView } from '../components/ui/RichContentView.jsx';
 
-export function WallView({ wall = [], people = [], onDeleteWallMessage, onTogglePinWallMessage }) {
+export function WallView({ wall = [], people = [], onDeleteWallMessage, onTogglePinWallMessage, onEditWallMessage }) {
   const sorted = [...(wall || [])].sort((a, b) =>
     a.isPinned !== b.isPinned
       ? (a.isPinned ? -1 : 1)
@@ -38,12 +38,24 @@ export function WallView({ wall = [], people = [], onDeleteWallMessage, onToggle
                     </div>
                     <div className="flex items-center gap-1">
                       <button
+                        onClick={() => onEditWallMessage?.(msg)}
+                        className="p-1 text-stone-500 hover:text-amber-400 transition"
+                        title="Edytuj wiadomość"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
                         onClick={() => onTogglePinWallMessage(msg.id)}
-                        className={`p-1 rounded ${msg.isPinned ? 'text-amber-400' : 'text-stone-500'}`}
+                        className={`p-1 rounded transition ${msg.isPinned ? 'text-amber-400' : 'text-stone-500 hover:text-stone-300'}`}
+                        title={msg.isPinned ? 'Odepnij' : 'Przypnij na górze'}
                       >
                         <Pin size={15} />
                       </button>
-                      <button onClick={() => onDeleteWallMessage(msg.id)} className="p-1 text-stone-500 hover:text-red-400">
+                      <button
+                        onClick={() => onDeleteWallMessage(msg.id)}
+                        className="p-1 text-stone-500 hover:text-red-400 transition"
+                        title="Usuń wiadomość"
+                      >
                         <Trash2 size={15} />
                       </button>
                     </div>

@@ -10,31 +10,37 @@ import {
 } from '../../utils/noteMigration.js';
 
 export function AddWallMessageModal({ people, currentUserId, initial, onClose, onSave }) {
+  const isEditing = Boolean(initial?.id);
   const [contentDoc, setContentDoc] = useState(() =>
     migrateNoteToTipTapFormat(initial?.content ?? initial?.note ?? initial?.text ?? '')
   );
-  const [personId, setPersonId] = useState(currentUserId || people[0]?.id || '');
-  const [color, setColor] = useState(CARD_COLORS[0]);
-  const [isPinned, setIsPinned] = useState(false);
+  const [personId, setPersonId] = useState(() => initial?.personId || currentUserId || people[0]?.id || '');
+  const [color, setColor] = useState(() => initial?.color || CARD_COLORS[0]);
+  const [isPinned, setIsPinned] = useState(() => Boolean(initial?.isPinned));
 
   const save = () => {
     const summary = extractTextSummaryFromDoc(contentDoc);
     if (summary.trim()) {
       onSave({
-        id: uid('w'),
+        id: initial?.id || uid('w'),
         content: contentDoc,
         text: summary.trim(),
         personId,
         color,
         isPinned,
-        createdAt: new Date().toISOString(),
+        createdAt: initial?.createdAt || new Date().toISOString(),
+        updatedAt: isEditing ? new Date().toISOString() : undefined,
       });
       onClose();
     }
   };
 
   return (
-    <ModalShell title="Wiadomość na tablicy" onClose={onClose} maxWidth="sm:max-w-lg">
+    <ModalShell
+      title={isEditing ? 'Edytuj wiadomość na tablicy' : 'Wiadomość na tablicy'}
+      onClose={onClose}
+      maxWidth="sm:max-w-lg"
+    >
       <div className="space-y-4">
         <div>
           <label className="text-xs font-semibold mb-1.5 block text-stone-400">Treść wiadomości</label>
@@ -94,11 +100,16 @@ export function AddWallMessageModal({ people, currentUserId, initial, onClose, o
           </label>
         </div>
         <button
+          type="button"
           onClick={save}
           style={{ background: COLORS.accent, color: '#121214' }}
           className="w-full rounded-xl py-3 text-sm font-bold shadow hover:opacity-90 transition mt-2 cursor-pointer"
         >
-          {isPinned ? 'Przypnij na górze tablicy' : 'Opublikuj wiadomość'}
+          {isEditing
+            ? 'Zapisz zmiany w wiadomości'
+            : isPinned
+            ? 'Przypnij na górze tablicy'
+            : 'Opublikuj wiadomość'}
         </button>
       </div>
     </ModalShell>
