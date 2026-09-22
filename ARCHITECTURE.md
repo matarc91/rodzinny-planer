@@ -139,9 +139,13 @@ Dokumentowa tabela przechowująca stan wszystkich modułów rodziny w strukturze
   - `people` (`Array`) – lista domowników (id, imię, kolor, awatar, punkty),
   - `events` (`Array`) – wydarzenia w kalendarzu (daty, godziny, powtarzalność, przypisane osoby, przypomnienia),
   - `tasks` (`Array`) – zadania, checklisty, terminy, osoby odpowiedzialne,
-  - `shopping` (`Array`) – wspólna lista zakupów z 9 kategoriami,
+  - `shopping` (`Array`) – wspólna lista zakupów z 9 kategoriami i auto-kategoryzacją,
   - `budget` (`Object`) – słownik budżetów miesięcznych (`YYYY-MM`: dochody, koszty stałe, wydatki bieżące),
   - `budgetGoals` (`Array`) – cele oszczędnościowe kwotowe i otwarte (∞),
+  - `emergencyFund` (`Object`) – poduszka płynnościowa (kwota docelowa, stan, notatki, plan zasilania),
+  - `expiringObligations` (`Array`) – raty 0% i koszty terminowe z automatycznym przekierowaniem uwolnionego kapitału,
+  - `investmentPlan` (`Object`) – roczne limity IKZE (JDG i Etat), alokacja ETF oraz nadpłaty hipoteki,
+  - `taxOptimization` (`Object`) – parametry wspólnego rozliczenia PIT (skala + etat) i symulacja zwrotu,
   - `notes` (`Array`) – notatki z formatowaniem TipTap,
   - `wall` (`Array`) – wiadomości i wpisy na tablicy (lodówce),
   - `settings` (`Object`) – konfiguracja aktywnych modułów,
@@ -242,11 +246,28 @@ W wersji 3.2.0 wdrożono zoptymalizowaną architekturę nawigacji mobilnej, zgod
 - **Wielodniowe i Wielopodmiotowe Badge:** Wydarzenia rozciągające się na kilka dni oraz gradienty w kolorach przypisanych osób.
 - **Minimalistyczny UX:** Usunięto zbędne zduplikowane przyciski w nagłówkach – dodawanie wydarzeń odbywa się przez globalny przycisk `+` (FAB).
 
-### 5.4. Budżet i Finanse ([`BudgetView.jsx`](file:///c:/Users/arcis/Projekty/rodzinny-planer/src/views/BudgetView.jsx))
-- **Podsumowanie Miesiąca:** Przychody, koszty stałe, wydatki bieżące, bilans i wskaźnik oszczędności.
-- **Kategorie z Limitami:** Paski postępu informujące o stopniu wykorzystania budżetu.
-- **Długoterminowe Cele Oszczędnościowe:** Cele kwotowe oraz cele otwarte (∞) z globalną kumulacją środków niezależną od zmiany miesiąca.
-- **Klawiatura mobilna `inputMode="decimal"`:** Szybkie i bezbłędne wprowadzanie kwot na smartfonach.
+### 5.4. Zaawansowany Silnik Finansowy Rodziny ([`BudgetView.jsx`](file:///c:/Users/arcis/Projekty/rodzinny-planer/src/views/BudgetView.jsx))
+Kompleksowy moduł zarządzania majątkiem, optymalizacją podatkową i alokacją docelową oparty na 4 filarach:
+1. **Poduszka Płynnościowa (Emergency Buffer):**
+   - Monitor kwoty docelowej i bieżącej z gradientowym wskaźnikiem postępu.
+   - Dynamiczny wskaźnik bezpieczeństwa: automatyczne wyliczanie liczby miesięcy stałych kosztów życia rodziny zabezpieczanych przez poduszkę.
+   - Szybkie wpłaty/wypłaty z opcją automatycznego powiązania z budżetem miesięcznym.
+2. **Sztywny Plan Inwestycyjny (Alokacja Docelowa):**
+   - **IKZE Mąż (JDG na skali):** monitor rocznego limitu wpłat (14 083,20 zł+), sugerowana wpłata miesięczna, wskaźnik tarczy podatkowej.
+   - **IKZE Żona (Etat):** monitor rocznego limitu wpłat (9 388,80 zł+) i tempo realizacji celu.
+   - **Portfel ETF:** cel miesięczny (np. 1 500 zł/msc) oraz rejestr łącznego zainwestowanego kapitału.
+   - **Systematyczne Nadpłaty Hipoteki:** monitor stałych comiesięcznych nadpłat redukujących kapitał zadłużenia.
+3. **Tarcza Podatkowa & Symulator Zwrotu z PIT ([`taxCalculator.js`](file:///c:/Users/arcis/Projekty/rodzinny-planer/src/utils/taxCalculator.js)):**
+   - Symulator wspólnego rozliczenia małżonków (JDG na skali podatkowej 12%/32% + Etat) z uwzględnieniem odliczenia limitów IKZE.
+   - Wyliczanie korzyści podatkowej z wyrównania progów oraz efektywnej stopy zwrotu z IKZE.
+   - **Reguła finansowa:** dedykowany mechanizm księgowania rocznego zwrotu z PIT jako dużej, jednorazowej transzy nadpłaty kredytu hipotecznego.
+4. **Zobowiązania Terminowe & Raty 0% (Uwolniony Kapitał):**
+   - Śledzenie spłat terminowych (np. sprzęt AGD, elektronika, leasingi) z licznikiem spłaconych rat.
+   - **Mechanizm Uwolnionego Kapitału:** baner informujący, kiedy i jaka kwota zostanie uwolniona oraz automatyczne przekierowanie uwolnionego przepływu gotówki na nadpłatę hipoteki lub inwestycje.
+5. **Budżet Miesięczny i Operacje:**
+   - Kategorie z limitami kwotowymi i ostrzeżeniami o przekroczeniu.
+   - Pełna edycja i modyfikacja operacji z możliwością przenoszenia transakcji między miesiącami.
+   - Klawiatura mobilna `inputMode="decimal"` dla optymalnego UX na smartfonach.
 
 ### 5.5. Tablica Rodzinna ([`WallView.jsx`](file:///c:/Users/arcis/Projekty/rodzinny-planer/src/views/WallView.jsx))
 - **Wiadomości na Lodówce:** Kolorowe karteczki z wiadomościami dla domowników.
