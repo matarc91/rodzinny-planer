@@ -125,6 +125,34 @@ export const SHOPPING_CATEGORIES = [
   { id: 'other', name: 'Inne', icon: '🛒', color: '#A0A0AB' },
 ];
 
+export function createDefaultEmergencyFund() {
+  return {
+    targetAmount: 50000,
+    currentAmount: 25000,
+    notes: 'Konto oszczędnościowe + lokaty 3M',
+    monthlyContributionTarget: 1000,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function createDefaultExpiringObligations() {
+  return [
+    {
+      id: 'exp_1',
+      title: 'Raty 0% Sprzęt AGD (Kuchnia)',
+      monthlyAmount: 450,
+      totalInstallments: 20,
+      paidInstallments: 12,
+      startDate: '2025-10-01',
+      endDate: '2027-05-31',
+      redirectToTarget: 'mortgage_overpayment', // 'mortgage_overpayment' | 'emergency_fund' | 'etf' | 'ikze_husband' | 'ikze_wife' | 'custom'
+      targetName: 'Nadpłata kredytu hipotecznego',
+      icon: '⚡',
+      isCompleted: false,
+    },
+  ];
+}
+
 export function emptyData() {
   const currentMonthKey = new Date().toISOString().slice(0, 7); // np. '2026-08'
   return {
@@ -142,7 +170,10 @@ export function emptyData() {
       [currentMonthKey]: createDefaultMonthBudget(),
     },
     budgetGoals: createDefaultBudgetGoals(),
+    emergencyFund: createDefaultEmergencyFund(),
+    expiringObligations: createDefaultExpiringObligations(),
     settings: { enableShopping: true, enableWall: true, enableBudget: true },
   };
 }
+
 

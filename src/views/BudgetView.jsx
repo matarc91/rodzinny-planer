@@ -17,10 +17,21 @@ import {
   Pencil,
 } from 'lucide-react';
 import { format, addMonths, parseISO } from 'date-fns';
-import { COLORS, MONTHS, createDefaultMonthBudget, createDefaultBudgetGoals } from '../utils/constants.js';
+import {
+  COLORS,
+  MONTHS,
+  createDefaultMonthBudget,
+  createDefaultBudgetGoals,
+  createDefaultEmergencyFund,
+  createDefaultExpiringObligations,
+} from '../utils/constants.js';
 import { TransactionModal } from '../components/modals/TransactionModal.jsx';
 import { ManageCategoriesModal } from '../components/modals/ManageCategoriesModal.jsx';
 import { ManageGoalsModal } from '../components/modals/ManageGoalsModal.jsx';
+import { EmergencyFundModal } from '../components/modals/EmergencyFundModal.jsx';
+import { ExpiringObligationModal } from '../components/modals/ExpiringObligationModal.jsx';
+import { EmergencyFundCard } from '../components/budget/EmergencyFundCard.jsx';
+import { ExpiringObligationsSection } from '../components/budget/ExpiringObligationsSection.jsx';
 import { Chip } from '../components/ui/Chip.jsx';
 
 export function BudgetView({
@@ -39,15 +50,18 @@ export function BudgetView({
     onMonthChange?.(newKey);
   };
 
-  const [activeModal, setActiveModal] = useState(null); // 'add-transaction' | 'edit-transaction' | 'manage-categories' | 'manage-goals' | null
+  const [activeModal, setActiveModal] = useState(null); // 'add-transaction' | 'edit-transaction' | 'manage-categories' | 'manage-goals' | 'emergency-fund' | 'add-obligation' | 'edit-obligation' | null
   const [selectedGoalForTx, setSelectedGoalForTx] = useState(null);
   const [editingTransaction, setEditingTransaction] = useState(null);
+  const [editingObligation, setEditingObligation] = useState(null);
   const [filterType, setFilterType] = useState('all'); // 'all' | 'expense' | 'fixedCost' | 'income'
 
   // Dane bieżącego miesiąca
   const budgetState = useMemo(() => data?.budget || {}, [data?.budget]);
   const currentMonthBudget = budgetState[monthKey];
   const budgetGoals = useMemo(() => data?.budgetGoals || createDefaultBudgetGoals(), [data?.budgetGoals]);
+  const emergencyFund = useMemo(() => data?.emergencyFund || createDefaultEmergencyFund(), [data?.emergencyFund]);
+  const expiringObligations = useMemo(() => data?.expiringObligations || createDefaultExpiringObligations(), [data?.expiringObligations]);
   const people = data?.people || [];
 
   // Parsowanie etykiety miesiąca do wyświetlenia
@@ -246,6 +260,54 @@ export function BudgetView({
     onUpdateData({
       ...data,
       budgetGoals: updatedGoals,
+    });
+  };
+
+  // Zapisanie zmodyfikowanej poduszki płynnościowej
+  const handleSaveEmergencyFund = (updatedFund) => {
+    onUpdateData({
+      ...data,
+      emergencyFund: updatedFund,
+    });
+  };
+
+  // Zapisanie nowej lub edytowanej raty 0% / zobowiązania terminowego
+  const handleSaveObligation = (savedObligation) => {
+    const exists = expiringObligations.some((o) => o.id === savedObligation.id);
+    const nextObligations = exists
+      ? expiringObligations.map((o) => (o.id === savedObligation.id ? savedObligation : o))
+      : [savedObligation, ...expiringObligations];
+
+    onUpdateData({
+      ...data,
+      expiringObligations: nextObligations,
+    });
+  };
+
+  // Zwiększenie liczby spłaconych rat o 1
+  const handleIncrementObligationPaid = (id) => {
+    const nextObligations = expiringObligations.map((o) => {
+      if (o.id !== id) return o;
+      const nextPaid = o.paidInstallments + 1;
+      const isCompleted = nextPaid >= o.totalInstallments;
+      return {
+        ...o,
+        paidInstallments: nextPaid,
+        isCompleted,
+      };
+    });
+
+    onUpdateData({
+      ...data,
+      expiringObligations: nextObligations,
+    });
+  };
+
+  // Usunięcie zobowiązania terminowego
+  const handleDeleteObligation = (id) => {
+    onUpdateData({
+      ...data,
+      expiringObligations: expiringObligations.filter((o) => o.id !== id),
     });
   };
 
@@ -508,6 +570,29 @@ export function BudgetView({
               </div>
             </div>
           </div>
+
+          {/* 3B. PODUSZKA PŁYNNOŚCIOWA (ZASADA 1: BEZPIECZEŃSTWO FINANSOWE) */}
+          <EmergencyFundCard
+            emergencyFund={emergencyFund}
+            monthlyBurnRate={summary.totalFixedCosts + summary.totalExpenses}
+            onOpenDepositModal={() => setActiveModal('emergency-fund-deposit')}
+            onOpenSettingsModal={() => setActiveModal('emergency-fund-settings')}
+          />
+
+          {/* 3C. ZOBOWIĄZANIA TERMINOWE & RATY 0% (UWOLNIONY KAPITAŁ) */}
+          <ExpiringObligationsSection
+            obligations={expiringObligations}
+            onOpenAddModal={() => {
+              setEditingObligation(null);
+              setActiveModal('add-obligation');
+            }}
+            onOpenEditModal={(obl) => {
+              setEditingObligation(obl);
+              setActiveModal('edit-obligation');
+            }}
+            onIncrementPaid={handleIncrementObligationPaid}
+            onDeleteObligation={handleDeleteObligation}
+          />
 
           {/* 4. SEKCJA: KATEGORIE WYDATKÓW */}
           <div
@@ -960,6 +1045,29 @@ export function BudgetView({
           goalsProgressMap={goalsProgressMap}
           onClose={() => setActiveModal(null)}
           onSave={handleSaveGoals}
+        />
+      )}
+
+      {/* MODAL PODUSZKI PŁYNNOŚCIOWEJ */}
+      {(activeModal === 'emergency-fund-deposit' || activeModal === 'emergency-fund-settings') && (
+        <EmergencyFundModal
+          emergencyFund={emergencyFund}
+          monthKey={monthKey}
+          onClose={() => setActiveModal(null)}
+          onSaveFund={handleSaveEmergencyFund}
+          onRecordBudgetExpense={(expenseItem) => handleSaveTransaction('expense', expenseItem)}
+        />
+      )}
+
+      {/* MODAL ZOBOWIĄZANIA TERMINOWEGO / RAT 0% */}
+      {(activeModal === 'add-obligation' || activeModal === 'edit-obligation') && (
+        <ExpiringObligationModal
+          initialObligation={activeModal === 'edit-obligation' ? editingObligation : null}
+          onClose={() => {
+            setActiveModal(null);
+            setEditingObligation(null);
+          }}
+          onSave={handleSaveObligation}
         />
       )}
     </div>
