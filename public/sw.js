@@ -1,7 +1,7 @@
 // Service Worker dla powiadomień Push i PWA w Rodzinnym Planerze
 
 const NOTIF_CACHE_NAME = 'rp-shown-notifs-v1';
-const STATIC_CACHE_NAME = 'rp-static-v1';
+const STATIC_CACHE_NAME = 'rp-static-v3.3.0';
 
 // Funkcja sprawdzająca czy dane powiadomienie było już wyświetlone (zapobiega powtórzeniom co 1 min)
 async function isDuplicateNotification(tag) {
@@ -62,6 +62,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== STATIC_CACHE_NAME && key !== NOTIF_CACHE_NAME) {
+            console.log('[SW] Usuwanie starej pamięci podręcznej:', key);
             return caches.delete(key);
           }
         })
@@ -77,8 +78,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Dla nawigacji i dokumentów HTML zawsze wymuś pobranie świeżej wersji z sieci
+  const isNavigate = event.request.mode === 'navigate' || event.request.destination === 'document';
+
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, isNavigate ? { cache: 'no-cache' } : {})
       .then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
           const responseToCache = networkResponse.clone();
@@ -94,7 +98,7 @@ self.addEventListener('fetch', (event) => {
           return cachedResponse;
         }
         // Fallback dla nawigacji
-        if (event.request.mode === 'navigate') {
+        if (isNavigate) {
           const fallback = await caches.match('/');
           if (fallback) return fallback;
         }

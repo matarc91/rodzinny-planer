@@ -24,10 +24,34 @@
             .register('/sw.js', { scope: '/' })
             .then((reg) => {
               console.log('[PWA] Service Worker zarejestrowany:', reg.scope);
+              // Wymuś sprawdzenie czy na serwerze jest nowsza wersja
+              reg.update().catch(() => {});
+
+              // Wykrycie nowej wersji w trakcie pobierania
+              reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                if (newWorker) {
+                  newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                      console.log('[PWA] Wykryto nową wersję aplikacji, odświeżam...');
+                      window.location.reload();
+                    }
+                  });
+                }
+              });
             })
             .catch((err) => {
               console.error('[PWA] Błąd rejestracji Service Workera:', err);
             });
+
+          // Gdy nowy Service Worker przejmie kontrolę
+          let refreshing = false;
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!refreshing) {
+              refreshing = true;
+              window.location.reload();
+            }
+          });
         });
       }
     </script>

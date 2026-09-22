@@ -522,163 +522,169 @@ export function BudgetView({
         </button>
       </div>
 
-      {/* 2. JEŚLI MIESIĄC NIE JEST ROZPOCZĘTY -> PUSTY STAN Z PRZYCISKIEM */}
-      {!currentMonthBudget ? (
-        <div
-          style={{ background: COLORS.surface, borderColor: COLORS.border }}
-          className="rounded-2xl p-7 border text-center space-y-4 shadow-lg"
-        >
-          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto mb-2 border border-amber-500/20">
-            <PiggyBank size={32} />
-          </div>
+      {/* 2. STRATEGIA FINANSOWA RODZINY (ZASADY 1-4: ZAWSZE WIDOCZNE) */}
+      <EmergencyFundCard
+        emergencyFund={emergencyFund}
+        monthlyBurnRate={summary.totalFixedCosts + summary.totalExpenses}
+        onOpenDepositModal={() => setActiveModal('emergency-fund-deposit')}
+        onOpenSettingsModal={() => setActiveModal('emergency-fund-settings')}
+      />
 
-          <div className="space-y-1.5 max-w-sm mx-auto">
+      <InvestmentAllocationSection
+        investmentPlan={investmentPlan}
+        onOpenContributionModal={(type) => {
+          setInvestmentModalType(type);
+          setActiveModal('investment-contribution');
+        }}
+        onOpenSettingsModal={() => {
+          setInvestmentModalType('settings');
+          setActiveModal('investment-settings');
+        }}
+      />
+
+      <TaxRefundSimulatorCard
+        taxOptimization={taxOptimization}
+        investmentPlan={investmentPlan}
+        onOpenTaxModal={() => setActiveModal('tax-simulator')}
+        onBookRefundToMortgage={handleBookTaxRefundToMortgage}
+      />
+
+      <ExpiringObligationsSection
+        obligations={expiringObligations}
+        onOpenAddModal={() => {
+          setEditingObligation(null);
+          setActiveModal('add-obligation');
+        }}
+        onOpenEditModal={(obl) => {
+          setEditingObligation(obl);
+          setActiveModal('edit-obligation');
+        }}
+        onIncrementPaid={handleIncrementObligationPaid}
+        onDeleteObligation={handleDeleteObligation}
+      />
+
+      {/* 3. MIESIĘCZNY BUDŻET OPERACYJNY I WYDATKI */}
+      <div className="pt-2 border-t border-stone-800 space-y-4">
+        <div className="px-1 flex items-center justify-between">
+          <div>
             <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-lg font-bold">
-              Brak planu na {monthLabel}
+              Budżet operacyjny ({monthLabel})
             </h3>
-            <p className="text-xs text-stone-400 leading-relaxed">
-              Miesiąc nie został jeszcze zainicjalizowany. Możesz skopiować swoje stałe koszty, przychody i limity kategorii z poprzedniego miesiąca jednym kliknięciem.
-            </p>
+            <p className="text-xs text-stone-400">Bieżące koszty, limity kategorii i wydatki w wybranym miesiącu</p>
           </div>
-
-          <button
-            onClick={handleStartMonth}
-            style={{ background: COLORS.accent, color: '#121214' }}
-            className="w-full sm:w-auto px-6 py-3.5 rounded-xl font-bold text-sm shadow hover:opacity-90 transition flex items-center justify-center gap-2 mx-auto cursor-pointer"
-          >
-            <Sparkles size={18} />
-            Rozpocznij ten miesiąc (Skopiuj stałe koszty i limity)
-          </button>
         </div>
-      ) : (
-        <>
-          {/* 3. GŁÓWNY DASHBOARD: [Przychody] - [Koszty Stałe] - [Wydatki] = [Pozostałe Środki] */}
-          <div className="space-y-3">
-            {/* Kafelek bilansu głównego */}
-            <div
-              style={{
-                background: summary.available >= 0 ? 'linear-gradient(135deg, #1e261f 0%, #151d16 100%)' : 'linear-gradient(135deg, #2d1818 0%, #1c1212 100%)',
-                borderColor: summary.available >= 0 ? '#38573b' : '#6b2d2d',
-              }}
-              className="p-5 rounded-2xl border shadow-xl relative overflow-hidden"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-semibold uppercase tracking-wider text-stone-400">
-                  Dostępne wolne środki
-                </span>
-                {summary.available >= 0 ? (
-                  <span className="flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded-md border border-emerald-800/40">
-                    <CheckCircle2 size={13} /> W budżecie
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-xs font-bold text-rose-400 bg-rose-950/60 px-2.5 py-1 rounded-md border border-rose-800/40">
-                    <AlertTriangle size={13} /> Przekroczenie
-                  </span>
-                )}
-              </div>
 
-              <div className="flex items-baseline gap-2 mt-1">
-                <h1
-                  style={{ fontFamily: 'Fraunces' }}
-                  className={`text-3xl sm:text-4xl font-extrabold tracking-tight ${
-                    summary.available >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                  }`}
-                >
-                  {formatPLN(summary.available)}
-                </h1>
-              </div>
+        {!currentMonthBudget ? (
+          <div
+            style={{ background: COLORS.surface, borderColor: COLORS.border }}
+            className="rounded-2xl p-7 border text-center space-y-4 shadow-lg"
+          >
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto mb-2 border border-amber-500/20">
+              <PiggyBank size={32} />
+            </div>
 
-              <p className="text-xs text-stone-400 mt-2">
-                Przychody ({formatPLN(summary.totalIncome)}) – Stałe ({formatPLN(summary.totalFixedCosts)}) – Wydatki ({formatPLN(summary.totalExpenses)})
+            <div className="space-y-1.5 max-w-sm mx-auto">
+              <h4 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-base font-bold">
+                Brak planu na {monthLabel}
+              </h4>
+              <p className="text-xs text-stone-400 leading-relaxed">
+                Miesiąc nie został jeszcze zainicjalizowany. Możesz skopiować swoje stałe koszty, przychody i limity kategorii z poprzedniego miesiąca jednym kliknięciem.
               </p>
             </div>
 
-            {/* Równanie / Kafelki składowe */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <button
+              onClick={handleStartMonth}
+              style={{ background: COLORS.accent, color: '#121214' }}
+              className="w-full sm:w-auto px-6 py-3.5 rounded-xl font-bold text-sm shadow hover:opacity-90 transition flex items-center justify-center gap-2 mx-auto cursor-pointer"
+            >
+              <Sparkles size={18} />
+              Rozpocznij ten miesiąc (Skopiuj stałe koszty i limity)
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Kafelek bilansu głównego */}
+            <div className="space-y-3">
               <div
-                style={{ background: COLORS.surface, borderColor: COLORS.border }}
-                className="p-3 sm:p-4 rounded-xl border flex flex-col justify-between"
+                style={{
+                  background: summary.available >= 0 ? 'linear-gradient(135deg, #1e261f 0%, #151d16 100%)' : 'linear-gradient(135deg, #2d1818 0%, #1c1212 100%)',
+                  borderColor: summary.available >= 0 ? '#38573b' : '#6b2d2d',
+                }}
+                className="p-5 rounded-2xl border shadow-xl relative overflow-hidden"
               >
-                <div className="flex items-center gap-1.5 text-emerald-400 mb-1">
-                  <TrendingUp size={14} />
-                  <span className="text-[11px] sm:text-xs font-semibold">Przychody</span>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+                    Dostępne wolne środki
+                  </span>
+                  {summary.available >= 0 ? (
+                    <span className="flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded-md border border-emerald-800/40">
+                      <CheckCircle2 size={13} /> W budżecie
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-xs font-bold text-rose-400 bg-rose-950/60 px-2.5 py-1 rounded-md border border-rose-800/40">
+                      <AlertTriangle size={13} /> Przekroczenie
+                    </span>
+                  )}
                 </div>
-                <span className="text-xs sm:text-sm md:text-base font-bold text-stone-100 font-mono truncate">
-                  {formatPLN(summary.totalIncome)}
-                </span>
+
+                <div className="flex items-baseline gap-2 mt-1">
+                  <h1
+                    style={{ fontFamily: 'Fraunces' }}
+                    className={`text-3xl sm:text-4xl font-extrabold tracking-tight ${
+                      summary.available >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                    }`}
+                  >
+                    {formatPLN(summary.available)}
+                  </h1>
+                </div>
+
+                <p className="text-xs text-stone-400 mt-2">
+                  Przychody ({formatPLN(summary.totalIncome)}) – Stałe ({formatPLN(summary.totalFixedCosts)}) – Wydatki ({formatPLN(summary.totalExpenses)})
+                </p>
               </div>
 
-              <div
-                style={{ background: COLORS.surface, borderColor: COLORS.border }}
-                className="p-3 sm:p-4 rounded-xl border flex flex-col justify-between"
-              >
-                <div className="flex items-center gap-1.5 text-orange-400 mb-1">
-                  <Landmark size={14} />
-                  <span className="text-[11px] sm:text-xs font-semibold">Koszty stałe</span>
+              {/* Równanie / Kafelki składowe */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <div
+                  style={{ background: COLORS.surface, borderColor: COLORS.border }}
+                  className="p-3 sm:p-4 rounded-xl border flex flex-col justify-between"
+                >
+                  <div className="flex items-center gap-1.5 text-emerald-400 mb-1">
+                    <TrendingUp size={14} />
+                    <span className="text-[11px] sm:text-xs font-semibold">Przychody</span>
+                  </div>
+                  <span className="text-xs sm:text-sm md:text-base font-bold text-stone-100 font-mono truncate">
+                    {formatPLN(summary.totalIncome)}
+                  </span>
                 </div>
-                <span className="text-xs sm:text-sm md:text-base font-bold text-stone-100 font-mono truncate">
-                  {formatPLN(summary.totalFixedCosts)}
-                </span>
-              </div>
 
-              <div
-                style={{ background: COLORS.surface, borderColor: COLORS.border }}
-                className="p-3 sm:p-4 rounded-xl border flex flex-col justify-between"
-              >
-                <div className="flex items-center gap-1.5 text-amber-400 mb-1">
-                  <TrendingDown size={14} />
-                  <span className="text-[11px] sm:text-xs font-semibold">Bieżące</span>
+                <div
+                  style={{ background: COLORS.surface, borderColor: COLORS.border }}
+                  className="p-3 sm:p-4 rounded-xl border flex flex-col justify-between"
+                >
+                  <div className="flex items-center gap-1.5 text-orange-400 mb-1">
+                    <Landmark size={14} />
+                    <span className="text-[11px] sm:text-xs font-semibold">Koszty stałe</span>
+                  </div>
+                  <span className="text-xs sm:text-sm md:text-base font-bold text-stone-100 font-mono truncate">
+                    {formatPLN(summary.totalFixedCosts)}
+                  </span>
                 </div>
-                <span className="text-xs sm:text-sm md:text-base font-bold text-stone-100 font-mono truncate">
-                  {formatPLN(summary.totalExpenses)}
-                </span>
+
+                <div
+                  style={{ background: COLORS.surface, borderColor: COLORS.border }}
+                  className="p-3 sm:p-4 rounded-xl border flex flex-col justify-between"
+                >
+                  <div className="flex items-center gap-1.5 text-amber-400 mb-1">
+                    <TrendingDown size={14} />
+                    <span className="text-[11px] sm:text-xs font-semibold">Bieżące</span>
+                  </div>
+                  <span className="text-xs sm:text-sm md:text-base font-bold text-stone-100 font-mono truncate">
+                    {formatPLN(summary.totalExpenses)}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* 3B. PODUSZKA PŁYNNOŚCIOWA (ZASADA 1: BEZPIECZEŃSTWO FINANSOWE) */}
-          <EmergencyFundCard
-            emergencyFund={emergencyFund}
-            monthlyBurnRate={summary.totalFixedCosts + summary.totalExpenses}
-            onOpenDepositModal={() => setActiveModal('emergency-fund-deposit')}
-            onOpenSettingsModal={() => setActiveModal('emergency-fund-settings')}
-          />
-
-          {/* 3C. SZTYWNY PLAN INWESTYCYJNY (ZASADA 2: ALOKACJA DOCELOWA IKZE + ETF + HIPOTEKA) */}
-          <InvestmentAllocationSection
-            investmentPlan={investmentPlan}
-            onOpenContributionModal={(type) => {
-              setInvestmentModalType(type);
-              setActiveModal('investment-contribution');
-            }}
-            onOpenSettingsModal={() => {
-              setInvestmentModalType('settings');
-              setActiveModal('investment-settings');
-            }}
-          />
-
-          {/* 3D. TARCZA PODATKOWA & ZWROT Z PIT (ZASADA 3: ZWROT PIT W CAŁOŚCI NA HIPOTEKĘ) */}
-          <TaxRefundSimulatorCard
-            taxOptimization={taxOptimization}
-            investmentPlan={investmentPlan}
-            onOpenTaxModal={() => setActiveModal('tax-simulator')}
-            onBookRefundToMortgage={handleBookTaxRefundToMortgage}
-          />
-
-          {/* 3E. ZOBOWIĄZANIA TERMINOWE & RATY 0% (ZASADA 4: UWOLNIONY KAPITAŁ) */}
-          <ExpiringObligationsSection
-            obligations={expiringObligations}
-            onOpenAddModal={() => {
-              setEditingObligation(null);
-              setActiveModal('add-obligation');
-            }}
-            onOpenEditModal={(obl) => {
-              setEditingObligation(obl);
-              setActiveModal('edit-obligation');
-            }}
-            onIncrementPaid={handleIncrementObligationPaid}
-            onDeleteObligation={handleDeleteObligation}
-          />
 
           {/* 4. SEKCJA: KATEGORIE WYDATKÓW */}
           <div
@@ -1095,6 +1101,7 @@ export function BudgetView({
           </div>
         </>
       )}
+      </div>
 
       {/* MODAL DODAWANIA I EDYCJI TRANSAKCJI */}
       {(activeModal === 'add-transaction' || activeModal === 'edit-transaction') && (
