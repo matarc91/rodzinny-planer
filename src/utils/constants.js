@@ -153,6 +153,41 @@ export function createDefaultExpiringObligations() {
   ];
 }
 
+export function createDefaultInvestmentPlan() {
+  return {
+    husbandIKZE: {
+      annualLimit: 14083.20,
+      currentContributed: 4500,
+      monthlyTarget: 1173.60,
+    },
+    wifeIKZE: {
+      annualLimit: 9388.80,
+      currentContributed: 3000,
+      monthlyTarget: 782.40,
+    },
+    etf: {
+      monthlyTarget: 1500,
+      totalContributed: 18000,
+    },
+    mortgage: {
+      monthlyOverpaymentTarget: 1000,
+      totalOverpaid: 24000,
+    },
+  };
+}
+
+export function createDefaultTaxOptimization() {
+  return {
+    year: 2026,
+    husbandIncomeEst: 180000,
+    wifeIncomeEst: 90000,
+    husbandTaxesPaid: 24000,
+    wifeTaxesPaid: 11000,
+    enableJointFiling: true,
+    lastRefundBookedAt: null,
+  };
+}
+
 export function emptyData() {
   const currentMonthKey = new Date().toISOString().slice(0, 7); // np. '2026-08'
   return {
@@ -172,8 +207,11 @@ export function emptyData() {
     budgetGoals: createDefaultBudgetGoals(),
     emergencyFund: createDefaultEmergencyFund(),
     expiringObligations: createDefaultExpiringObligations(),
+    investmentPlan: createDefaultInvestmentPlan(),
+    taxOptimization: createDefaultTaxOptimization(),
     settings: { enableShopping: true, enableWall: true, enableBudget: true },
   };
 }
+
 
 

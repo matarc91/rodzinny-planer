@@ -24,14 +24,20 @@ import {
   createDefaultBudgetGoals,
   createDefaultEmergencyFund,
   createDefaultExpiringObligations,
+  createDefaultInvestmentPlan,
+  createDefaultTaxOptimization,
 } from '../utils/constants.js';
 import { TransactionModal } from '../components/modals/TransactionModal.jsx';
 import { ManageCategoriesModal } from '../components/modals/ManageCategoriesModal.jsx';
 import { ManageGoalsModal } from '../components/modals/ManageGoalsModal.jsx';
 import { EmergencyFundModal } from '../components/modals/EmergencyFundModal.jsx';
 import { ExpiringObligationModal } from '../components/modals/ExpiringObligationModal.jsx';
+import { InvestmentContributionModal } from '../components/modals/InvestmentContributionModal.jsx';
+import { TaxSimulatorModal } from '../components/modals/TaxSimulatorModal.jsx';
 import { EmergencyFundCard } from '../components/budget/EmergencyFundCard.jsx';
 import { ExpiringObligationsSection } from '../components/budget/ExpiringObligationsSection.jsx';
+import { InvestmentAllocationSection } from '../components/budget/InvestmentAllocationSection.jsx';
+import { TaxRefundSimulatorCard } from '../components/budget/TaxRefundSimulatorCard.jsx';
 import { Chip } from '../components/ui/Chip.jsx';
 
 export function BudgetView({
@@ -50,10 +56,11 @@ export function BudgetView({
     onMonthChange?.(newKey);
   };
 
-  const [activeModal, setActiveModal] = useState(null); // 'add-transaction' | 'edit-transaction' | 'manage-categories' | 'manage-goals' | 'emergency-fund' | 'add-obligation' | 'edit-obligation' | null
+  const [activeModal, setActiveModal] = useState(null); // 'add-transaction' | 'edit-transaction' | 'manage-categories' | 'manage-goals' | 'emergency-fund' | 'add-obligation' | 'edit-obligation' | 'investment-contribution' | 'investment-settings' | 'tax-simulator' | null
   const [selectedGoalForTx, setSelectedGoalForTx] = useState(null);
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [editingObligation, setEditingObligation] = useState(null);
+  const [investmentModalType, setInvestmentModalType] = useState('husbandIKZE');
   const [filterType, setFilterType] = useState('all'); // 'all' | 'expense' | 'fixedCost' | 'income'
 
   // Dane bieżącego miesiąca
@@ -62,6 +69,8 @@ export function BudgetView({
   const budgetGoals = useMemo(() => data?.budgetGoals || createDefaultBudgetGoals(), [data?.budgetGoals]);
   const emergencyFund = useMemo(() => data?.emergencyFund || createDefaultEmergencyFund(), [data?.emergencyFund]);
   const expiringObligations = useMemo(() => data?.expiringObligations || createDefaultExpiringObligations(), [data?.expiringObligations]);
+  const investmentPlan = useMemo(() => data?.investmentPlan || createDefaultInvestmentPlan(), [data?.investmentPlan]);
+  const taxOptimization = useMemo(() => data?.taxOptimization || createDefaultTaxOptimization(), [data?.taxOptimization]);
   const people = data?.people || [];
 
   // Parsowanie etykiety miesiąca do wyświetlenia
@@ -308,6 +317,62 @@ export function BudgetView({
     onUpdateData({
       ...data,
       expiringObligations: expiringObligations.filter((o) => o.id !== id),
+    });
+  };
+
+  // Zapisanie zmodyfikowanego planu inwestycyjnego
+  const handleSaveInvestmentPlan = (updatedPlan) => {
+    onUpdateData({
+      ...data,
+      investmentPlan: updatedPlan,
+    });
+  };
+
+  // Zapisanie parametrów symulacji podatkowej
+  const handleSaveTaxConfig = (updatedTax) => {
+    onUpdateData({
+      ...data,
+      taxOptimization: updatedTax,
+    });
+  };
+
+  // Zaksięgowanie zwrotu z PIT jako jednorazowej nadpłaty hipoteki
+  const handleBookTaxRefundToMortgage = (refundAmount) => {
+    if (!refundAmount || refundAmount <= 0) return;
+
+    const currentMortgageOverpaid = Number(investmentPlan.mortgage?.totalOverpaid || 0);
+    const updatedPlan = {
+      ...investmentPlan,
+      mortgage: {
+        ...(investmentPlan.mortgage || {}),
+        totalOverpaid: currentMortgageOverpaid + refundAmount,
+      },
+    };
+
+    const updatedTax = {
+      ...taxOptimization,
+      lastRefundBookedAt: new Date().toISOString(),
+      lastTaxRefund: refundAmount,
+    };
+
+    // Automatyczne dodanie operacji celu w budżecie bieżącego miesiąca
+    handleSaveTransaction('expense', {
+      id: `exp_tax_refund_${Date.now()}`,
+      amount: refundAmount,
+      date: `${monthKey}-01`,
+      categoryId: 'goal',
+      categoryName: 'Nadpłata kredytu hipotecznego',
+      goalId: 'mortgage',
+      goalName: 'Nadpłata kredytu hipotecznego',
+      goalIcon: '🏠',
+      description: `Jednorazowa nadpłata hipoteki ze zwrotu PIT (${taxOptimization.year || 2026})`,
+      createdAt: new Date().toISOString(),
+    });
+
+    onUpdateData({
+      ...data,
+      investmentPlan: updatedPlan,
+      taxOptimization: updatedTax,
     });
   };
 
@@ -579,7 +644,28 @@ export function BudgetView({
             onOpenSettingsModal={() => setActiveModal('emergency-fund-settings')}
           />
 
-          {/* 3C. ZOBOWIĄZANIA TERMINOWE & RATY 0% (UWOLNIONY KAPITAŁ) */}
+          {/* 3C. SZTYWNY PLAN INWESTYCYJNY (ZASADA 2: ALOKACJA DOCELOWA IKZE + ETF + HIPOTEKA) */}
+          <InvestmentAllocationSection
+            investmentPlan={investmentPlan}
+            onOpenContributionModal={(type) => {
+              setInvestmentModalType(type);
+              setActiveModal('investment-contribution');
+            }}
+            onOpenSettingsModal={() => {
+              setInvestmentModalType('settings');
+              setActiveModal('investment-settings');
+            }}
+          />
+
+          {/* 3D. TARCZA PODATKOWA & ZWROT Z PIT (ZASADA 3: ZWROT PIT W CAŁOŚCI NA HIPOTEKĘ) */}
+          <TaxRefundSimulatorCard
+            taxOptimization={taxOptimization}
+            investmentPlan={investmentPlan}
+            onOpenTaxModal={() => setActiveModal('tax-simulator')}
+            onBookRefundToMortgage={handleBookTaxRefundToMortgage}
+          />
+
+          {/* 3E. ZOBOWIĄZANIA TERMINOWE & RATY 0% (ZASADA 4: UWOLNIONY KAPITAŁ) */}
           <ExpiringObligationsSection
             obligations={expiringObligations}
             onOpenAddModal={() => {
@@ -1068,6 +1154,28 @@ export function BudgetView({
             setEditingObligation(null);
           }}
           onSave={handleSaveObligation}
+        />
+      )}
+
+      {/* MODAL WPŁATY I USTAWIEŃ PLANU INWESTYCYJNEGO (IKZE / ETF / HIPOTEKA) */}
+      {(activeModal === 'investment-contribution' || activeModal === 'investment-settings') && (
+        <InvestmentContributionModal
+          initialType={investmentModalType}
+          investmentPlan={investmentPlan}
+          monthKey={monthKey}
+          onClose={() => setActiveModal(null)}
+          onSavePlan={handleSaveInvestmentPlan}
+          onRecordBudgetExpense={(expenseItem) => handleSaveTransaction('expense', expenseItem)}
+        />
+      )}
+
+      {/* MODAL SYMULATORA PODATKOWEGO PIT */}
+      {activeModal === 'tax-simulator' && (
+        <TaxSimulatorModal
+          taxOptimization={taxOptimization}
+          investmentPlan={investmentPlan}
+          onClose={() => setActiveModal(null)}
+          onSaveTaxConfig={handleSaveTaxConfig}
         />
       )}
     </div>
