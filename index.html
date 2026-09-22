@@ -14,7 +14,7 @@
     
     <title>Rodzinny Planer</title>
   </head>
-  <body class="bg-[#121214] text-[#F3F3F5] overscroll-none">
+  <body class="bg-[#121214] text-[#F3F3F5]">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
@@ -24,7 +24,7 @@
             .register('/sw.js', { scope: '/' })
             .then((reg) => {
               console.log('[PWA] Service Worker zarejestrowany:', reg.scope);
-              // Wymuś sprawdzenie czy na serwerze jest nowsza wersja
+              // Wymuś natychmiastowe sprawdzenie czy na serwerze jest nowsza wersja
               reg.update().catch(() => {});
 
               // Wykrycie nowej wersji w trakcie pobierania
@@ -52,6 +52,23 @@
               window.location.reload();
             }
           });
+
+          // Nasłuchiwanie bezpośredniej wiadomości o aktualizacji z SW
+          navigator.serviceWorker.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'SW_UPDATED' && !refreshing) {
+              refreshing = true;
+              window.location.reload();
+            }
+          });
+        });
+
+        // Wymuś sprawdzenie czy jest nowa wersja przy każdym powrocie do aplikacji
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            navigator.serviceWorker.getRegistration().then((reg) => {
+              if (reg) reg.update().catch(() => {});
+            });
+          }
         });
       }
     </script>

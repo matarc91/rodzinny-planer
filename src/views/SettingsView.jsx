@@ -26,6 +26,7 @@ import {
 import { Chip } from '../components/ui/Chip.jsx';
 import { AppLogsSection } from './AppLogsSection.jsx';
 import { addLog } from '../utils/logger.js';
+import { APP_VERSION } from '../utils/constants.js';
 import {
   getNotificationPermission,
   requestNotificationPermission,
@@ -787,7 +788,66 @@ export function SettingsView({
         )}
       </div>
 
-      {/* SEKCJA 6: Strefa niebezpieczna */}
+      {/* SEKCJA 6: Wersja aplikacji i aktualizacje */}
+      <div className="bg-[#1E1E22] border border-[#33333C] rounded-2xl overflow-hidden transition-all shadow-sm">
+        <button
+          type="button"
+          onClick={() => toggleSection('version')}
+          className="w-full p-4 flex items-center justify-between text-left hover:bg-[#2A2A30] transition active:bg-stone-800"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+              <RefreshCw size={18} />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-stone-100 flex items-center gap-2">
+                <span>Wersja Aplikacji</span>
+                <span className="font-mono text-xs text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30">
+                  {APP_VERSION}
+                </span>
+              </div>
+              <div className="text-xs text-stone-400">Pamięć podręczna PWA i wymuszenie aktualizacji</div>
+            </div>
+          </div>
+          <div className="text-stone-400 p-1">
+            {expandedSection === 'version' ? <ChevronDown size={18} className="text-amber-400" /> : <ChevronRight size={18} />}
+          </div>
+        </button>
+
+        {expandedSection === 'version' && (
+          <div className="p-4 pt-3 border-t border-[#33333C] space-y-3 bg-stone-900/30">
+            <p className="text-xs text-stone-400 leading-relaxed">
+              Zainstalowana wersja: <strong className="text-stone-200 font-mono">{APP_VERSION}</strong>. Jeśli aplikacja nie pobrała najnowszych funkcji lub przycisków, kliknij poniższy przycisk, aby wyczyścić Service Workera i pamięć CacheStorage telefonu.
+            </p>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  if ('serviceWorker' in navigator) {
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    for (const r of regs) await r.unregister();
+                  }
+                  if ('caches' in window) {
+                    const keys = await caches.keys();
+                    for (const k of keys) await caches.delete(k);
+                  }
+                  if (showToast) showToast('Wyczyszczono pamięć. Odświeżam aplikację...');
+                  setTimeout(() => {
+                    window.location.reload(true);
+                  }, 400);
+                } catch (e) {
+                  window.location.reload();
+                }
+              }}
+              className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 active:scale-95 shadow-md cursor-pointer"
+            >
+              <RefreshCw size={15} /> Wymuś aktualizację i wyczyść pamięć podręczną
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* SEKCJA 7: Strefa niebezpieczna */}
       <div className="bg-[#1E1E22] border border-red-900/40 rounded-2xl overflow-hidden transition-all shadow-sm">
         <button
           type="button"
