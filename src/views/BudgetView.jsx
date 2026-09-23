@@ -22,22 +22,13 @@ import {
   MONTHS,
   createDefaultMonthBudget,
   createDefaultBudgetGoals,
-  createDefaultEmergencyFund,
   createDefaultExpiringObligations,
-  createDefaultInvestmentPlan,
-  createDefaultTaxOptimization,
 } from '../utils/constants.js';
 import { TransactionModal } from '../components/modals/TransactionModal.jsx';
 import { ManageCategoriesModal } from '../components/modals/ManageCategoriesModal.jsx';
 import { ManageGoalsModal } from '../components/modals/ManageGoalsModal.jsx';
-import { EmergencyFundModal } from '../components/modals/EmergencyFundModal.jsx';
 import { ExpiringObligationModal } from '../components/modals/ExpiringObligationModal.jsx';
-import { InvestmentContributionModal } from '../components/modals/InvestmentContributionModal.jsx';
-import { TaxSimulatorModal } from '../components/modals/TaxSimulatorModal.jsx';
-import { EmergencyFundCard } from '../components/budget/EmergencyFundCard.jsx';
 import { ExpiringObligationsSection } from '../components/budget/ExpiringObligationsSection.jsx';
-import { InvestmentAllocationSection } from '../components/budget/InvestmentAllocationSection.jsx';
-import { TaxRefundSimulatorCard } from '../components/budget/TaxRefundSimulatorCard.jsx';
 import { Chip } from '../components/ui/Chip.jsx';
 
 export function BudgetView({
@@ -56,21 +47,44 @@ export function BudgetView({
     onMonthChange?.(newKey);
   };
 
-  const [activeModal, setActiveModal] = useState(null); // 'add-transaction' | 'edit-transaction' | 'manage-categories' | 'manage-goals' | 'emergency-fund' | 'add-obligation' | 'edit-obligation' | 'investment-contribution' | 'investment-settings' | 'tax-simulator' | null
+  const [activeModal, setActiveModal] = useState(null); // 'add-transaction' | 'edit-transaction' | 'manage-categories' | 'manage-goals' | 'add-obligation' | 'edit-obligation' | null
   const [selectedGoalForTx, setSelectedGoalForTx] = useState(null);
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [editingObligation, setEditingObligation] = useState(null);
-  const [investmentModalType, setInvestmentModalType] = useState('husbandIKZE');
-  const [filterType, setFilterType] = useState('all'); // 'all' | 'expense' | 'fixedCost' | 'income'
+  const [editingGoalId, setEditingGoalId] = useState(null);
+  const [filterType, setFilterType] = useState('all'); // 'all' | 'expense' | 'fixedCost' | 'goal' | 'income'
 
   // Dane bieżącego miesiąca
   const budgetState = useMemo(() => data?.budget || {}, [data?.budget]);
   const currentMonthBudget = budgetState[monthKey];
-  const budgetGoals = useMemo(() => data?.budgetGoals || createDefaultBudgetGoals(), [data?.budgetGoals]);
-  const emergencyFund = useMemo(() => data?.emergencyFund || createDefaultEmergencyFund(), [data?.emergencyFund]);
-  const expiringObligations = useMemo(() => data?.expiringObligations || createDefaultExpiringObligations(), [data?.expiringObligations]);
-  const investmentPlan = useMemo(() => data?.investmentPlan || createDefaultInvestmentPlan(), [data?.investmentPlan]);
-  const taxOptimization = useMemo(() => data?.taxOptimization || createDefaultTaxOptimization(), [data?.taxOptimization]);
+
+  // Cele finansowe i inwestycyjne (z automatyczną migracją Poduszki Finansowej jeśli była w emergencyFund)
+  const budgetGoals = useMemo(() => {
+    const rawGoals = data?.budgetGoals || createDefaultBudgetGoals();
+    const hasPoduszka = rawGoals.some(
+      (g) => g.id === 'goal_poduszka' || (g.name && g.name.toLowerCase().includes('poduszk'))
+    );
+    if (!hasPoduszka && data?.emergencyFund) {
+      return [
+        {
+          id: 'goal_poduszka',
+          name: 'Poduszka finansowa',
+          targetAmount: data.emergencyFund.targetAmount || 50000,
+          initialAmount: data.emergencyFund.currentAmount || 0,
+          icon: '🛡️',
+          isCompleted: false,
+          createdAt: new Date().toISOString(),
+        },
+        ...rawGoals,
+      ];
+    }
+    return rawGoals;
+  }, [data?.budgetGoals, data?.emergencyFund]);
+
+  const expiringObligations = useMemo(
+    () => data?.expiringObligations || createDefaultExpiringObligations(),
+    [data?.expiringObligations]
+  );
   const people = data?.people || [];
 
   // Parsowanie etykiety miesiąca do wyświetlenia
@@ -198,7 +212,8 @@ export function BudgetView({
     });
 
     const list = (budgetGoals || []).map((g) => {
-      const spent = map[g.id] || 0;
+      const initial = Number(g.initialAmount) || 0;
+      const spent = (map[g.id] || 0) + initial;
       const hasTarget = g.targetAmount !== null && g.targetAmount !== undefined && Number(g.targetAmount) > 0;
       const target = hasTarget ? Number(g.targetAmount) : 0;
       const percent = hasTarget ? Math.min(100, Math.round((spent / target) * 100)) : 100;
@@ -272,14 +287,6 @@ export function BudgetView({
     });
   };
 
-  // Zapisanie zmodyfikowanej poduszki płynnościowej
-  const handleSaveEmergencyFund = (updatedFund) => {
-    onUpdateData({
-      ...data,
-      emergencyFund: updatedFund,
-    });
-  };
-
   // Zapisanie nowej lub edytowanej raty 0% / zobowiązania terminowego
   const handleSaveObligation = (savedObligation) => {
     const exists = expiringObligations.some((o) => o.id === savedObligation.id);
@@ -317,62 +324,6 @@ export function BudgetView({
     onUpdateData({
       ...data,
       expiringObligations: expiringObligations.filter((o) => o.id !== id),
-    });
-  };
-
-  // Zapisanie zmodyfikowanego planu inwestycyjnego
-  const handleSaveInvestmentPlan = (updatedPlan) => {
-    onUpdateData({
-      ...data,
-      investmentPlan: updatedPlan,
-    });
-  };
-
-  // Zapisanie parametrów symulacji podatkowej
-  const handleSaveTaxConfig = (updatedTax) => {
-    onUpdateData({
-      ...data,
-      taxOptimization: updatedTax,
-    });
-  };
-
-  // Zaksięgowanie zwrotu z PIT jako jednorazowej nadpłaty hipoteki
-  const handleBookTaxRefundToMortgage = (refundAmount) => {
-    if (!refundAmount || refundAmount <= 0) return;
-
-    const currentMortgageOverpaid = Number(investmentPlan.mortgage?.totalOverpaid || 0);
-    const updatedPlan = {
-      ...investmentPlan,
-      mortgage: {
-        ...(investmentPlan.mortgage || {}),
-        totalOverpaid: currentMortgageOverpaid + refundAmount,
-      },
-    };
-
-    const updatedTax = {
-      ...taxOptimization,
-      lastRefundBookedAt: new Date().toISOString(),
-      lastTaxRefund: refundAmount,
-    };
-
-    // Automatyczne dodanie operacji celu w budżecie bieżącego miesiąca
-    handleSaveTransaction('expense', {
-      id: `exp_tax_refund_${Date.now()}`,
-      amount: refundAmount,
-      date: `${monthKey}-01`,
-      categoryId: 'goal',
-      categoryName: 'Nadpłata kredytu hipotecznego',
-      goalId: 'mortgage',
-      goalName: 'Nadpłata kredytu hipotecznego',
-      goalIcon: '🏠',
-      description: `Jednorazowa nadpłata hipoteki ze zwrotu PIT (${taxOptimization.year || 2026})`,
-      createdAt: new Date().toISOString(),
-    });
-
-    onUpdateData({
-      ...data,
-      investmentPlan: updatedPlan,
-      taxOptimization: updatedTax,
     });
   };
 
@@ -522,49 +473,8 @@ export function BudgetView({
         </button>
       </div>
 
-      {/* 2. STRATEGIA FINANSOWA RODZINY (ZASADY 1-4: ZAWSZE WIDOCZNE) */}
-      <EmergencyFundCard
-        emergencyFund={emergencyFund}
-        monthlyBurnRate={summary.totalFixedCosts + summary.totalExpenses}
-        onOpenDepositModal={() => setActiveModal('emergency-fund-deposit')}
-        onOpenSettingsModal={() => setActiveModal('emergency-fund-settings')}
-      />
-
-      <InvestmentAllocationSection
-        investmentPlan={investmentPlan}
-        onOpenContributionModal={(type) => {
-          setInvestmentModalType(type);
-          setActiveModal('investment-contribution');
-        }}
-        onOpenSettingsModal={() => {
-          setInvestmentModalType('settings');
-          setActiveModal('investment-settings');
-        }}
-      />
-
-      <TaxRefundSimulatorCard
-        taxOptimization={taxOptimization}
-        investmentPlan={investmentPlan}
-        onOpenTaxModal={() => setActiveModal('tax-simulator')}
-        onBookRefundToMortgage={handleBookTaxRefundToMortgage}
-      />
-
-      <ExpiringObligationsSection
-        obligations={expiringObligations}
-        onOpenAddModal={() => {
-          setEditingObligation(null);
-          setActiveModal('add-obligation');
-        }}
-        onOpenEditModal={(obl) => {
-          setEditingObligation(obl);
-          setActiveModal('edit-obligation');
-        }}
-        onIncrementPaid={handleIncrementObligationPaid}
-        onDeleteObligation={handleDeleteObligation}
-      />
-
-      {/* 3. MIESIĘCZNY BUDŻET OPERACYJNY I WYDATKI */}
-      <div className="pt-2 border-t border-stone-800 space-y-4">
+      {/* 2. MIESIĘCZNY BUDŻET OPERACYJNY */}
+      <div className="pt-1 space-y-4">
         <div className="px-1 flex items-center justify-between">
           <div>
             <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-lg font-bold">
@@ -686,422 +596,500 @@ export function BudgetView({
               </div>
             </div>
 
-          {/* 4. SEKCJA: KATEGORIE WYDATKÓW */}
-          <div
-            style={{ background: COLORS.surface, borderColor: COLORS.border }}
-            className="rounded-2xl p-5 border space-y-4 shadow-sm"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2.5">
-              <div>
-                <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-base font-bold">
-                  Kategorie wydatków
-                </h3>
-                <p className="text-xs text-stone-400">Kontrola wydatków i limitów w bieżącym miesiącu</p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setActiveModal('manage-categories')}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-stone-300 bg-stone-800 hover:bg-stone-700 transition border border-stone-700 cursor-pointer"
-                title="Modyfikuj, dodawaj lub usuwaj kategorie"
-              >
-                <SlidersHorizontal size={14} className="text-amber-400" />
-                <span>Kategorie</span>
-              </button>
-            </div>
-
-            <div className="space-y-3.5 pt-1">
-              {summary.categoriesProgress.map((cat) => {
-                const isOver = cat.isExceeded;
-                const barWidth = Math.min(100, Math.max(2, cat.percent));
-
-                return (
-                  <div
-                    key={cat.id}
-                    style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
-                    className="p-3.5 rounded-xl border space-y-2.5"
-                  >
-                    {/* Górna linijka: Nazwa i wartości liczbowe */}
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-base shrink-0">{cat.icon || '🏷️'}</span>
-                        <span className="text-sm font-semibold text-stone-200 truncate">{cat.name}</span>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div className="text-xs font-mono">
-                          <span className={isOver ? 'text-rose-400 font-bold' : 'text-stone-100 font-bold'}>
-                            {formatPLN(cat.spent)}
-                          </span>
-                          <span className="text-stone-500 mx-1">/</span>
-                          <span className="text-stone-400">{formatPLN(cat.limit)}</span>
-                        </div>
-
-                        {isOver ? (
-                          <span className="text-[11px] bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-md border border-rose-500/30 font-semibold shrink-0">
-                            +{formatPLN(cat.diff)}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-stone-500 font-mono shrink-0">
-                            {cat.percent}%
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Progress bar z marginesem i tłem */}
-                    <div className="w-full bg-stone-900 rounded-full h-2.5 overflow-hidden border border-stone-800">
-                      <div
-                        style={{
-                          width: `${barWidth}%`,
-                          backgroundColor: isOver ? COLORS.warn : COLORS.accent,
-                        }}
-                        className="h-full rounded-full transition-all duration-500"
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-
-              {summary.categoriesProgress.length === 0 && (
-                <div className="text-center py-5 border border-dashed border-stone-800 rounded-xl bg-stone-900/30 space-y-2">
-                  <p className="text-xs text-stone-400">Brak zdefiniowanych kategorii w tym miesiącu.</p>
-                  <button
-                    type="button"
-                    onClick={() => setActiveModal('manage-categories')}
-                    style={{ color: COLORS.accent }}
-                    className="text-xs font-bold hover:underline"
-                  >
-                    + Dodaj pierwszą kategorię
-                  </button>
+            {/* KATEGORIE WYDATKÓW */}
+            <div
+              style={{ background: COLORS.surface, borderColor: COLORS.border }}
+              className="rounded-2xl p-4 sm:p-5 border space-y-4 shadow-sm"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2.5">
+                <div>
+                  <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-base font-bold">
+                    Kategorie wydatków
+                  </h3>
+                  <p className="text-xs text-stone-400">Kontrola wydatków i limitów w bieżącym miesiącu</p>
                 </div>
-              )}
-            </div>
-          </div>
 
-          {/* 4B. SEKCJA: CELE FINANSOWE (GLOBALNE) */}
-          <div
-            style={{ background: COLORS.surface, borderColor: COLORS.border }}
-            className="rounded-2xl p-5 border space-y-4 shadow-sm"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2.5">
-              <div>
-                <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-base font-bold flex items-center gap-2">
-                  <span>Cele finansowe</span>
-                </h3>
-                <p className="text-xs text-stone-400">Globalne plany i oszczędności rodziny (sumowane bez resetu)</p>
+                <button
+                  type="button"
+                  onClick={() => setActiveModal('manage-categories')}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-stone-300 bg-stone-800 hover:bg-stone-700 transition border border-stone-700 cursor-pointer"
+                  title="Modyfikuj, dodawaj lub usuwaj kategorie"
+                >
+                  <SlidersHorizontal size={14} className="text-amber-400" />
+                  <span>Kategorie</span>
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setActiveModal('manage-goals')}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-stone-300 bg-stone-800 hover:bg-stone-700 transition border border-stone-700 cursor-pointer"
-                title="Modyfikuj, dodawaj lub zamykaj cele"
-              >
-                <Target size={14} className="text-amber-400" />
-                <span>Cele</span>
-              </button>
-            </div>
+              <div className="space-y-3 pt-1">
+                {summary.categoriesProgress.map((cat) => {
+                  const isOver = cat.isExceeded;
+                  const barWidth = Math.min(100, Math.max(2, cat.percent));
 
-            <div className="space-y-3 pt-1">
-              {goalsProgress.map((goal) => {
-                const hasTarget = goal.hasTarget;
-                const isReached = goal.isReached;
-                const isCompleted = goal.isCompleted;
-
-                return (
-                  <div
-                    key={goal.id}
-                    style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
-                    className={`p-3.5 rounded-xl border space-y-2.5 transition ${
-                      isCompleted ? 'opacity-70 border-emerald-500/30' : ''
-                    }`}
-                  >
-                    {/* Górna linijka: Nazwa i wartości */}
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xl shrink-0">{goal.icon || '🎯'}</span>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className={`text-sm font-semibold truncate ${isCompleted ? 'line-through text-stone-400' : 'text-stone-100'}`}>
-                              {goal.name}
-                            </span>
-                            {isCompleted ? (
-                              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-semibold border border-emerald-500/30 flex items-center gap-0.5">
-                                <CheckCircle2 size={10} /> Zrealizowany
-                              </span>
-                            ) : isReached ? (
-                              <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-semibold border border-amber-500/30">
-                                Cel osiągnięty!
-                              </span>
-                            ) : null}
-                          </div>
+                  return (
+                    <div
+                      key={cat.id}
+                      style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
+                      className="p-3 sm:p-3.5 rounded-xl border space-y-2.5"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-base shrink-0">{cat.icon || '🏷️'}</span>
+                          <span className="text-sm font-semibold text-stone-200 truncate">{cat.name}</span>
                         </div>
-                      </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div className="text-xs font-mono">
-                          <span className="text-stone-100 font-bold">{formatPLN(goal.spent)}</span>
-                          <span className="text-stone-500 mx-1">/</span>
-                          {hasTarget ? (
-                            <span className="text-stone-400">{formatPLN(goal.target)}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="text-xs font-mono">
+                            <span className={isOver ? 'text-rose-400 font-bold' : 'text-stone-100 font-bold'}>
+                              {formatPLN(cat.spent)}
+                            </span>
+                            <span className="text-stone-500 mx-1">/</span>
+                            <span className="text-stone-400">{formatPLN(cat.limit)}</span>
+                          </div>
+
+                          {isOver ? (
+                            <span className="text-[11px] bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-md border border-rose-500/30 font-semibold shrink-0">
+                              +{formatPLN(cat.diff)}
+                            </span>
                           ) : (
-                            <span className="text-amber-400 font-bold text-sm">∞</span>
+                            <span className="text-[11px] text-stone-500 font-mono shrink-0">
+                              {cat.percent}%
+                            </span>
                           )}
                         </div>
-
-                        {hasTarget ? (
-                          <span className="text-[11px] text-stone-400 font-mono shrink-0">
-                            {goal.rawPercent}%
-                          </span>
-                        ) : (
-                          <span className="text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 font-bold font-mono">
-                            ∞ otwarty
-                          </span>
-                        )}
                       </div>
-                    </div>
 
-                    {/* Pasek postępu */}
-                    {hasTarget ? (
                       <div className="w-full bg-stone-900 rounded-full h-2.5 overflow-hidden border border-stone-800">
                         <div
                           style={{
-                            width: `${Math.max(2, Math.min(100, goal.percent))}%`,
-                            backgroundColor: isReached ? COLORS.success : COLORS.accent,
+                            width: `${barWidth}%`,
+                            backgroundColor: isOver ? COLORS.warn : COLORS.accent,
                           }}
                           className="h-full rounded-full transition-all duration-500"
                         />
                       </div>
-                    ) : (
-                      <div className="w-full bg-stone-900 rounded-full h-2.5 overflow-hidden border border-amber-500/20 relative flex items-center">
-                        <div className="h-full rounded-full w-full bg-gradient-to-r from-amber-500/30 via-amber-400/80 to-amber-500/30 animate-pulse transition-all duration-500" />
-                        <span className="absolute right-2 text-[9px] font-bold text-amber-300 pointer-events-none drop-shadow">
-                          ∞
-                        </span>
-                      </div>
-                    )}
+                    </div>
+                  );
+                })}
 
-                    {/* Szybka akcja: dodaj wydatek/odłożenie na ten cel */}
-                    {!isCompleted && (
-                      <div className="flex justify-end pt-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedGoalForTx(goal.id);
-                            setActiveModal('add-transaction');
-                          }}
-                          className="text-[11px] font-semibold text-amber-400/90 hover:text-amber-300 flex items-center gap-1 hover:underline cursor-pointer"
-                        >
-                          <Plus size={12} />
-                          Dodaj wydatek na ten cel
-                        </button>
-                      </div>
-                    )}
+                {summary.categoriesProgress.length === 0 && (
+                  <div className="text-center py-5 border border-dashed border-stone-800 rounded-xl bg-stone-900/30 space-y-2">
+                    <p className="text-xs text-stone-400">Brak zdefiniowanych kategorii w tym miesiącu.</p>
+                    <button
+                      type="button"
+                      onClick={() => setActiveModal('manage-categories')}
+                      style={{ color: COLORS.accent }}
+                      className="text-xs font-bold hover:underline"
+                    >
+                      + Dodaj pierwszą kategorię
+                    </button>
                   </div>
-                );
-              })}
-
-              {goalsProgress.length === 0 && (
-                <div className="text-center py-5 border border-dashed border-stone-800 rounded-xl bg-stone-900/30 space-y-2">
-                  <p className="text-xs text-stone-400">Brak zdefiniowanych celów finansowych.</p>
-                  <button
-                    type="button"
-                    onClick={() => setActiveModal('manage-goals')}
-                    style={{ color: COLORS.accent }}
-                    className="text-xs font-bold hover:underline"
-                  >
-                    + Dodaj pierwszy cel finansowy
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 5. LISTA OPERACJI Z DANEGO MIESIĄCA (Z OZNACZENIEM OSOBY) */}
-          <div
-            style={{ background: COLORS.surface, borderColor: COLORS.border }}
-            className="rounded-2xl p-5 border space-y-4 shadow-sm"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-base font-bold">
-                Operacje ({combinedTransactions.length})
-              </h3>
-
-              {/* Filtry */}
-              <div
-                style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
-                className="flex p-0.5 rounded-xl border text-xs font-semibold overflow-x-auto no-scrollbar"
-              >
-                <button
-                  onClick={() => setFilterType('all')}
-                  style={{
-                    background: filterType === 'all' ? COLORS.accent : 'transparent',
-                    color: filterType === 'all' ? '#121214' : COLORS.inkSoft,
-                  }}
-                  className="px-3 py-1.5 rounded-lg transition shrink-0"
-                >
-                  Wszystkie
-                </button>
-                <button
-                  onClick={() => setFilterType('expense')}
-                  style={{
-                    background: filterType === 'expense' ? COLORS.accent : 'transparent',
-                    color: filterType === 'expense' ? '#121214' : COLORS.inkSoft,
-                  }}
-                  className="px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
-                >
-                  Wydatki
-                </button>
-                <button
-                  onClick={() => setFilterType('fixedCost')}
-                  style={{
-                    background: filterType === 'fixedCost' ? COLORS.accent : 'transparent',
-                    color: filterType === 'fixedCost' ? '#121214' : COLORS.inkSoft,
-                  }}
-                  className="px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
-                >
-                  Stałe koszty
-                </button>
-                <button
-                  onClick={() => setFilterType('goal')}
-                  style={{
-                    background: filterType === 'goal' ? COLORS.accent : 'transparent',
-                    color: filterType === 'goal' ? '#121214' : COLORS.inkSoft,
-                  }}
-                  className="px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
-                >
-                  Cele
-                </button>
-                <button
-                  onClick={() => setFilterType('income')}
-                  style={{
-                    background: filterType === 'income' ? COLORS.accent : 'transparent',
-                    color: filterType === 'income' ? '#121214' : COLORS.inkSoft,
-                  }}
-                  className="px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
-                >
-                  Przychody
-                </button>
+                )}
               </div>
             </div>
 
-            {/* Lista wpisów */}
-            <div className="space-y-2.5 pt-1">
-              {combinedTransactions.map((tx) => {
-                const isIncome = tx.type === 'income';
-                const isFixed = tx.type === 'fixedCost';
-                const person = getPerson(tx.personId);
-
-                return (
-                  <div
-                    key={tx.id}
-                    style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
-                    className="flex items-center justify-between p-3.5 rounded-xl border transition hover:border-stone-700 gap-3"
+            {/* 3. OKNO OPERACJI Z DANEGO MIESIĄCA (SCROLLOWANE + ZOPTYMALIZOWANE MOBILNIE) */}
+            <div
+              style={{ background: COLORS.surface, borderColor: COLORS.border }}
+              className="rounded-2xl p-4 sm:p-5 border space-y-4 shadow-sm"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center justify-between">
+                  <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-base font-bold">
+                    Operacje ({combinedTransactions.length})
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedGoalForTx(null);
+                      setEditingTransaction(null);
+                      setActiveModal('add-transaction');
+                    }}
+                    style={{ background: COLORS.accent, color: '#121214' }}
+                    className="sm:hidden px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow hover:opacity-90 transition cursor-pointer"
                   >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                          isIncome
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : isFixed
-                            ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
-                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                        }`}
-                      >
-                        {isIncome && <TrendingUp size={18} />}
-                        {isFixed && <Landmark size={18} />}
-                        {!isIncome && !isFixed && <TrendingDown size={18} />}
+                    <Plus size={14} />
+                    <span>Dodaj</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Filtry */}
+                  <div
+                    style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
+                    className="flex p-0.5 rounded-xl border text-xs font-semibold overflow-x-auto no-scrollbar w-full sm:w-auto"
+                  >
+                    <button
+                      onClick={() => setFilterType('all')}
+                      style={{
+                        background: filterType === 'all' ? COLORS.accent : 'transparent',
+                        color: filterType === 'all' ? '#121214' : COLORS.inkSoft,
+                      }}
+                      className="px-2.5 sm:px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
+                    >
+                      Wszystkie
+                    </button>
+                    <button
+                      onClick={() => setFilterType('expense')}
+                      style={{
+                        background: filterType === 'expense' ? COLORS.accent : 'transparent',
+                        color: filterType === 'expense' ? '#121214' : COLORS.inkSoft,
+                      }}
+                      className="px-2.5 sm:px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
+                    >
+                      Wydatki
+                    </button>
+                    <button
+                      onClick={() => setFilterType('fixedCost')}
+                      style={{
+                        background: filterType === 'fixedCost' ? COLORS.accent : 'transparent',
+                        color: filterType === 'fixedCost' ? '#121214' : COLORS.inkSoft,
+                      }}
+                      className="px-2.5 sm:px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
+                    >
+                      Stałe
+                    </button>
+                    <button
+                      onClick={() => setFilterType('goal')}
+                      style={{
+                        background: filterType === 'goal' ? COLORS.accent : 'transparent',
+                        color: filterType === 'goal' ? '#121214' : COLORS.inkSoft,
+                      }}
+                      className="px-2.5 sm:px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
+                    >
+                      Cele
+                    </button>
+                    <button
+                      onClick={() => setFilterType('income')}
+                      style={{
+                        background: filterType === 'income' ? COLORS.accent : 'transparent',
+                        color: filterType === 'income' ? '#121214' : COLORS.inkSoft,
+                      }}
+                      className="px-2.5 sm:px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
+                    >
+                      Przychody
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedGoalForTx(null);
+                      setEditingTransaction(null);
+                      setActiveModal('add-transaction');
+                    }}
+                    style={{ background: COLORS.accent, color: '#121214' }}
+                    className="hidden sm:flex px-3 py-1.5 rounded-xl text-xs font-bold items-center gap-1.5 shadow hover:opacity-90 transition shrink-0 cursor-pointer"
+                  >
+                    <Plus size={15} />
+                    <span>Dodaj operację</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Scrollowane okno operacji */}
+              <div className="max-h-[460px] overflow-y-auto pr-1 sm:pr-2 space-y-2.5">
+                {combinedTransactions.map((tx) => {
+                  const isIncome = tx.type === 'income';
+                  const isFixed = tx.type === 'fixedCost';
+                  const person = getPerson(tx.personId);
+
+                  return (
+                    <div
+                      key={tx.id}
+                      style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
+                      className="p-3 sm:p-3.5 rounded-xl border transition hover:border-stone-700 space-y-2"
+                    >
+                      {/* Górna linia: Ikona + Tytuł vs Kwota (nigdy się nie rozjeżdża) */}
+                      <div className="flex items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <div
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                              isIncome
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : isFixed
+                                ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            }`}
+                          >
+                            {isIncome && <TrendingUp size={16} />}
+                            {isFixed && <Landmark size={16} />}
+                            {!isIncome && !isFixed && <TrendingDown size={16} />}
+                          </div>
+
+                          <span className="text-sm font-bold text-stone-100 truncate">
+                            {tx.displayTitle}
+                          </span>
+                        </div>
+
+                        <span
+                          className={`font-mono text-sm sm:text-base font-bold shrink-0 whitespace-nowrap ${
+                            isIncome ? 'text-emerald-400' : 'text-stone-100'
+                          }`}
+                        >
+                          {isIncome ? '+' : '-'}{formatPLN(tx.amount)}
+                        </span>
                       </div>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-bold text-stone-100 truncate">{tx.displayTitle}</div>
-                        <div className="text-xs text-stone-400 flex flex-wrap items-center gap-2 mt-0.5">
-                          <span className="text-stone-300 font-medium">{tx.categoryName || 'Brak kategorii'}</span>
+                      {/* Dolna linia: Etykiety metadanych po lewej vs Akcje po prawej */}
+                      <div className="flex items-center justify-between gap-2 pt-0.5 text-xs text-stone-400">
+                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                          {/* Kategoria */}
+                          <span className="text-stone-300 font-medium px-2 py-0.5 rounded-md bg-stone-800/80 border border-stone-700/50 text-[11px] shrink-0 whitespace-nowrap">
+                            {tx.categoryName || 'Brak kategorii'}
+                          </span>
+
                           {/* Oznaczenie celu finansowego */}
                           {tx.goalName && (
-                            <>
-                              <span className="text-stone-600">•</span>
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[11px] font-medium">
-                                <span>{tx.goalIcon || '🎯'}</span>
-                                <span>{tx.goalName}</span>
-                              </span>
-                            </>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[11px] font-medium shrink-0 whitespace-nowrap">
+                              <span>{tx.goalIcon || '🎯'}</span>
+                              <span className="truncate max-w-[120px]">{tx.goalName}</span>
+                            </span>
                           )}
+
+                          {/* Data */}
                           {tx.date && (
-                            <>
-                              <span className="text-stone-600">•</span>
-                              <span className="flex items-center gap-1 font-mono text-stone-400">
-                                <Calendar size={11} /> {tx.date}
-                              </span>
-                            </>
+                            <span className="inline-flex items-center gap-1 font-mono text-stone-400 text-[11px] shrink-0 whitespace-nowrap">
+                              <Calendar size={11} /> {tx.date}
+                            </span>
                           )}
-                          {/* Oznaczenie osoby */}
+
+                          {/* Osoba */}
                           {person && (
-                            <>
-                              <span className="text-stone-600">•</span>
-                              <span
-                                style={{
-                                  borderColor: `${person.color}40`,
-                                  background: `${person.color}15`,
-                                  color: person.color,
-                                }}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium"
-                              >
-                                <Chip person={person} size="sm" />
-                                <span>{person.name}</span>
-                              </span>
-                            </>
+                            <span
+                              style={{
+                                borderColor: `${person.color}40`,
+                                background: `${person.color}15`,
+                                color: person.color,
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium shrink-0 whitespace-nowrap"
+                            >
+                              <Chip person={person} size="sm" />
+                              <span>{person.name}</span>
+                            </span>
                           )}
+                        </div>
+
+                        {/* Akcje: Edycja i Usuwanie */}
+                        <div className="flex items-center gap-1 shrink-0 ml-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingTransaction(tx);
+                              setActiveModal('edit-transaction');
+                            }}
+                            className="p-1.5 rounded-lg text-stone-400 hover:text-amber-400 hover:bg-stone-800 transition cursor-pointer"
+                            title="Edytuj operację"
+                          >
+                            <Pencil size={14} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteItem(tx.type, tx.id)}
+                            className="p-1.5 rounded-lg text-stone-400 hover:text-rose-400 hover:bg-stone-800 transition cursor-pointer"
+                            title="Usuń operację"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {combinedTransactions.length === 0 && (
+                  <div className="text-center py-8 text-stone-500 text-xs italic">
+                    Brak operacji dla wybranego filtru w tym miesiącu.
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* 4. SUPER SEKCJA: CELE FINANSOWE I INWESTYCYJNE */}
+      <div
+        style={{ background: COLORS.surface, borderColor: COLORS.border }}
+        className="rounded-2xl p-4 sm:p-5 border space-y-4 shadow-sm"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
+          <div>
+            <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-base font-bold flex items-center gap-2">
+              <span>Cele finansowe i inwestycyjne</span>
+            </h3>
+            <p className="text-xs text-stone-400">
+              Poduszka finansowa, emerytalne (IKZE), inwestycje (ETF) i plany długoterminowe
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setEditingGoalId(null);
+              setActiveModal('manage-goals');
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-stone-300 bg-stone-800 hover:bg-stone-700 transition border border-stone-700 cursor-pointer"
+            title="Modyfikuj, dodawaj lub edytuj cele"
+          >
+            <SlidersHorizontal size={14} className="text-amber-400" />
+            <span>Zarządzaj celami</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+          {goalsProgress.map((goal) => {
+            const hasTarget = goal.hasTarget;
+            const isReached = goal.isReached;
+            const isCompleted = goal.isCompleted;
+
+            return (
+              <div
+                key={goal.id}
+                style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
+                className={`p-3.5 rounded-xl border flex flex-col justify-between gap-3 transition ${
+                  isCompleted ? 'opacity-70 border-emerald-500/30' : ''
+                }`}
+              >
+                <div className="space-y-2.5">
+                  {/* Górny wiersz celu */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xl shrink-0">{goal.icon || '🎯'}</span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`text-sm font-semibold truncate ${isCompleted ? 'line-through text-stone-400' : 'text-stone-100'}`}>
+                            {goal.name}
+                          </span>
+                          {isCompleted ? (
+                            <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-semibold border border-emerald-500/30 flex items-center gap-0.5">
+                              <CheckCircle2 size={10} /> Zrealizowany
+                            </span>
+                          ) : isReached ? (
+                            <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-semibold border border-amber-500/30">
+                              Osiągnięty!
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span
-                        className={`font-mono text-sm sm:text-base font-bold mr-1 ${
-                          isIncome ? 'text-emerald-400' : 'text-stone-100'
-                        }`}
-                      >
-                        {isIncome ? '+' : '-'}
-                        {formatPLN(tx.amount)}
-                      </span>
-
                       <button
                         type="button"
                         onClick={() => {
-                          setEditingTransaction(tx);
-                          setActiveModal('edit-transaction');
+                          setEditingGoalId(goal.id);
+                          setActiveModal('manage-goals');
                         }}
-                        className="p-2 rounded-lg text-stone-500 hover:text-amber-400 hover:bg-stone-800 transition cursor-pointer"
-                        title="Edytuj operację"
+                        className="p-1 rounded-lg text-stone-500 hover:text-amber-400 hover:bg-stone-800 transition cursor-pointer"
+                        title="Edytuj ten cel"
                       >
-                        <Pencil size={15} />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteItem(tx.type, tx.id)}
-                        className="p-2 rounded-lg text-stone-500 hover:text-rose-400 hover:bg-stone-800 transition cursor-pointer"
-                        title="Usuń wpis"
-                      >
-                        <Trash2 size={15} />
+                        <Pencil size={13} />
                       </button>
                     </div>
                   </div>
-                );
-              })}
 
-              {combinedTransactions.length === 0 && (
-                <div className="text-center py-8 text-stone-500 text-xs italic">
-                  Brak operacji dla wybranego filtru w tym miesiącu.
+                  {/* Kwoty i procenty */}
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="font-mono">
+                      <span className="text-stone-100 font-bold">{formatPLN(goal.spent)}</span>
+                      <span className="text-stone-500 mx-1">/</span>
+                      {hasTarget ? (
+                        <span className="text-stone-400">{formatPLN(goal.target)}</span>
+                      ) : (
+                        <span className="text-amber-400 font-bold text-xs">∞ otwarty</span>
+                      )}
+                    </div>
+
+                    {hasTarget ? (
+                      <span className="text-[11px] text-stone-400 font-mono">
+                        {goal.rawPercent}%
+                      </span>
+                    ) : (
+                      <span className="text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 font-bold font-mono">
+                        Plan ciągły
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Pasek postępu */}
+                  {hasTarget ? (
+                    <div className="w-full bg-stone-900 rounded-full h-2 overflow-hidden border border-stone-800">
+                      <div
+                        style={{
+                          width: `${Math.max(2, Math.min(100, goal.percent))}%`,
+                          backgroundColor: isReached ? COLORS.success : COLORS.accent,
+                        }}
+                        className="h-full rounded-full transition-all duration-500"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-full bg-stone-900 rounded-full h-2 overflow-hidden border border-amber-500/20 relative flex items-center">
+                      <div className="h-full rounded-full w-full bg-gradient-to-r from-amber-500/30 via-amber-400/80 to-amber-500/30 animate-pulse transition-all duration-500" />
+                    </div>
+                  )}
+
+                  {/* Informacja o stanie początkowym jeśli istnieje */}
+                  {Number(goal.initialAmount) > 0 && (
+                    <div className="text-[10px] text-stone-500">
+                      Stan początkowy: <span className="font-mono text-stone-400">{formatPLN(goal.initialAmount)}</span>
+                    </div>
+                  )}
                 </div>
-              )}
+
+                {/* Akcja wpłaty na cel - odzwierciedla się w Operacjach */}
+                {!isCompleted && (
+                  <div className="pt-1 border-t border-stone-800/60 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedGoalForTx(goal.id);
+                        setActiveModal('add-transaction');
+                      }}
+                      className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border border-amber-500/30 transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus size={13} />
+                      <span>Wpłać na cel</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {goalsProgress.length === 0 && (
+            <div className="col-span-full text-center py-6 border border-dashed border-stone-800 rounded-xl bg-stone-900/30 space-y-2">
+              <p className="text-xs text-stone-400">Brak zdefiniowanych celów finansowych.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingGoalId(null);
+                  setActiveModal('manage-goals');
+                }}
+                style={{ color: COLORS.accent }}
+                className="text-xs font-bold hover:underline"
+              >
+                + Dodaj pierwszy cel finansowy
+              </button>
             </div>
-          </div>
-        </>
-      )}
+          )}
+        </div>
       </div>
+
+      {/* 5. ZOBOWIĄZANIA TERMINOWE I RATY */}
+      <ExpiringObligationsSection
+        obligations={expiringObligations}
+        onOpenAddModal={() => {
+          setEditingObligation(null);
+          setActiveModal('add-obligation');
+        }}
+        onOpenEditModal={(obl) => {
+          setEditingObligation(obl);
+          setActiveModal('edit-obligation');
+        }}
+        onIncrementPaid={handleIncrementObligationPaid}
+        onDeleteObligation={handleDeleteObligation}
+      />
 
       {/* MODAL DODAWANIA I EDYCJI TRANSAKCJI */}
       {(activeModal === 'add-transaction' || activeModal === 'edit-transaction') && (
@@ -1112,6 +1100,7 @@ export function BudgetView({
           people={people}
           currentPersonId={currentPersonId}
           initialGoalId={selectedGoalForTx}
+          initialType={selectedGoalForTx ? 'goal' : 'expense'}
           initialTransaction={activeModal === 'edit-transaction' ? editingTransaction : null}
           onClose={() => {
             setActiveModal(null);
@@ -1136,19 +1125,12 @@ export function BudgetView({
         <ManageGoalsModal
           goals={budgetGoals}
           goalsProgressMap={goalsProgressMap}
-          onClose={() => setActiveModal(null)}
+          initialEditingGoalId={editingGoalId}
+          onClose={() => {
+            setActiveModal(null);
+            setEditingGoalId(null);
+          }}
           onSave={handleSaveGoals}
-        />
-      )}
-
-      {/* MODAL PODUSZKI PŁYNNOŚCIOWEJ */}
-      {(activeModal === 'emergency-fund-deposit' || activeModal === 'emergency-fund-settings') && (
-        <EmergencyFundModal
-          emergencyFund={emergencyFund}
-          monthKey={monthKey}
-          onClose={() => setActiveModal(null)}
-          onSaveFund={handleSaveEmergencyFund}
-          onRecordBudgetExpense={(expenseItem) => handleSaveTransaction('expense', expenseItem)}
         />
       )}
 
@@ -1161,28 +1143,6 @@ export function BudgetView({
             setEditingObligation(null);
           }}
           onSave={handleSaveObligation}
-        />
-      )}
-
-      {/* MODAL WPŁATY I USTAWIEŃ PLANU INWESTYCYJNEGO (IKZE / ETF / HIPOTEKA) */}
-      {(activeModal === 'investment-contribution' || activeModal === 'investment-settings') && (
-        <InvestmentContributionModal
-          initialType={investmentModalType}
-          investmentPlan={investmentPlan}
-          monthKey={monthKey}
-          onClose={() => setActiveModal(null)}
-          onSavePlan={handleSaveInvestmentPlan}
-          onRecordBudgetExpense={(expenseItem) => handleSaveTransaction('expense', expenseItem)}
-        />
-      )}
-
-      {/* MODAL SYMULATORA PODATKOWEGO PIT */}
-      {activeModal === 'tax-simulator' && (
-        <TaxSimulatorModal
-          taxOptimization={taxOptimization}
-          investmentPlan={investmentPlan}
-          onClose={() => setActiveModal(null)}
-          onSaveTaxConfig={handleSaveTaxConfig}
         />
       )}
     </div>

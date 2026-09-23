@@ -14,26 +14,7 @@ export function PoweredByFooter({ className = '' }) {
           syncup.pl
         </a>
       </div>
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] font-mono text-stone-500/80 font-medium tracking-wide">{APP_VERSION}</span>
-        <button
-          onClick={async () => {
-            if ('serviceWorker' in navigator) {
-              const regs = await navigator.serviceWorker.getRegistrations();
-              for (const r of regs) await r.unregister();
-            }
-            if ('caches' in window) {
-              const keys = await caches.keys();
-              for (const k of keys) await caches.delete(k);
-            }
-            window.location.reload();
-          }}
-          className="text-[10px] text-stone-500 hover:text-amber-400 transition underline cursor-pointer"
-          title="Wyczyść pamięć podręczną i zaktualizuj aplikację"
-        >
-          (odśwież wersję)
-        </button>
-      </div>
+      <span className="text-[11px] font-mono text-stone-500/80 font-medium tracking-wide">{APP_VERSION}</span>
     </footer>
   );
 }

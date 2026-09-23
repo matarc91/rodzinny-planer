@@ -3,7 +3,16 @@ import { COLORS, uid } from '../../utils/constants.js';
 import { ModalShell } from '../ui/ModalShell.jsx';
 import { Plus, Trash2, Edit2, Check, Sparkles, CheckCircle2, RotateCcw } from 'lucide-react';
 
-const COMMON_GOAL_EMOJIS = ['💰', '🏖️', '🚗', '🏡', '👶', '🎁', '🛡️', '🎓', '💻', '💍', '🚴', '📱', '✈️', '⚡', '🐾', '🎯'];
+const COMMON_GOAL_EMOJIS = ['💰', '🛡️', '💼', '👛', '📈', '🏠', '🏖️', '🚗', '🏡', '👶', '🎁', '🎓', '💻', '💍', '🚴', '📱', '✈️', '⚡', '🐾', '🎯'];
+
+export const GOAL_PRESETS = [
+  { name: 'Poduszka finansowa', icon: '🛡️', target: 50000, isInfinite: false },
+  { name: 'IKZE Mąż (JDG)', icon: '💼', target: 14083, isInfinite: false },
+  { name: 'IKZE Żona (Etat)', icon: '👛', target: 9389, isInfinite: false },
+  { name: 'Portfel ETF', icon: '📈', target: null, isInfinite: true },
+  { name: 'Nadpłata hipoteki', icon: '🏠', target: null, isInfinite: true },
+  { name: 'Wakacje', icon: '🏖️', target: 10000, isInfinite: false },
+];
 
 const inputStyle =
   'w-full border rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 transition bg-stone-900 text-stone-100 placeholder-stone-500';
@@ -11,19 +20,25 @@ const inputStyle =
 export function ManageGoalsModal({
   goals = [],
   goalsProgressMap = {},
+  initialEditingGoalId = null,
   onClose,
   onSave,
 }) {
   const [goalList, setGoalList] = useState(() => JSON.parse(JSON.stringify(goals)));
-  const [editingId, setEditingId] = useState(null);
-  const [editName, setEditName] = useState('');
-  const [editTarget, setEditTarget] = useState('');
-  const [editIsInfinite, setEditIsInfinite] = useState(false);
-  const [editIcon, setEditIcon] = useState('💰');
+  const initialTargetGoal = goals.find((g) => g.id === initialEditingGoalId);
+  const [editingId, setEditingId] = useState(() => initialEditingGoalId || null);
+  const [editName, setEditName] = useState(() => initialTargetGoal?.name || '');
+  const [editTarget, setEditTarget] = useState(() => (initialTargetGoal?.targetAmount ? String(initialTargetGoal.targetAmount) : ''));
+  const [editInitial, setEditInitial] = useState(() => (initialTargetGoal?.initialAmount ? String(initialTargetGoal.initialAmount) : ''));
+  const [editIsInfinite, setEditIsInfinite] = useState(() =>
+    initialTargetGoal ? (initialTargetGoal.targetAmount === null || initialTargetGoal.targetAmount === undefined || initialTargetGoal.targetAmount <= 0) : false
+  );
+  const [editIcon, setEditIcon] = useState(() => initialTargetGoal?.icon || '💰');
 
   // Formularz nowego celu
   const [newName, setNewName] = useState('');
   const [newTarget, setNewTarget] = useState('');
+  const [newInitial, setNewInitial] = useState('');
   const [newIsInfinite, setNewIsInfinite] = useState(false);
   const [newIcon, setNewIcon] = useState('💰');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -33,6 +48,7 @@ export function ManageGoalsModal({
     setEditName(goal.name);
     setEditIsInfinite(goal.targetAmount === null || goal.targetAmount === undefined || goal.targetAmount <= 0);
     setEditTarget(goal.targetAmount ? String(goal.targetAmount) : '');
+    setEditInitial(goal.initialAmount ? String(goal.initialAmount) : '');
     setEditIcon(goal.icon || '💰');
   };
 
@@ -43,6 +59,8 @@ export function ManageGoalsModal({
       const num = parseFloat(editTarget.replace(',', '.'));
       targetAmount = isNaN(num) || num <= 0 ? null : num;
     }
+    const initNum = parseFloat(editInitial.replace(',', '.'));
+    const initialAmount = isNaN(initNum) || initNum <= 0 ? 0 : initNum;
 
     setGoalList((prev) =>
       prev.map((g) =>
@@ -51,6 +69,7 @@ export function ManageGoalsModal({
               ...g,
               name: editName.trim(),
               targetAmount,
+              initialAmount,
               icon: editIcon || '💰',
             }
           : g
@@ -86,10 +105,14 @@ export function ManageGoalsModal({
       targetAmount = isNaN(num) || num <= 0 ? null : num;
     }
 
+    const initNum = parseFloat(newInitial.replace(',', '.'));
+    const initialAmount = isNaN(initNum) || initNum <= 0 ? 0 : initNum;
+
     const newGoal = {
       id: uid('goal'),
       name: newName.trim(),
       targetAmount,
+      initialAmount,
       icon: newIcon || '💰',
       isCompleted: false,
       createdAt: new Date().toISOString(),
@@ -98,6 +121,7 @@ export function ManageGoalsModal({
     setGoalList((prev) => [...prev, newGoal]);
     setNewName('');
     setNewTarget('');
+    setNewInitial('');
     setNewIsInfinite(false);
     setNewIcon('💰');
     setShowAddForm(false);
@@ -184,6 +208,26 @@ export function ManageGoalsModal({
                         </span>
                       </div>
                     )}
+
+                    <div className="relative">
+                      <label className="text-[11px] font-semibold text-stone-400 block mb-1">
+                        Stan początkowy / odłożone wcześniej (opcjonalnie)
+                      </label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="1"
+                        min="0"
+                        value={editInitial}
+                        onChange={(e) => setEditInitial(e.target.value)}
+                        placeholder="0 zł"
+                        style={{ borderColor: COLORS.border }}
+                        className={`${inputStyle} pr-8`}
+                      />
+                      <span className="absolute right-3 top-[27px] text-xs text-stone-500 font-semibold">
+                        zł
+                      </span>
+                    </div>
                   </div>
 
                   {/* Szybkie wybieranie ikon */}
@@ -244,8 +288,15 @@ export function ManageGoalsModal({
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-stone-400 flex items-center gap-2 mt-0.5">
-                      <span>Zgromadzono: <b className="text-stone-200">{formatPLN(spent)}</b></span>
+                    <div className="text-xs text-stone-400 flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                      <span>
+                        Zgromadzono: <b className="text-stone-200">{formatPLN(spent + (Number(goal.initialAmount) || 0))}</b>
+                      </span>
+                      {Number(goal.initialAmount) > 0 && (
+                        <span className="text-[10px] text-stone-500 font-mono">
+                          (w tym start: {formatPLN(goal.initialAmount)})
+                        </span>
+                      )}
                       <span>•</span>
                       <span>Cel: <b className="text-amber-400 font-mono">{hasTarget ? formatPLN(goal.targetAmount) : '∞ (otwarty)'}</b></span>
                     </div>
@@ -318,6 +369,29 @@ export function ManageGoalsModal({
               </span>
             </div>
 
+            {/* Szybkie szablony celów */}
+            <div>
+              <span className="text-[11px] text-stone-400 block mb-1">Popularne szablony celów:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {GOAL_PRESETS.map((preset) => (
+                  <button
+                    key={preset.name}
+                    type="button"
+                    onClick={() => {
+                      setNewName(preset.name);
+                      setNewIcon(preset.icon);
+                      setNewIsInfinite(preset.isInfinite);
+                      setNewTarget(preset.target ? String(preset.target) : '');
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-xs bg-stone-900 hover:bg-stone-800 border border-stone-800 text-stone-300 transition flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                  >
+                    <span>{preset.icon}</span>
+                    <span>{preset.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="flex gap-2 items-center">
               <input
                 type="text"
@@ -368,6 +442,26 @@ export function ManageGoalsModal({
                   </span>
                 </div>
               )}
+
+              <div className="relative">
+                <label className="text-[11px] font-semibold text-stone-400 block mb-1">
+                  Stan początkowy / odłożone wcześniej (opcjonalnie)
+                </label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="1"
+                  min="0"
+                  value={newInitial}
+                  onChange={(e) => setNewInitial(e.target.value)}
+                  placeholder="0 zł"
+                  style={{ borderColor: COLORS.border }}
+                  className={`${inputStyle} pr-8`}
+                />
+                <span className="absolute right-3 top-[27px] text-xs text-stone-500 font-semibold">
+                  zł
+                </span>
+              </div>
             </div>
 
             {/* Popularne emotikony */}

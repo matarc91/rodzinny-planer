@@ -6,15 +6,6 @@ import { Clock, Calendar, Sparkles, ArrowRight, ShieldCheck } from 'lucide-react
 
 const COMMON_OBLIGATION_ICONS = ['⚡', '📺', '📱', '🛋️', '🚗', '💻', '🚲', '🏠', '🔧', '🎓', '🎯'];
 
-const TARGET_REDIRECT_OPTIONS = [
-  { id: 'mortgage_overpayment', name: 'Nadpłata kredytu hipotecznego', icon: '🏠' },
-  { id: 'emergency_fund', name: 'Poduszka finansowa', icon: '🛡️' },
-  { id: 'etf', name: 'Inwestycje w fundusze ETF', icon: '📈' },
-  { id: 'ikze_husband', name: 'IKZE Mąż (JDG)', icon: '💼' },
-  { id: 'ikze_wife', name: 'IKZE Żona (Etat)', icon: '👩‍💼' },
-  { id: 'custom', name: 'Inny cel oszczędnościowy', icon: '🎯' },
-];
-
 const inputStyle =
   'w-full border border-stone-700 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 transition bg-stone-900 text-stone-100 placeholder-stone-500';
 
@@ -36,16 +27,7 @@ export function ExpiringObligationModal({
     initialObligation?.paidInstallments !== undefined ? String(initialObligation.paidInstallments) : '0'
   );
   const [startDate, setStartDate] = useState(() => initialObligation?.startDate || todayStr().slice(0, 7) + '-01');
-  const [redirectToTarget, setRedirectToTarget] = useState(() => initialObligation?.redirectToTarget || 'mortgage_overpayment');
-  const [targetName, setTargetName] = useState(() => initialObligation?.targetName || 'Nadpłata kredytu hipotecznego');
   const [icon, setIcon] = useState(() => initialObligation?.icon || '⚡');
-
-  const handleRedirectOptionSelect = (option) => {
-    setRedirectToTarget(option.id);
-    if (option.id !== 'custom') {
-      setTargetName(option.name);
-    }
-  };
 
   const handleSubmit = (e) => {
     e?.preventDefault();
@@ -73,8 +55,6 @@ export function ExpiringObligationModal({
       paidInstallments: safePaid,
       startDate: startDate || todayStr().slice(0, 7) + '-01',
       endDate: endDateStr,
-      redirectToTarget,
-      targetName: targetName.trim() || 'Nadpłata kredytu',
       icon: icon || '⚡',
       isCompleted: safePaid >= totalNum,
       createdAt: initialObligation?.createdAt || new Date().toISOString(),
@@ -184,53 +164,6 @@ export function ExpiringObligationModal({
             className={inputStyle}
             required
           />
-        </div>
-
-        {/* Automatyczne przekierowanie uwolnionego kapitału */}
-        <div className="space-y-2 pt-1 border-t border-stone-800/80">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-300">
-            <Sparkles size={14} />
-            <span>Po wygaśnięciu raty: gdzie automatycznie przekierować uwolnioną kwotę?</span>
-          </div>
-          <p className="text-[11px] text-stone-400 leading-relaxed">
-            Gdy spłacisz ostatnią ratę, system automatycznie doda tę miesięczną kwotę do wybranego celu inwestycyjnego lub poduszki.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-            {TARGET_REDIRECT_OPTIONS.map((opt) => {
-              const isSelected = redirectToTarget === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => handleRedirectOptionSelect(opt)}
-                  style={{
-                    background: isSelected ? 'rgba(226, 176, 83, 0.12)' : COLORS.surfaceHighlight,
-                    borderColor: isSelected ? COLORS.accent : COLORS.border,
-                    color: isSelected ? COLORS.accent : COLORS.ink,
-                  }}
-                  className="p-2.5 rounded-xl border text-xs font-medium flex items-center gap-2 text-left transition cursor-pointer"
-                >
-                  <span className="text-base">{opt.icon}</span>
-                  <span className="truncate flex-1">{opt.name}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {redirectToTarget === 'custom' && (
-            <div className="pt-2">
-              <label className="text-xs font-semibold mb-1 block text-stone-400">Wpisz nazwę własnego celu</label>
-              <input
-                type="text"
-                value={targetName}
-                onChange={(e) => setTargetName(e.target.value)}
-                placeholder="np. Remont domu, Nowy samochód"
-                className={inputStyle}
-                required
-              />
-            </div>
-          )}
         </div>
 
         <div className="flex justify-end gap-2 pt-3 border-t border-stone-800">

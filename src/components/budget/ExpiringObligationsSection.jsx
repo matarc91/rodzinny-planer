@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, Plus, Sparkles, Pencil, Trash2, CheckCircle2, ArrowRight, TrendingUp } from 'lucide-react';
+import { Clock, Plus, Sparkles, Pencil, Trash2, CheckCircle2, TrendingUp } from 'lucide-react';
 import { COLORS } from '../../utils/constants.js';
 
 export function ExpiringObligationsSection({
@@ -45,14 +45,14 @@ export function ExpiringObligationsSection({
           <div>
             <div className="flex items-center gap-2">
               <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-base font-bold">
-                Zobowiązania terminowe & Raty 0%
+                Zobowiązania terminowe i raty
               </h3>
               <span className="text-[10px] font-mono text-stone-400 bg-stone-900 px-2 py-0.5 rounded-full border border-stone-800">
                 {activeObligations.length} aktywne
               </span>
             </div>
             <p className="text-xs text-stone-400 mt-0.5">
-              Śledzenie wygasania rat i automatyczne przekierowanie uwolnionego kapitału na inwestycje/nadpłaty
+              Śledzenie spłat rat 0% i zobowiązań o określonej liczbie miesięcy
             </p>
           </div>
         </div>
@@ -64,40 +64,40 @@ export function ExpiringObligationsSection({
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-stone-200 hover:text-stone-100 hover:bg-stone-800 transition border cursor-pointer"
         >
           <Plus size={14} className="text-amber-400" />
-          <span>Dodaj ratę 0%</span>
+          <span>Dodaj ratę</span>
         </button>
       </div>
 
-      {/* Baner Uwolnionego Kapitału */}
-      {(totalMonthlyFreed > 0 || nextExpiring) && (
+      {/* Podsumowanie rat */}
+      {(totalMonthlyActive > 0 || nextExpiring) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-          {totalMonthlyFreed > 0 && (
-            <div className="bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-xl flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                <TrendingUp size={16} />
+          {totalMonthlyActive > 0 && (
+            <div className="bg-stone-900/60 border border-stone-800 p-3 rounded-xl flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-orange-500/15 text-orange-400 flex items-center justify-center shrink-0">
+                <Clock size={16} />
               </div>
               <div className="text-xs">
-                <div className="font-bold text-emerald-300 flex items-center gap-1">
-                  <span>Uwolniony kapitał: +{formatPLN(totalMonthlyFreed)} / msc</span>
+                <div className="font-bold text-stone-200">
+                  Łącznie w ratach: {formatPLN(totalMonthlyActive)} / msc
                 </div>
                 <div className="text-stone-400 text-[11px] mt-0.5">
-                  Kwota ze spłaconych rat zasila Twoje cele inwestycyjne i nadpłatę hipoteki!
+                  Bieżące miesięczne obciążenie budżetu z tytułu aktywnych rat
                 </div>
               </div>
             </div>
           )}
 
           {nextExpiring && (
-            <div className="bg-amber-950/30 border border-amber-800/40 p-3 rounded-xl flex items-center gap-3">
+            <div className="bg-amber-950/20 border border-amber-800/30 p-3 rounded-xl flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-300 flex items-center justify-center shrink-0">
                 <Sparkles size={16} />
               </div>
               <div className="text-xs">
                 <div className="font-bold text-amber-200">
-                  Za {nextExpiring.totalInstallments - nextExpiring.paidInstallments} msc uwolni się +{formatPLN(nextExpiring.monthlyAmount)}/msc
+                  Za {nextExpiring.totalInstallments - nextExpiring.paidInstallments} msc koniec: {nextExpiring.title}
                 </div>
                 <div className="text-stone-400 text-[11px] mt-0.5">
-                  Automatycznie zasili: <strong>{nextExpiring.targetName}</strong>
+                  Uwolni się +{formatPLN(nextExpiring.monthlyAmount)} / msc wolnych środków w budżecie
                 </div>
               </div>
             </div>
@@ -208,12 +208,6 @@ export function ExpiringObligationsSection({
                   </div>
                 </div>
 
-                {/* Docelowe przekierowanie kwoty */}
-                <div className="flex items-center gap-1.5 text-[11px] text-stone-400 bg-stone-900/60 px-2.5 py-1.5 rounded-lg border border-stone-800/80">
-                  <ArrowRight size={12} className="text-amber-400 shrink-0" />
-                  <span>Po wygaśnięciu przekieruj na:</span>
-                  <span className="font-semibold text-stone-200">{item.targetName}</span>
-                </div>
               </div>
             );
           })}
