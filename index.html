@@ -24,21 +24,7 @@
             .register('/sw.js', { scope: '/' })
             .then((reg) => {
               console.log('[PWA] Service Worker zarejestrowany:', reg.scope);
-              // Wymuś natychmiastowe sprawdzenie czy na serwerze jest nowsza wersja
               reg.update().catch(() => {});
-
-              // Wykrycie nowej wersji w trakcie pobierania
-              reg.addEventListener('updatefound', () => {
-                const newWorker = reg.installing;
-                if (newWorker) {
-                  newWorker.addEventListener('statechange', () => {
-                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                      console.log('[PWA] Wykryto nową wersję aplikacji, odświeżam...');
-                      window.location.reload();
-                    }
-                  });
-                }
-              });
             })
             .catch((err) => {
               console.error('[PWA] Błąd rejestracji Service Workera:', err);
@@ -51,18 +37,13 @@
           registerSW();
         }
 
-        // Gdy nowy Service Worker przejmie kontrolę
+        // Tylko jeśli strona MIAŁA już kontroler przed startem (kolejne uruchomienie aplikacji),
+        // pozwalamy na przeładowanie po aktualizacji. Na pierwszym starcie hadController = false,
+        // więc nie przerywamy startu aplikacji i nie zawieszamy ekranu powitalnego (splash screen) w APK/TWA.
+        const hadController = Boolean(navigator.serviceWorker.controller);
         let refreshing = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => {
-          if (!refreshing) {
-            refreshing = true;
-            window.location.reload();
-          }
-        });
-
-        // Nasłuchiwanie bezpośredniej wiadomości o aktualizacji z SW
-        navigator.serviceWorker.addEventListener('message', (event) => {
-          if (event.data && event.data.type === 'SW_UPDATED' && !refreshing) {
+          if (!refreshing && hadController) {
             refreshing = true;
             window.location.reload();
           }
