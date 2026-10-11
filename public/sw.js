@@ -210,14 +210,28 @@ self.addEventListener('notificationclick', (event) => {
   const targetUrl = event.notification.data?.url || '/';
 
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Jeśli aplikacja jest już otwarta w którejś karcie/oknie, skupiamy się na niej
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientList) => {
+      // Jeśli aplikacja jest już otwarta w którejś karcie/oknie:
       for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          return client.focus();
+        if (client.url.includes(self.location.origin)) {
+          if ('focus' in client) {
+            await client.focus();
+          }
+          // Poinformuj Reacta o konieczności przejścia do odpowiedniego menu
+          client.postMessage({ type: 'NAVIGATE', url: targetUrl });
+
+          // Jeśli klient wspiera navigate i nie znajduje się już dokładnie pod targetUrl
+          if ('navigate' in client && client.url !== new URL(targetUrl, self.location.origin).href) {
+            try {
+              await client.navigate(targetUrl);
+            } catch {
+              // Ignore navigation abort
+            }
+          }
+          return;
         }
       }
-      // W przeciwnym razie otwieramy nowe okno aplikacji
+      // W przeciwnym razie otwieramy nowe okno aplikacji pod docelowym adresem
       if (self.clients.openWindow) {
         return self.clients.openWindow(targetUrl);
       }

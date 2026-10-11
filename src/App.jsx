@@ -101,9 +101,13 @@ export default function App() {
     (window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery'))
   );
 
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
+  const showToast = (msg, targetTab = null) => {
+    if (typeof msg === 'object' && msg !== null) {
+      setToast(msg);
+    } else {
+      setToast({ text: msg, tab: targetTab });
+    }
+    setTimeout(() => setToast(null), 3500);
   };
 
   // Auth Listener
@@ -131,6 +135,44 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, [supabaseClient]);
+
+  // Listener powiadomień Service Workera i nawigacji URL
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleSWMessage = (event) => {
+      if (event.data?.type === 'NAVIGATE' && event.data.url) {
+        try {
+          const u = new URL(event.data.url, window.location.origin);
+          const targetTab = u.searchParams.get('tab');
+          if (targetTab && ['today', 'calendar', 'tasks', 'shopping', 'notes', 'wall', 'budget', 'settings'].includes(targetTab)) {
+            setTab(targetTab);
+            window.history.replaceState({}, '', event.data.url);
+          }
+        } catch {}
+      }
+    };
+
+    const handlePopState = () => {
+      const p = new URLSearchParams(window.location.search);
+      const t = p.get('tab');
+      if (t && ['today', 'calendar', 'tasks', 'shopping', 'notes', 'wall', 'budget', 'settings'].includes(t)) {
+        setTab(t);
+      }
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSWMessage);
+    }
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+      }
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
 
   // Load Profile & Family
   useEffect(() => {
@@ -206,10 +248,10 @@ export default function App() {
   }, [profile]);
 
   // Pomocnicza funkcja inteligentnego dostarczania powiadomień wewnątrz aplikacji:
-  // - W interfejsie użytkownika wyświetla Toast
+  // - W interfejsie użytkownika wyświetla Toast (z opcją przejścia do odpowiedniego menu)
   // - Powiadomienia systemowe/OS w tle obsługiwane są bezpośrednio przez Web Push (Service Worker)
-  const deliverNotification = useCallback((title, body, toastMsg) => {
-    showToast(toastMsg || (body ? `${title}: ${body}` : title));
+  const deliverNotification = useCallback((title, body, toastMsg, targetTab = null) => {
+    showToast(toastMsg || (body ? `${title}: ${body}` : title), targetTab);
   }, []);
 
   // System sprawdzania i wysyłania przypomnień czasowych dla wydarzeń i zadań
@@ -259,7 +301,7 @@ export default function App() {
                       : `Przypomnienie (${labelText}): "${ev.title}"${ev.time ? ' o ' + ev.time : ''} 🔔`;
 
                   addLog('info', `Wyzwalanie przypomnienia o wydarzeniu: ${body}`);
-                  deliverNotification('Nadchodzące wydarzenie 🔔', body, `🔔 ${body}`);
+                  deliverNotification('Nadchodzące wydarzenie 🔔', body, `🔔 ${body}`, 'calendar');
                 }
               }
             });
@@ -300,7 +342,7 @@ export default function App() {
                     : `Przypomnienie o zadaniu (${labelText}): "${t.title}" 📝`;
 
                 addLog('info', `Wyzwalanie przypomnienia o zadaniu: ${body}`);
-                deliverNotification('Przypomnienie o zadaniu 📝', body, `📝 ${body}`);
+                deliverNotification('Przypomnienie o zadaniu 📝', body, `📝 ${body}`, 'tasks');
               }
             });
           });
@@ -354,7 +396,7 @@ export default function App() {
       // 1. TABLICA (WALL)
       (newData.wall || []).forEach((newMsg) => {
         if (!oldWallMap.has(newMsg.id)) {
-          deliverNotification('Wiadomość na lodówce 💬', newMsg.text, `Nowa wiadomość na lodówce: "${newMsg.text}" 💬`);
+          deliverNotification('Wiadomość na lodówce 💬', newMsg.text, `Nowa wiadomość na lodówce: "${newMsg.text}" 💬`, 'wall');
           hasNotified = true;
         }
       });
@@ -364,12 +406,13 @@ export default function App() {
         if (oldMsg && JSON.stringify(oldMsg) !== JSON.stringify(newMsg)) {
           if (oldMsg.isPinned !== newMsg.isPinned) {
             const pinText = newMsg.isPinned ? 'Przypięto wpis na lodówce 📌' : 'Odepnięto wpis z lodówki 📌';
-            deliverNotification('Tablica rodzinna 📌', pinText, pinText);
+            deliverNotification('Tablica rodzinna 📌', pinText, pinText, 'wall');
           } else {
             deliverNotification(
               'Zmieniono wiadomość na lodówce 💬',
               newMsg.text,
-              `Zmieniono wpis na lodówce: "${newMsg.text}" 💬`
+              `Zmieniono wpis na lodówce: "${newMsg.text}" 💬`,
+              'wall'
             );
           }
           hasNotified = true;
@@ -378,7 +421,7 @@ export default function App() {
 
       (oldData.wall || []).forEach((oldMsg) => {
         if (!newWallMap.has(oldMsg.id)) {
-          deliverNotification('Tablica rodzinna 🗑️', 'Usunięto wiadomość z lodówki', 'Usunięto wpis z lodówki 🗑️');
+          deliverNotification('Tablica rodzinna 🗑️', 'Usunięto wiadomość z lodówki', 'Usunięto wpis z lodówki 🗑️', 'wall');
           hasNotified = true;
         }
       });
@@ -393,7 +436,8 @@ export default function App() {
               deliverNotification(
                 'Nowe wydarzenie 📅',
                 `Współdomownik dodał wydarzenie: "${newEv.title}"${timeInfo}`,
-                `Nowe wydarzenie: "${newEv.title}" 📅`
+                `Nowe wydarzenie: "${newEv.title}" 📅`,
+                'calendar'
               );
               hasNotified = true;
             }
@@ -409,7 +453,8 @@ export default function App() {
               deliverNotification(
                 'Zaktualizowano wydarzenie 📅',
                 `Ktoś edytował wydarzenie: "${newEv.title}"`,
-                `Ktoś edytował wydarzenie: "${newEv.title}" 📅`
+                `Ktoś edytował wydarzenie: "${newEv.title}" 📅`,
+                'calendar'
               );
               hasNotified = true;
             }
@@ -422,7 +467,8 @@ export default function App() {
               deliverNotification(
                 'Anulowano wydarzenie 📅',
                 `Usunięto wydarzenie: "${oldEv.title}"`,
-                `Anulowano wydarzenie: "${oldEv.title}" 🗑️`
+                `Anulowano wydarzenie: "${oldEv.title}" 🗑️`,
+                'calendar'
               );
               hasNotified = true;
             }
@@ -436,7 +482,8 @@ export default function App() {
               deliverNotification(
                 'Nowe zadanie 📝',
                 `Współdomownik przypisał Ci zadanie: "${newTask.title}"`,
-                `Nowe zadanie: "${newTask.title}" 📝`
+                `Nowe zadanie: "${newTask.title}" 📝`,
+                'tasks'
               );
               hasNotified = true;
             }
@@ -453,7 +500,7 @@ export default function App() {
               const msg = completionsChanged
                 ? `Zaktualizowano status zadania: "${newTask.title}"`
                 : `Ktoś edytował zadanie: "${newTask.title}"`;
-              deliverNotification('Zadanie rodzinne 📝', msg, `${msg} 📝`);
+              deliverNotification('Zadanie rodzinne 📝', msg, `${msg} 📝`, 'tasks');
               hasNotified = true;
             }
           }
@@ -465,7 +512,8 @@ export default function App() {
               deliverNotification(
                 'Anulowano zadanie 📝',
                 `Usunięto zadanie: "${oldTask.title}"`,
-                `Anulowano zadanie: "${oldTask.title}" 🗑️`
+                `Anulowano zadanie: "${oldTask.title}" 🗑️`,
+                'tasks'
               );
               hasNotified = true;
             }
@@ -480,7 +528,8 @@ export default function App() {
           deliverNotification(
             'Lista zakupów 🛒',
             `Nowy produkt na liście: "${newItem.text}"`,
-            `Dodano do listy zakupów: "${newItem.text}" 🛒`
+            `Dodano do listy zakupów: "${newItem.text}" 🛒`,
+            'shopping'
           );
           hasNotified = true;
         }
@@ -691,6 +740,7 @@ export default function App() {
           body: `${authorName} dodał(a): "${ev.title}"${ev.time ? ` (${ev.time})` : ''}`,
           type: 'event',
           tag: `event_new_${ev.id}`,
+          url: '/?tab=calendar',
         });
       }
     } else {
@@ -704,6 +754,7 @@ export default function App() {
           body: `${authorName} zaktualizował(a) wydarzenie: "${ev.title}"${ev.time ? ` (${ev.time})` : ''}`,
           type: 'event_update',
           tag: `event_upd_${ev.id}`,
+          url: '/?tab=calendar',
         });
       }
     }
@@ -739,6 +790,7 @@ export default function App() {
           body: `${authorName} przypisał(a) zadanie: "${t.title}"`,
           type: 'task',
           tag: `task_new_${t.id}`,
+          url: '/?tab=tasks',
         });
       }
     } else {
@@ -752,6 +804,7 @@ export default function App() {
           body: `${authorName} zaktualizował(a) zadanie: "${t.title}"`,
           type: 'task_update',
           tag: `task_upd_${t.id}`,
+          url: '/?tab=tasks',
         });
       }
     }
@@ -800,6 +853,7 @@ export default function App() {
         body: msg.text,
         type: 'wall_message',
         tag: `wall_msg_${msg.id}`,
+        url: '/?tab=wall',
       });
     }
   };
@@ -961,6 +1015,7 @@ export default function App() {
         body: `${authorName} usunął(a) wydarzenie: "${ev.title}"`,
         type: 'event_delete',
         tag: `event_del_${id}`,
+        url: '/?tab=calendar',
       });
     }
   };
@@ -985,6 +1040,7 @@ export default function App() {
         body: `${authorName} usunął(a) wystąpienie "${ev.title}" z dnia ${dateStr}`,
         type: 'event_delete_instance',
         tag: `event_del_inst_${eventId}_${dateStr}`,
+        url: '/?tab=calendar',
       });
     }
   };
@@ -1007,22 +1063,35 @@ export default function App() {
         body: `${authorName} usunął(a) zadanie: "${t.title}"`,
         type: 'task_delete',
         tag: `task_del_${id}`,
+        url: '/?tab=tasks',
       });
     }
   };
 
   const deleteNote = (id) => persist({ ...data, notes: data.notes.filter((n) => n.id !== id) });
 
-  const toggleTask = (task) => {
+  const toggleTask = (task, targetDate = todayStr()) => {
     const freq = task.recurrence?.freq || 'none';
-    const key = getPeriodKey(freq, todayStr());
+    const key = getPeriodKey(freq, targetDate);
     const isDone = Boolean(task.completions && task.completions[key]);
     const nextCompletions = { ...(task.completions || {}) };
-    if (isDone) delete nextCompletions[key];
-    else nextCompletions[key] = true;
+    if (isDone) {
+      delete nextCompletions[key];
+    } else {
+      nextCompletions[key] = targetDate;
+    }
+    const completedAt = !isDone ? new Date().toISOString() : null;
     persist({
       ...data,
-      tasks: data.tasks.map((t) => (t.id === task.id ? { ...t, completions: nextCompletions } : t)),
+      tasks: data.tasks.map((t) =>
+        t.id === task.id
+          ? {
+              ...t,
+              completions: nextCompletions,
+              completedAt: !isDone ? (t.completedAt || completedAt) : null,
+            }
+          : t
+      ),
     });
   };
 
@@ -1235,9 +1304,20 @@ export default function App() {
       <style>{FONT_IMPORT}</style>
 
       {toast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-stone-800 text-stone-100 text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl border border-stone-700 flex items-center gap-2 animate-bounce">
-          <Sparkles size={14} className="text-amber-400" />
-          {toast}
+        <div
+          onClick={() => {
+            if (toast.tab) {
+              setTab(toast.tab);
+            }
+            setToast(null);
+          }}
+          className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-stone-800 text-stone-100 text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl border border-stone-700 flex items-center gap-2 animate-bounce select-none ${
+            toast.tab ? 'cursor-pointer hover:bg-stone-700 hover:border-amber-500/50 transition' : ''
+          }`}
+        >
+          <Sparkles size={14} className="text-amber-400 shrink-0" />
+          <span>{toast.text || (typeof toast === 'string' ? toast : '')}</span>
+          {toast.tab && <span className="text-[10px] text-amber-300 ml-1 underline">Otwórz →</span>}
         </div>
       )}
 

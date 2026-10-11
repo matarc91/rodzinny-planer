@@ -19,7 +19,7 @@
     <script type="module" src="/src/main.jsx"></script>
     <script>
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
+        const registerSW = () => {
           navigator.serviceWorker
             .register('/sw.js', { scope: '/' })
             .then((reg) => {
@@ -43,23 +43,29 @@
             .catch((err) => {
               console.error('[PWA] Błąd rejestracji Service Workera:', err);
             });
+        };
 
-          // Gdy nowy Service Worker przejmie kontrolę
-          let refreshing = false;
-          navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (!refreshing) {
-              refreshing = true;
-              window.location.reload();
-            }
-          });
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', registerSW);
+        } else {
+          registerSW();
+        }
 
-          // Nasłuchiwanie bezpośredniej wiadomości o aktualizacji z SW
-          navigator.serviceWorker.addEventListener('message', (event) => {
-            if (event.data && event.data.type === 'SW_UPDATED' && !refreshing) {
-              refreshing = true;
-              window.location.reload();
-            }
-          });
+        // Gdy nowy Service Worker przejmie kontrolę
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (!refreshing) {
+            refreshing = true;
+            window.location.reload();
+          }
+        });
+
+        // Nasłuchiwanie bezpośredniej wiadomości o aktualizacji z SW
+        navigator.serviceWorker.addEventListener('message', (event) => {
+          if (event.data && event.data.type === 'SW_UPDATED' && !refreshing) {
+            refreshing = true;
+            window.location.reload();
+          }
         });
 
         // Wymuś sprawdzenie czy jest nowa wersja przy każdym powrocie do aplikacji
