@@ -1,8 +1,11 @@
 [{
-      "relation": ["delegate_permission/common.handle_all_urls"],
-      "target": {
-        "namespace": "android_app",
-        "package_name": "pl.syncup.planer_rodzinny.twa",
-        "sha256_cert_fingerprints": ["07:6B:F2:BF:3B:C1:28:EA:82:45:C7:7B:65:A9:D0:71:0C:CB:3E:5D:4F:46:95:AB:88:3C:B2:A5:60:A1:12:EC"]
-      }
-    }]
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "pl.syncup.planer_rodzinny.twa",
+    "sha256_cert_fingerprints": [
+      "63:02:8F:9E:94:D6:E5:6D:F9:5A:10:75:B8:22:B5:8B:5F:E4:78:DF:CF:CE:4A:C2:F8:9E:E2:36:E4:E9:F8:1B",
+      "07:6B:F2:BF:3B:C1:28:EA:82:45:C7:7B:65:A9:D0:71:0C:CB:3E:5D:4F:46:95:AB:88:3C:B2:A5:60:A1:12:EC"
+    ]
+  }
+}]
