@@ -22,7 +22,7 @@ WORKDIR /app
 
 # Kopiowanie package.json backendu i instalacja zależności produkcyjnych
 COPY backend/api/package*.json ./
-RUN npm ci --only=production
+RUN npm install --omit=dev --no-audit
 
 # Kopiowanie kodu backendu
 COPY backend/api/src/ ./src/
