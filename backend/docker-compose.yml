@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: planer-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: planer
+      POSTGRES_USER: planer
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - planer-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U planer"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: backend/api/Dockerfile
+    container_name: planer-api
+    restart: unless-stopped
+    ports:
+      - "8085:3000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://planer:${DB_PASSWORD}@db:5432/planer
+      PORT: 3000
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - planer-net
+
+networks:
+  planer-net:
+    driver: bridge

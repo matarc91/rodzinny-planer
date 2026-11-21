@@ -27,14 +27,25 @@ export async function sendSystemNotification(title, options = {}) {
     }
     if (Notification.permission === 'granted') {
       const reg = await getOrRegisterServiceWorker().catch(() => null);
+      const targetTab = options.tab || 'today';
+      const targetUrl = options.url || `/?tab=${targetTab}`;
+
+      const finalOptions = {
+        icon: '/favicon.svg',
+        badge: '/badge-72.png',
+        ...options,
+        data: {
+          url: targetUrl,
+          tab: targetTab,
+          dateOfArrival: Date.now(),
+          ...(options.data || {}),
+        },
+      };
+
       if (reg && reg.showNotification) {
-        await reg.showNotification(title, {
-          icon: '/favicon.svg',
-          badge: '/favicon.svg',
-          ...options,
-        });
+        await reg.showNotification(title, finalOptions);
       } else {
-        new Notification(title, options);
+        new Notification(title, finalOptions);
       }
       return true;
     }

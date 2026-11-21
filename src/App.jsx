@@ -8,6 +8,8 @@ import {
   Sparkles,
   RefreshCw,
   MoreHorizontal,
+  Bell,
+  CloudOff,
 } from 'lucide-react';
 import { COLORS, FONT_IMPORT, emptyData, createDefaultMonthBudget, createDefaultBudgetGoals } from './utils/constants.js';
 import {
@@ -19,8 +21,11 @@ import {
   getPeriodKey,
 } from './utils/dateUtils.js';
 import { getSupabaseClient } from './utils/supabaseClient.js';
+import { apiClient } from './api.js';
 import { addLog } from './utils/logger.js';
-import { getInitialSentReminders, recordFamilyNotification } from './utils/pushService.js';
+import { getInitialSentReminders, recordFamilyNotification, sendSystemNotification } from './utils/pushService.js';
+import { addNotificationHistoryItem, getUnreadCount } from './utils/notificationHistory.js';
+import { NotificationCenterModal } from './components/ui/NotificationCenterModal.jsx';
 
 import { AppLogo, Chip, PoweredByFooter, FloatingActionButton, MoreMenuSheet } from './components/ui/index.js';
 import {
@@ -100,6 +105,20 @@ export default function App() {
     window.location &&
     (window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery'))
   );
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(() => getUnreadCount());
+  const [syncStatus, setSyncStatus] = useState(() => apiClient.syncStatus || 'synced');
+
+  useEffect(() => {
+    const handleUnread = () => setUnreadNotifCount(getUnreadCount());
+    const handleSync = (e) => setSyncStatus(e.detail?.status || 'synced');
+    window.addEventListener('rp-notifications-updated', handleUnread);
+    window.addEventListener('rp-sync-status', handleSync);
+    return () => {
+      window.removeEventListener('rp-notifications-updated', handleUnread);
+      window.removeEventListener('rp-sync-status', handleSync);
+    };
+  }, []);
 
   const showToast = (msg, targetTab = null) => {
     if (typeof msg === 'object' && msg !== null) {
@@ -248,10 +267,22 @@ export default function App() {
   }, [profile]);
 
   // Pomocnicza funkcja inteligentnego dostarczania powiadomień wewnątrz aplikacji:
+  // - Zapisuje zdarzenie w Centrum Powiadomień (historia offline)
   // - W interfejsie użytkownika wyświetla Toast (z opcją przejścia do odpowiedniego menu)
-  // - Powiadomienia systemowe/OS w tle obsługiwane są bezpośrednio przez Web Push (Service Worker)
+  // - Wyświetla lokalne powiadomienie systemowe (z przekierowaniem do odpowiedniego menu po kliknięciu)
   const deliverNotification = useCallback((title, body, toastMsg, targetTab = null) => {
+    // 1. Zapis do Centrum Powiadomień
+    addNotificationHistoryItem({ title, body, tab: targetTab });
+
+    // 2. Toast w interfejsie aplikacji
     showToast(toastMsg || (body ? `${title}: ${body}` : title), targetTab);
+
+    // 3. Lokalne powiadomienie systemowe w telefonie/systemie
+    sendSystemNotification(title, {
+      body,
+      tab: targetTab,
+      url: `/?tab=${targetTab || 'today'}`,
+    });
   }, []);
 
   // System sprawdzania i wysyłania przypomnień czasowych dla wydarzeń i zadań
@@ -542,71 +573,39 @@ export default function App() {
     [deliverNotification]
   );
 
-  // Load Data, Realtime Sync & Polling Fallback
+  // Load Data, Realtime Sync (WebSocket cosmere) & Offline First
   useEffect(() => {
     let isMounted = true;
-    let channel = null;
-    let pollInterval = null;
 
     async function fetchAndSync() {
-      if (!supabaseClient || !family || !profile) return;
+      if (!family || !profile) return;
 
       try {
-        const { data: stateRow, error } = await supabaseClient
-          .from('family_state')
-          .select('data')
-          .eq('family_id', family.id)
-          .single();
-
-        if (error && error.code === 'PGRST116') {
+        const res = await apiClient.state.get(family.id);
+        if (res?.data && isMounted) {
+          setData(res.data);
+          dataRef.current = res.data;
+        } else if (isMounted) {
           const init = emptyData();
-          await supabaseClient.from('family_state').insert({ family_id: family.id, data: init });
-          if (isMounted) {
-            setData(init);
-            dataRef.current = init;
-          }
-        } else if (stateRow && stateRow.data) {
-          if (isMounted) {
-            setData(stateRow.data);
-            dataRef.current = stateRow.data;
-          }
+          setData(init);
+          dataRef.current = init;
+          await apiClient.state.put(family.id, init).catch(() => {});
         }
 
-        // 1. Kanał Realtime Supabase (WebSocket)
-        channel = supabaseClient
-          .channel(`public:family_state:${family.id}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'family_state',
-              filter: `family_id=eq.${family.id}`,
-            },
-            (payload) => {
-              if (isMounted && payload.new && payload.new.data) {
-                handleRemoteDataUpdate(payload.new.data);
-              }
+        // Połączenie z WebSocket na serwerze cosmere (natychmiastowe aktualizacje)
+        apiClient.connectRealtime(
+          family.id,
+          (remoteData) => {
+            if (isMounted && remoteData) {
+              handleRemoteDataUpdate(remoteData);
             }
-          )
-          .subscribe();
-
-        // 2. Backup Polling (co 6 sekund)
-        pollInterval = setInterval(async () => {
-          if (!isMounted) return;
-          try {
-            const { data: row } = await supabaseClient
-              .from('family_state')
-              .select('data')
-              .eq('family_id', family.id)
-              .single();
-            if (isMounted && row && row.data) {
-              handleRemoteDataUpdate(row.data);
+          },
+          (status) => {
+            if (isMounted && status === 'connected') {
+              apiClient.syncPendingChanges(family.id);
             }
-          } catch {
-            // Bezgłośny błąd sieci
           }
-        }, 6000);
+        );
       } catch (err) {
         console.warn('Błąd ładowania danych:', err);
       }
@@ -617,29 +616,24 @@ export default function App() {
 
     return () => {
       isMounted = false;
-      if (channel && supabaseClient) supabaseClient.removeChannel(channel);
-      if (pollInterval) clearInterval(pollInterval);
+      apiClient.disconnectRealtime();
     };
-  }, [supabaseClient, family, profile, handleRemoteDataUpdate]);
+  }, [family, profile, handleRemoteDataUpdate]);
 
   const persist = useCallback(
     async (next) => {
       const updated = { ...next, lastUpdatedAt: Date.now() };
       setData(updated);
       dataRef.current = updated;
-      if (supabaseClient && family) {
+      if (family) {
         try {
-          await supabaseClient.from('family_state').upsert({
-            family_id: family.id,
-            data: updated,
-            updated_at: new Date().toISOString(),
-          });
+          await apiClient.state.put(family.id, updated);
         } catch (e) {
-          console.warn(e);
+          console.warn('Błąd persist:', e);
         }
       }
     },
-    [supabaseClient, family]
+    [family]
   );
 
   // Routing / Render State
@@ -1351,16 +1345,51 @@ export default function App() {
             )}
           </div>
         </div>
-        <button
-          onClick={() => setTab('settings')}
-          className={`p-2 rounded-full transition border shadow-sm ${
-            tab === 'settings'
-              ? 'bg-amber-500/10 border-amber-500/50 text-amber-400'
-              : 'bg-stone-900 border-stone-800 text-stone-300 hover:bg-stone-800'
-          }`}
-        >
-          <Settings size={20} />
-        </button>
+        <div className="flex items-center gap-2">
+          {syncStatus === 'offline' && (
+            <span
+              title="Brak połączenia z serwerem. Zmiany są bezpiecznie zapisywane w pamięci urządzenia i wyślą się automatycznie po powrocie połączenia."
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded-full animate-fadeIn"
+            >
+              <CloudOff size={13} />
+              <span className="hidden sm:inline">Offline</span>
+            </span>
+          )}
+          {syncStatus === 'pending' && (
+            <span
+              title="Kolejka zmian offline czeka na wysłanie na serwer cosmere..."
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded-full animate-pulse"
+            >
+              <RefreshCw size={12} className="animate-spin" />
+              <span className="hidden sm:inline">Zapisywanie...</span>
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsNotificationCenterOpen(true)}
+            title="Centrum powiadomień"
+            className="relative p-2 rounded-full transition border shadow-xs bg-stone-900 border-stone-800 text-stone-300 hover:bg-stone-800 hover:text-amber-400 cursor-pointer"
+          >
+            <Bell size={20} />
+            {unreadNotifCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-amber-500 text-stone-950 text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-xs">
+                {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setTab('settings')}
+            className={`p-2 rounded-full transition border shadow-xs ${
+              tab === 'settings'
+                ? 'bg-amber-500/10 border-amber-500/50 text-amber-400'
+                : 'bg-stone-900 border-stone-800 text-stone-300 hover:bg-stone-800'
+            }`}
+          >
+            <Settings size={20} />
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 flex flex-col justify-between overflow-y-auto px-4 pt-4 pb-28 max-w-2xl mx-auto w-full">
@@ -1624,6 +1653,12 @@ export default function App() {
           onToggleSubItem={toggleSubItem}
         />
       )}
+
+      <NotificationCenterModal
+        isOpen={isNotificationCenterOpen}
+        onClose={() => setIsNotificationCenterOpen(false)}
+        onSelectTab={(newTab) => setTab(newTab)}
+      />
     </div>
   );
 }

@@ -1,10 +1,23 @@
 import { addLog } from './logger.js';
+import { apiClient } from './api.js';
 
-// Domyślny publiczny klucz VAPID (używany do autoryzacji subskrypcji Web Push w przeglądarce)
-// P-256 (NIST prime256v1) format uncompressed EC point
+// Domyślny publiczny klucz VAPID (fallback jeśli serwer nie jest dostępny)
 export const DEFAULT_VAPID_PUBLIC_KEY = 
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_VAPID_PUBLIC_KEY) ||
   'BO8-dI3zfjiVL76KjpiwgQYNLvDKGqrPyrWUV4RotrVqMPZsHBaegbv-9vxlKHalZmPTYTl2yd17kxPJdauIjI8';
+
+/**
+ * Pobiera publiczny klucz VAPID z serwera cosmere (lub zwraca domyślny)
+ */
+export async function getVapidPublicKey() {
+  try {
+    const key = await apiClient.push.getVapidPublicKey();
+    if (key) return key;
+  } catch (err) {
+    addLog('warn', `Nie udało się pobrać VAPID z API, użyto fallback: ${err.message}`);
+  }
+  return DEFAULT_VAPID_PUBLIC_KEY;
+}
 
 /**
  * Konwertuje klucz publiczny base64url do Uint8Array dla PushManager.subscribe
@@ -35,23 +48,19 @@ export function urlBase64ToUint8Array(base64String) {
 export async function getNotificationPermission() {
   if (typeof window === 'undefined') return 'unsupported';
 
-  // 1. Sprawdzenie Notification.permission (standard Web API)
   if (typeof Notification !== 'undefined' && 'permission' in Notification) {
     if (Notification.permission === 'granted' || Notification.permission === 'denied') {
       return Notification.permission;
     }
   }
 
-  // 2. Sprawdzenie Permissions API (nowoczesne przeglądarki i Android Chrome/WebView)
   if (typeof navigator !== 'undefined' && navigator.permissions?.query) {
     try {
       const status = await navigator.permissions.query({ name: 'notifications' });
       if (status.state === 'granted') return 'granted';
       if (status.state === 'denied') return 'denied';
       if (status.state === 'prompt') return 'default';
-    } catch {
-      // Ignorujemy błędy query w niektórych wersjach przeglądarek
-    }
+    } catch {}
   }
 
   if (typeof Notification !== 'undefined' && 'permission' in Notification) {
@@ -62,7 +71,7 @@ export async function getNotificationPermission() {
 }
 
 /**
- * Bezpiecznie prosi o uprawnienia systemowe (kompatybilne z Androidem, WebView, PWA i starszymi przeglądarkami)
+ * Bezpiecznie prosi o uprawnienia systemowe do powiadomień
  */
 export async function requestNotificationPermission() {
   if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -70,14 +79,12 @@ export async function requestNotificationPermission() {
   }
 
   try {
-    // Jeśli już mamy zgodę, zwróć natychmiast
     if (Notification.permission === 'granted') {
       return 'granted';
     }
 
     addLog('info', 'Wywołanie systemowego okna zapytania o uprawnienia powiadomień...');
 
-    // Obsługa zarówno Promise jak i Callback w różnych wersjach silnika Chromium/Android
     let resolvedPerm = null;
     const requestPromise = Notification.requestPermission((callbackResult) => {
       resolvedPerm = callbackResult;
@@ -152,16 +159,16 @@ export async function checkPushSubscription() {
 }
 
 /**
- * Zapisuje subskrypcję w przeglądarce i wysyła token do bazy Supabase
+ * Zapisuje subskrypcję w przeglądarce i wysyła token do backendu na cosmere
  */
-export async function subscribeToPushNotifications(supabase, user, familyId) {
+export async function subscribeToPushNotifications(supabaseOrApi, user, familyId) {
   if (typeof window === 'undefined' || !('Notification' in window)) {
     throw new Error('Notification API nie jest dostępne w tej przeglądarce.');
   }
 
   addLog('info', 'Rozpoczęcie procedury włączania powiadomień Web Push w tle...');
 
-  // 1. Prośba o uprawnienia systemowe (musi być na samym początku w odpowiedzi na gest użytkownika)
+  // 1. Uprawnienia systemowe
   let permission = await getNotificationPermission();
   if (permission !== 'granted') {
     permission = await requestNotificationPermission();
@@ -182,76 +189,55 @@ export async function subscribeToPushNotifications(supabase, user, familyId) {
     throw new Error('PushManager nie jest dostępny w Twojej przeglądarce.');
   }
 
-  // 3. Sprawdzenie istniejącej subskrypcji lub utworzenie nowej
+  // 3. Pobranie klucza VAPID
+  const vapidKeyStr = await getVapidPublicKey();
+
+  // 4. Utworzenie subskrypcji w PushManager
   let sub = await reg.pushManager.getSubscription();
-  
   if (!sub) {
     addLog('info', 'Tworzenie nowej subskrypcji Web Push w PushManager...');
     try {
-      const applicationServerKey = urlBase64ToUint8Array(DEFAULT_VAPID_PUBLIC_KEY);
+      const applicationServerKey = urlBase64ToUint8Array(vapidKeyStr);
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: applicationServerKey.length > 0 ? applicationServerKey : undefined,
       });
       addLog('success', 'Utworzono subskrypcję Web Push w przeglądarce!');
     } catch (subErr) {
-      addLog('warn', `Próba subskrypcji z kluczem VAPID zwróciła błąd: ${subErr.message}. Próba alternatywna...`);
+      addLog('warn', `Próba subskrypcji z kluczem VAPID: ${subErr.message}. Próba alternatywna...`);
       try {
-        sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-        });
+        sub = await reg.pushManager.subscribe({ userVisibleOnly: true });
       } catch (fallbackErr) {
         addLog('error', `Błąd PushManager.subscribe: ${fallbackErr.message}`);
-        throw new Error(`Nie udało się utworzyć subskrypcji Push w urządzeniu: ${fallbackErr.message}`, { cause: fallbackErr });
+        throw new Error(`Nie udało się utworzyć subskrypcji Push w urządzeniu: ${fallbackErr.message}`);
       }
     }
   }
 
-  const subJson = sub.toJSON ? sub.toJSON() : {};
-  const endpoint = sub.endpoint || subJson.endpoint;
-  const p256dh = subJson.keys?.p256dh || '';
-  const auth = subJson.keys?.auth || '';
-
-  addLog('info', 'Zapisywanie tokenu subskrypcji Push w bazie Supabase...');
-
-  // 4. Zapisanie danych w tabeli push_subscriptions w Supabase
-  if (supabase && user?.id) {
-    try {
-      const { error } = await supabase.from('push_subscriptions').upsert(
-        {
-          user_id: user.id,
-          family_id: familyId || null,
-          endpoint: endpoint,
-          p256dh: p256dh,
-          auth: auth,
-        },
-        { onConflict: 'endpoint' }
-      );
-
-      if (error) {
-        addLog('warn', `Baza Supabase zwróciła błąd przy zapisie push_subscriptions: ${error.message}`);
-      } else {
-        addLog('success', 'Token Web Push pomyślnie zapisany w bazie Supabase!');
-      }
-    } catch (dbErr) {
-      addLog('warn', `Wyjątek podczas zapisu do bazy: ${dbErr.message}`);
-    }
+  // 5. Zapisanie tokenu subskrypcji w backendzie na serwerze cosmere
+  try {
+    const client = supabaseOrApi || apiClient;
+    await client.push.subscribe(sub);
+    addLog('success', 'Token Web Push pomyślnie zarejestrowany na serwerze cosmere!');
+  } catch (err) {
+    addLog('warn', `Błąd zapisu subskrypcji na serwerze: ${err.message}`);
   }
 
-  // 5. Bezpieczne wyświetlenie powiadomienia potwierdzającego
+  // 6. Powiadomienie powitalne potwierdzające
   try {
     if (Notification.permission === 'granted' && reg.showNotification) {
       await reg.showNotification('Rodzinny Planer 🔔', {
-        body: 'Powiadomienia w tle zostały pomyślnie aktywowane na tym urządzeniu!',
+        body: 'Powiadomienia w tle zostały pomyślnie aktywowane!',
         icon: '/favicon.svg',
-        badge: '/favicon.svg',
+        badge: '/badge-72.png',
         tag: 'rodzinny-planer-welcome',
         renotify: true,
         vibrate: [200, 100, 200],
+        data: { url: '/?tab=settings' },
       });
     }
   } catch (notifErr) {
-    addLog('warn', `Nie udało się wyświetlić powiadomienia powitalnego: ${notifErr.message}`);
+    console.warn('Błąd powiadomienia powitalnego:', notifErr);
   }
 
   return sub;
@@ -260,7 +246,7 @@ export async function subscribeToPushNotifications(supabase, user, familyId) {
 /**
  * Odłącza subskrypcję Web Push z tego urządzenia
  */
-export async function unsubscribeFromPushNotifications(supabase) {
+export async function unsubscribeFromPushNotifications(supabaseOrApi) {
   try {
     const reg = await getOrRegisterServiceWorker().catch(() => null);
     if (reg && reg.pushManager) {
@@ -268,12 +254,11 @@ export async function unsubscribeFromPushNotifications(supabase) {
       if (sub) {
         const endpoint = sub.endpoint;
         await sub.unsubscribe();
-        addLog('info', 'Subskrypcja została anulowana lokalnie w przeglądarce.');
+        addLog('info', 'Subskrypcja została anulowana w przeglądarce.');
 
-        if (supabase && endpoint) {
-          await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
-          addLog('info', 'Subskrypcja usunięta z bazy danych Supabase.');
-        }
+        const client = supabaseOrApi || apiClient;
+        await client.push.unsubscribe(endpoint).catch(() => {});
+        addLog('info', 'Subskrypcja usunięta z serwera cosmere.');
       }
     }
     return true;
@@ -284,41 +269,65 @@ export async function unsubscribeFromPushNotifications(supabase) {
 }
 
 /**
- * Bezpośrednio wywołuje Edge Function 'send-push' w chmurze Supabase
- * bez pośredniego zapisu do tabeli notifications (zapobiega dublowaniu przez Webhooki i gubieniu targetPersonIds)
+ * Wysyła powiadomienie Push do członków rodziny przez serwer cosmere
  */
-export async function recordFamilyNotification(supabase, { familyId, userId, targetPersonIds = null, title, body, type = 'info', url = '/', tag = null }) {
-  if (!supabase || !familyId) return;
+export async function recordFamilyNotification(
+  supabaseOrApi,
+  { familyId, userId, targetPersonIds = null, title, body, type = 'info', url = '/', tag = null }
+) {
+  if (!familyId) return;
 
   try {
-    const notificationTag = tag || `${type}_${Date.now()}`;
+    const client = supabaseOrApi || apiClient;
+    const targetUrl = url && url !== '/' ? url : `/?tab=${type === 'calendar' ? 'calendar' : type === 'tasks' ? 'tasks' : type === 'wall' ? 'wall' : type === 'shopping' ? 'shopping' : 'today'}`;
 
-    // Jeśli skonfigurowana jest Edge Function 'send-push', wywołujemy ją bezpośrednio
-    if (typeof supabase.functions?.invoke === 'function') {
-      try {
-        const { data, error } = await supabase.functions.invoke('send-push', {
-          body: {
-            family_id: familyId,
-            user_id: userId || null, // ID autora akcji (wykluczany z powiadomień)
-            target_person_ids: targetPersonIds,
-            title,
-            body,
-            type,
-            tag: notificationTag,
-            url,
-          },
-        });
-
-        if (error) {
-          addLog('warn', `Edge Function send-push zwróciła błąd: ${error.message}`);
-        } else {
-          addLog('info', `Wysłano Web Push przez Edge Function: "${title}"`, data);
-        }
-      } catch (fnErr) {
-        addLog('warn', `Błąd wywołania send-push: ${fnErr.message}`);
-      }
-    }
+    await client.push.send({
+      familyId,
+      title,
+      body: body || '',
+      url: targetUrl,
+    });
+    addLog('info', `Wysłano Web Push przez serwer cosmere: "${title}"`);
   } catch (err) {
     addLog('warn', `Błąd wysyłania powiadomienia rodziny: ${err.message}`);
   }
+}
+
+/**
+ * Bezpośrednie wyświetlenie lokalnego powiadomienia systemowego (działa offline!)
+ * z obsługą przekierowania po kliknięciu
+ */
+export async function sendSystemNotification(title, options = {}) {
+  if (typeof window === 'undefined' || !('Notification' in window)) return false;
+  if (Notification.permission !== 'granted') return false;
+
+  const targetTab = options.tab || 'today';
+  const targetUrl = options.url || `/?tab=${targetTab}`;
+
+  try {
+    const reg = await getOrRegisterServiceWorker().catch(() => null);
+    if (reg && reg.showNotification) {
+      await reg.showNotification(title, {
+        body: options.body || '',
+        icon: options.icon || '/favicon.svg',
+        badge: options.badge || '/badge-72.png',
+        tag: options.tag || `local_${Date.now()}`,
+        renotify: true,
+        vibrate: [200, 100, 200],
+        data: {
+          url: targetUrl,
+          tab: targetTab,
+          dateOfArrival: Date.now(),
+        },
+        actions: [
+          { action: 'open', title: 'Otwórz' },
+          { action: 'dismiss', title: 'Zamknij' },
+        ],
+      });
+      return true;
+    }
+  } catch (err) {
+    console.warn('Błąd wyświetlania lokalnego powiadomienia:', err);
+  }
+  return false;
 }
