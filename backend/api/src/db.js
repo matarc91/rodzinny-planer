@@ -2,12 +2,24 @@ import pg from 'pg';
 
 const { Pool } = pg;
 
-export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+// Bezpieczna konfiguracja połączenia – odporna na znaki specjalne (@, #, !, $, %, &) w haśle
+const poolConfig = {
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
-});
+};
+
+if (process.env.DB_PASSWORD) {
+  poolConfig.host = process.env.DB_HOST || 'db';
+  poolConfig.port = parseInt(process.env.DB_PORT || '5432', 10);
+  poolConfig.database = process.env.DB_NAME || 'planer';
+  poolConfig.user = process.env.DB_USER || 'planer';
+  poolConfig.password = String(process.env.DB_PASSWORD);
+} else if (process.env.DATABASE_URL) {
+  poolConfig.connectionString = process.env.DATABASE_URL;
+}
+
+export const pool = new Pool(poolConfig);
 
 pool.on('error', (err) => {
   console.error('[DB] Nieoczekiwany błąd połączenia:', err.message);
