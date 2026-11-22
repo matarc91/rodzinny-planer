@@ -6,6 +6,16 @@
 
 BEGIN;
 
+-- 0. Dostosowanie schematu (gdyby baza wystartowała z wcześniejszej wersji init.sql)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_expires TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_expires TIMESTAMPTZ;
+ALTER TABLE families ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS display_name TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'member';
+ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
 -- 1. Użytkownicy
 INSERT INTO users (id, email, password_hash, is_verified, created_at)
 VALUES ('3096b887-0f7f-47cc-959b-cf6fc322d0d6', 'mateusz.arciszewski@empik.com', '$2a$12$925DiI032/haOQP5WpbPp.d3BLC6h6qlI/gvhMtCAC3TuH4Q.4xLS', true, '2026-08-19T19:58:44.981429Z')
