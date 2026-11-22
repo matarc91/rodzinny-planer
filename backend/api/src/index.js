@@ -4,7 +4,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
-import { query, pool } from './db.js';
+import { query, pool, initSchema } from './db.js';
 import { initWebPush } from './services/webpush.js';
 import { handleConnection } from './services/websocket.js';
 import authRoutes from './routes/auth.js';
@@ -20,6 +20,9 @@ const port = process.env.PORT || 3000;
 
 // Inicjalizacja Web Push VAPID
 initWebPush();
+
+// Automatyczna inicjalizacja / migracja schematu bazy danych
+initSchema().catch((err) => console.error('[DB] Błąd initSchema:', err.message));
 
 // Middleware
 app.use(cors({
