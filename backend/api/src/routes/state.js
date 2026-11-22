@@ -13,7 +13,7 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     // Sprawdź dostęp
     const memberCheck = await query(
-      'SELECT id FROM profiles WHERE family_id = $1 AND user_id = $2',
+      'SELECT id FROM profiles WHERE family_id = $1 AND (user_id = $2 OR id = $2)',
       [familyId, req.userId]
     );
     if (memberCheck.rows.length === 0) {
@@ -54,7 +54,7 @@ router.put('/', requireAuth, async (req, res) => {
   try {
     // Sprawdź dostęp
     const memberCheck = await query(
-      'SELECT id FROM profiles WHERE family_id = $1 AND user_id = $2',
+      'SELECT id FROM profiles WHERE family_id = $1 AND (user_id = $2 OR id = $2)',
       [familyId, req.userId]
     );
     if (memberCheck.rows.length === 0) {

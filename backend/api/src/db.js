@@ -60,6 +60,7 @@ export async function initSchema() {
       ALTER TABLE profiles ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE;
       ALTER TABLE profiles ADD COLUMN IF NOT EXISTS display_name TEXT;
       ALTER TABLE profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'member';
+      UPDATE profiles SET user_id = id WHERE user_id IS NULL;
 
       CREATE TABLE IF NOT EXISTS family_state (
         family_id UUID PRIMARY KEY REFERENCES families(id) ON DELETE CASCADE,

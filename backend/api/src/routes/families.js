@@ -22,7 +22,7 @@ router.post('/', requireAuth, async (req, res) => {
   if (!name || !personName) return res.status(400).json({ error: 'Nazwa rodziny i imię są wymagane' });
 
   // Sprawdź czy użytkownik już należy do rodziny
-  const existing = await query('SELECT id FROM profiles WHERE user_id = $1', [req.userId]);
+  const existing = await query('SELECT id FROM profiles WHERE user_id = $1 OR id = $1', [req.userId]);
   if (existing.rows.length > 0) {
     return res.status(409).json({ error: 'Już należysz do rodziny. Najpierw ją opuść.' });
   }
@@ -79,7 +79,7 @@ router.post('/join', requireAuth, async (req, res) => {
   if (!code || !personName) return res.status(400).json({ error: 'Kod i imię są wymagane' });
 
   // Sprawdź czy użytkownik już należy do rodziny
-  const existing = await query('SELECT id FROM profiles WHERE user_id = $1', [req.userId]);
+  const existing = await query('SELECT id FROM profiles WHERE user_id = $1 OR id = $1', [req.userId]);
   if (existing.rows.length > 0) {
     return res.status(409).json({ error: 'Już należysz do rodziny' });
   }
@@ -115,7 +115,7 @@ router.get('/:id', requireAuth, async (req, res) => {
   try {
     // Sprawdź czy użytkownik należy do tej rodziny
     const memberCheck = await query(
-      'SELECT p.*, u.email FROM profiles p JOIN users u ON p.user_id = u.id WHERE p.family_id = $1 AND p.user_id = $2',
+      'SELECT p.*, u.email FROM profiles p JOIN users u ON (p.user_id = u.id OR p.id = u.id) WHERE p.family_id = $1 AND (p.user_id = $2 OR p.id = $2)',
       [id, req.userId]
     );
     if (memberCheck.rows.length === 0) {
@@ -127,7 +127,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 
     // Wszystkie profile w tej rodzinie
     const membersResult = await query(
-      'SELECT p.id, p.person_id, p.display_name, p.role, u.email FROM profiles p JOIN users u ON p.user_id = u.id WHERE p.family_id = $1',
+      'SELECT p.id, p.person_id, p.display_name, p.role, u.email FROM profiles p JOIN users u ON (p.user_id = u.id OR p.id = u.id) WHERE p.family_id = $1',
       [id]
     );
 
@@ -147,7 +147,7 @@ router.delete('/:id/leave', requireAuth, async (req, res) => {
 
   try {
     const profileResult = await query(
-      'SELECT p.id, p.role FROM profiles p WHERE p.family_id = $1 AND p.user_id = $2',
+      'SELECT p.id, p.role FROM profiles p WHERE p.family_id = $1 AND (p.user_id = $2 OR p.id = $2)',
       [id, req.userId]
     );
     if (profileResult.rows.length === 0) {

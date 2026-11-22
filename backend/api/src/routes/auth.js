@@ -7,9 +7,10 @@ import { requireAuth } from '../middleware/auth.js';
 import { sendVerificationEmail, sendResetPasswordEmail } from '../services/email.js';
 
 const router = express.Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'planer-rodzinny-jwt-secret-cosmere-2026';
 
 function generateToken(userId) {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '30d' });
+  return jwt.sign({ userId, id: userId }, JWT_SECRET, { expiresIn: '30d' });
 }
 
 // POST /api/auth/register
@@ -51,7 +52,7 @@ router.post('/login', async (req, res) => {
   if (!email || !password) return res.status(400).json({ error: 'Email i hasło są wymagane' });
 
   try {
-    const result = await query('SELECT * FROM users WHERE email = $1', [email.toLowerCase()]);
+    const result = await query('SELECT * FROM users WHERE email = $1', [email.toLowerCase().trim()]);
     if (result.rows.length === 0) return res.status(401).json({ error: 'Nieprawidłowy email lub hasło' });
 
     const user = result.rows[0];
@@ -64,20 +65,30 @@ router.post('/login', async (req, res) => {
 
     const token = generateToken(user.id);
 
-    // Pobierz powiązany profil rodziny
-    const profileResult = await query(
-      'SELECT p.*, f.name as family_name FROM profiles p JOIN families f ON p.family_id = f.id WHERE p.user_id = $1 LIMIT 1',
-      [user.id]
-    );
+    // Pobierz powiązany profil rodziny (bezpieczny LEFT JOIN)
+    let profile = null;
+    try {
+      const profileResult = await query(
+        `SELECT p.*, f.name as family_name, f.join_code as family_join_code
+         FROM profiles p
+         LEFT JOIN families f ON p.family_id = f.id
+         WHERE p.user_id = $1 OR p.id = $1
+         LIMIT 1`,
+        [user.id]
+      );
+      profile = profileResult.rows[0] || null;
+    } catch (profErr) {
+      console.warn('[AUTH] Błąd pobierania profilu przy logowaniu:', profErr.message);
+    }
 
     res.json({
       token,
       user: { id: user.id, email: user.email },
-      profile: profileResult.rows[0] || null
+      profile
     });
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).json({ error: 'Błąd serwera podczas logowania' });
+    res.status(500).json({ error: `Błąd serwera podczas logowania: ${err.message}` });
   }
 });
 
@@ -185,18 +196,28 @@ router.get('/me', requireAuth, async (req, res) => {
     const result = await query('SELECT id, email, is_verified, created_at FROM users WHERE id = $1', [req.userId]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Użytkownik nie znaleziony' });
 
-    const profileResult = await query(
-      'SELECT p.*, f.name as family_name, f.id as family_id FROM profiles p JOIN families f ON p.family_id = f.id WHERE p.user_id = $1 LIMIT 1',
-      [req.userId]
-    );
+    let profile = null;
+    try {
+      const profileResult = await query(
+        `SELECT p.*, f.name as family_name, f.join_code as family_join_code
+         FROM profiles p
+         LEFT JOIN families f ON p.family_id = f.id
+         WHERE p.user_id = $1 OR p.id = $1
+         LIMIT 1`,
+        [req.userId]
+      );
+      profile = profileResult.rows[0] || null;
+    } catch (profErr) {
+      console.warn('[AUTH] Błąd pobierania profilu me:', profErr.message);
+    }
 
     res.json({
       user: result.rows[0],
-      profile: profileResult.rows[0] || null
+      profile
     });
   } catch (err) {
     console.error('Get me error:', err);
-    res.status(500).json({ error: 'Błąd serwera' });
+    res.status(500).json({ error: `Błąd serwera: ${err.message}` });
   }
 });
 

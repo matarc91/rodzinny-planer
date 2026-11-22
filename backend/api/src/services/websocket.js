@@ -93,12 +93,13 @@ export function handleConnection(ws, query) {
     if (msg.type === 'join') {
       // Autentykacja przez JWT
       try {
-        const decoded = jwt.verify(msg.token, process.env.JWT_SECRET);
-        const userId = decoded.userId;
+        const JWT_SECRET = process.env.JWT_SECRET || 'planer-rodzinny-jwt-secret-cosmere-2026';
+        const decoded = jwt.verify(msg.token, JWT_SECRET);
+        const userId = decoded.userId || decoded.id || decoded.sub;
 
         // Sprawdź czy użytkownik należy do tej rodziny
         const result = await query(
-          'SELECT id FROM profiles WHERE user_id = $1 AND family_id = $2',
+          'SELECT id FROM profiles WHERE (user_id = $1 OR id = $1) AND family_id = $2',
           [userId, msg.familyId]
         );
 
