@@ -223,24 +223,29 @@ router.get('/me', requireAuth, async (req, res) => {
 
 // PATCH /api/auth/me/password
 router.patch('/me/password', requireAuth, async (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Obecne i nowe hasło są wymagane' });
-  if (newPassword.length < 6) return res.status(400).json({ error: 'Nowe hasło musi mieć minimum 6 znaków' });
+  const { currentPassword, newPassword, password } = req.body;
+  const targetPassword = newPassword || password;
+
+  if (!targetPassword) return res.status(400).json({ error: 'Nowe hasło jest wymagane' });
+  if (targetPassword.length < 6) return res.status(400).json({ error: 'Nowe hasło musi mieć minimum 6 znaków' });
 
   try {
     const result = await query('SELECT password_hash FROM users WHERE id = $1', [req.userId]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Użytkownik nie znaleziony' });
 
-    const match = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
-    if (!match) return res.status(401).json({ error: 'Obecne hasło jest nieprawidłowe' });
+    // Jeśli podano obecne hasło, zweryfikuj je (dla zachowania zgodności z opcjonalną weryfikacją)
+    if (currentPassword) {
+      const match = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
+      if (!match) return res.status(401).json({ error: 'Obecne hasło jest nieprawidłowe' });
+    }
 
-    const newHash = await bcrypt.hash(newPassword, 12);
+    const newHash = await bcrypt.hash(targetPassword, 12);
     await query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, req.userId]);
 
-    res.json({ message: 'Hasło zostało zmienione' });
+    res.json({ message: 'Hasło zostało pomyślnie zmienione' });
   } catch (err) {
     console.error('Change password error:', err);
-    res.status(500).json({ error: 'Błąd serwera' });
+    res.status(500).json({ error: `Błąd serwera: ${err.message}` });
   }
 });
 

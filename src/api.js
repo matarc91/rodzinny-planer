@@ -204,11 +204,14 @@ export class ApiClient {
         };
       },
 
-      updateUser: async ({ password, currentPassword }) => {
+      updateUser: async ({ password, newPassword, currentPassword }) => {
         try {
           const res = await this.request('/auth/me/password', {
             method: 'PATCH',
-            body: JSON.stringify({ newPassword: password, currentPassword: currentPassword || password }),
+            body: JSON.stringify({
+              newPassword: newPassword || password,
+              currentPassword: currentPassword || undefined,
+            }),
           });
           return { data: res, error: null };
         } catch (err) {
