@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { COLORS, uid } from '../../utils/constants.js';
 import { ModalShell } from '../ui/ModalShell.jsx';
-import { Plus, Trash2, Edit2, Check, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Edit2, Check, Sparkles, Lock } from 'lucide-react';
 
 const COMMON_EMOJIS = ['🛒', '👶', '🐕', '🔨', '🚗', '💊', '🎬', '👗', '✈️', '⚡', '☕', '📚', '🎁', '🍔', '🏋️', '🏠'];
 
 const inputStyle =
   'w-full border rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 transition bg-stone-900 text-stone-100 placeholder-stone-500';
 
-export function ManageCategoriesModal({ categories = [], onClose, onSave }) {
+export function ManageCategoriesModal({ categories = [], categoryExpenseCounts = {}, onClose, onSave }) {
   const [catList, setCatList] = useState(() => JSON.parse(JSON.stringify(categories)));
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
@@ -47,6 +47,7 @@ export function ManageCategoriesModal({ categories = [], onClose, onSave }) {
   };
 
   const deleteCategory = (id) => {
+    if ((categoryExpenseCounts[id] || 0) > 0) return;
     setCatList((prev) => prev.filter((c) => c.id !== id));
   };
 
@@ -152,38 +153,57 @@ export function ManageCategoriesModal({ categories = [], onClose, onSave }) {
               );
             }
 
+            const attachedCount = categoryExpenseCounts[cat.id] || 0;
+            const hasOperations = attachedCount > 0;
+
             return (
               <div
                 key={cat.id}
                 style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
                 className="flex items-center justify-between p-3 rounded-xl border"
               >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-lg w-7 text-center">{cat.icon || '🏷️'}</span>
-                  <div>
-                    <div className="text-sm font-semibold text-stone-100">{cat.name}</div>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="text-lg w-7 text-center shrink-0">{cat.icon || '🏷️'}</span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-stone-100 truncate">{cat.name}</span>
+                      {hasOperations && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-stone-800 text-stone-400 border border-stone-700/60">
+                          {attachedCount} {attachedCount === 1 ? 'operacja' : attachedCount < 5 ? 'operacje' : 'operacji'}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs font-mono text-stone-400">
                       Limit: <span className="text-amber-400 font-bold">{cat.limit || 0} zł</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 shrink-0">
                   <button
                     type="button"
                     onClick={() => startEdit(cat)}
-                    className="p-2 rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition"
+                    className="p-2 rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition cursor-pointer"
                     title="Edytuj kategorię"
                   >
                     <Edit2 size={14} />
                   </button>
                   <button
                     type="button"
+                    disabled={hasOperations}
                     onClick={() => deleteCategory(cat.id)}
-                    className="p-2 rounded-lg text-stone-400 hover:text-rose-400 hover:bg-stone-800 transition"
-                    title="Usuń kategorię"
+                    className={`p-2 rounded-lg transition ${
+                      hasOperations
+                        ? 'text-stone-600 cursor-not-allowed opacity-60'
+                        : 'text-stone-400 hover:text-rose-400 hover:bg-stone-800 cursor-pointer'
+                    }`}
+                    title={
+                      hasOperations
+                        ? `Nie można usunąć kategorii z przypisanymi operacjami (${attachedCount}). Najpierw usuń lub przenieś operacje.`
+                        : 'Usuń kategorię'
+                    }
                   >
-                    <Trash2 size={14} />
+                    {hasOperations ? <Lock size={14} /> : <Trash2 size={14} />}
                   </button>
                 </div>
               </div>

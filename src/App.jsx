@@ -1305,7 +1305,8 @@ export default function App() {
             }
             setToast(null);
           }}
-          className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-stone-800 text-stone-100 text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl border border-stone-700 flex items-center gap-2 animate-bounce select-none ${
+          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 4.5rem)' }}
+          className={`fixed left-1/2 -translate-x-1/2 z-50 bg-stone-800 text-stone-100 text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl border border-stone-700 flex items-center gap-2 animate-bounce select-none ${
             toast.tab ? 'cursor-pointer hover:bg-stone-700 hover:border-amber-500/50 transition' : ''
           }`}
         >
@@ -1315,7 +1316,7 @@ export default function App() {
         </div>
       )}
 
-      <header className="flex items-center justify-between px-4 sm:px-5 pt-6 pb-4 sticky top-0 z-30 bg-[#121214]/85 backdrop-blur-md border-b border-stone-800/50">
+      <header className="flex items-center justify-between px-4 sm:px-5 pt-safe-header pb-4 sticky top-0 z-30 bg-[#121214]/85 backdrop-blur-md border-b border-stone-800/50">
         <div className="flex items-center gap-2.5 min-w-0">
           <AppLogo className="w-8 h-8 rounded-xl shrink-0" iconSize={18} />
           <div className="flex items-center gap-2 min-w-0">

@@ -15,6 +15,7 @@ export function TransactionModal({
   people = [],
   currentPersonId = null,
   initialGoalId = null,
+  initialCategoryId = null,
   initialTransaction = null,
   onClose,
   onSave,
@@ -44,7 +45,7 @@ export function TransactionModal({
   });
 
   const [categoryId, setCategoryId] = useState(() => {
-    return initialTransaction?.categoryId || categories[0]?.id || '';
+    return initialTransaction?.categoryId || initialCategoryId || categories[0]?.id || '';
   });
 
   const [goalId, setGoalId] = useState(() => {

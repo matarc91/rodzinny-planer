@@ -40,7 +40,12 @@ export function ExpiringObligationModal({
     }
 
     const safePaid = isNaN(paidNum) || paidNum < 0 ? 0 : Math.min(paidNum, totalNum);
-    const remainingMonths = Math.max(0, totalNum - safePaid);
+    const existingPaidMonths = Array.isArray(initialObligation?.paidMonths) ? initialObligation.paidMonths : [];
+    const nextPaidMonths =
+      existingPaidMonths.length > safePaid
+        ? [...existingPaidMonths].sort().slice(0, safePaid)
+        : existingPaidMonths;
+    const initialPaidInstallments = Math.max(0, safePaid - nextPaidMonths.length);
 
     // Wyliczenie szacowanej daty zakończenia
     const startD = new Date(startDate || todayStr());
@@ -53,6 +58,8 @@ export function ExpiringObligationModal({
       monthlyAmount: amountNum,
       totalInstallments: totalNum,
       paidInstallments: safePaid,
+      initialPaidInstallments,
+      paidMonths: nextPaidMonths,
       startDate: startDate || todayStr().slice(0, 7) + '-01',
       endDate: endDateStr,
       icon: icon || '⚡',
@@ -67,13 +74,13 @@ export function ExpiringObligationModal({
 
   return (
     <ModalShell
-      title={isEditing ? 'Edytuj ratę 0% / zobowiązanie' : 'Dodaj ratę 0% lub koszt terminowy'}
+      title={isEditing ? 'Edytuj ratę' : 'Dodaj ratę'}
       onClose={onClose}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Ikona + Nazwa */}
         <div>
-          <label className="text-xs font-semibold mb-1 block text-stone-400">Nazwa zobowiązania</label>
+          <label className="text-xs font-semibold mb-1 block text-stone-400">Nazwa raty</label>
           <div className="flex gap-2">
             <div className="relative">
               <input
@@ -180,7 +187,7 @@ export function ExpiringObligationModal({
             style={{ background: COLORS.accent, color: '#121214' }}
             className="px-5 py-2.5 rounded-xl font-bold text-xs transition disabled:opacity-40 shadow-sm cursor-pointer"
           >
-            {isEditing ? 'Zapisz zmiany w zobowiązaniu' : 'Dodaj zobowiązanie'}
+            {isEditing ? 'Zapisz zmiany' : 'Dodaj ratę'}
           </button>
         </div>
       </form>

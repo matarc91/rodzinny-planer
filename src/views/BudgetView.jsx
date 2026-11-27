@@ -15,6 +15,7 @@ import {
   Target,
   Plus,
   Pencil,
+  Clock,
 } from 'lucide-react';
 import { format, addMonths, parseISO } from 'date-fns';
 import {
@@ -28,7 +29,11 @@ import { TransactionModal } from '../components/modals/TransactionModal.jsx';
 import { ManageCategoriesModal } from '../components/modals/ManageCategoriesModal.jsx';
 import { ManageGoalsModal } from '../components/modals/ManageGoalsModal.jsx';
 import { ExpiringObligationModal } from '../components/modals/ExpiringObligationModal.jsx';
-import { ExpiringObligationsSection } from '../components/budget/ExpiringObligationsSection.jsx';
+import { BudgetDetailsModal } from '../components/modals/BudgetDetailsModal.jsx';
+import {
+  ExpiringObligationsSection,
+  getObligationMonthState,
+} from '../components/budget/ExpiringObligationsSection.jsx';
 import { Chip } from '../components/ui/Chip.jsx';
 
 export function BudgetView({
@@ -49,10 +54,12 @@ export function BudgetView({
 
   const [activeModal, setActiveModal] = useState(null); // 'add-transaction' | 'edit-transaction' | 'manage-categories' | 'manage-goals' | 'add-obligation' | 'edit-obligation' | null
   const [selectedGoalForTx, setSelectedGoalForTx] = useState(null);
+  const [selectedCategoryForTx, setSelectedCategoryForTx] = useState(null);
+  const [initialTxType, setInitialTxType] = useState('expense');
+  const [detailsModal, setDetailsModal] = useState(null); // { mode: 'category' | 'incomes' | 'fixedCosts', categoryId?: string } | null
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [editingObligation, setEditingObligation] = useState(null);
   const [editingGoalId, setEditingGoalId] = useState(null);
-  const [filterType, setFilterType] = useState('all'); // 'all' | 'expense' | 'fixedCost' | 'goal' | 'income'
 
   // Dane bieżącego miesiąca
   const budgetState = useMemo(() => data?.budget || {}, [data?.budget]);
@@ -151,30 +158,51 @@ export function BudgetView({
 
   // Wyliczenia finansowe (Dashboard)
   const summary = useMemo(() => {
+    const totalInstallments = expiringObligations.reduce((acc, obl) => {
+      const state = getObligationMonthState(obl, monthKey);
+      return state.isPaidInMonth ? acc + (Number(obl.monthlyAmount) || 0) : acc;
+    }, 0);
+
     if (!currentMonthBudget) {
       return {
         totalIncome: 0,
         totalFixedCosts: 0,
         totalExpenses: 0,
-        available: 0,
+        totalInstallments,
+        available: -totalInstallments,
         categoriesProgress: [],
+        categoryExpenseCounts: {},
       };
     }
 
     const totalIncome = (currentMonthBudget.incomes || []).reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
     const totalFixedCosts = (currentMonthBudget.fixedCosts || []).reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
     const totalExpenses = (currentMonthBudget.expenses || []).reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
-    const available = totalIncome - totalFixedCosts - totalExpenses;
+    const available = totalIncome - totalFixedCosts - totalExpenses - totalInstallments;
 
-    // Wydatki per kategoria
+    // Wydatki per kategoria (z wyłączeniem wpłat na cele)
+    const categories = currentMonthBudget.categories || [];
+    const validCategoryIds = new Set(categories.map((c) => c.id));
     const catMap = {};
+    const categoryExpenseCounts = {};
+    let uncategorizedSpent = 0;
+    let uncategorizedCount = 0;
+
     for (const exp of currentMonthBudget.expenses || []) {
-      const cId = exp.categoryId || 'other';
-      catMap[cId] = (catMap[cId] || 0) + (Number(exp.amount) || 0);
+      if (exp.goalId) continue;
+      const cId = exp.categoryId;
+      if (cId && validCategoryIds.has(cId)) {
+        catMap[cId] = (catMap[cId] || 0) + (Number(exp.amount) || 0);
+        categoryExpenseCounts[cId] = (categoryExpenseCounts[cId] || 0) + 1;
+      } else {
+        uncategorizedSpent += Number(exp.amount) || 0;
+        uncategorizedCount += 1;
+      }
     }
 
-    const categoriesProgress = (currentMonthBudget.categories || []).map((cat) => {
+    const categoriesProgress = categories.map((cat) => {
       const spent = catMap[cat.id] || 0;
+      const count = categoryExpenseCounts[cat.id] || 0;
       const limit = Number(cat.limit) || 0;
       const percent = limit > 0 ? Math.round((spent / limit) * 100) : 0;
       const isExceeded = limit > 0 && spent > limit;
@@ -183,21 +211,40 @@ export function BudgetView({
       return {
         ...cat,
         spent,
+        count,
         limit,
         percent,
         isExceeded,
         diff,
+        isFallback: false,
       };
     });
+
+    if (uncategorizedCount > 0) {
+      categoriesProgress.push({
+        id: '__other__',
+        name: 'Inne wydatki',
+        icon: '📦',
+        spent: uncategorizedSpent,
+        count: uncategorizedCount,
+        limit: 0,
+        percent: 0,
+        isExceeded: false,
+        diff: 0,
+        isFallback: true,
+      });
+    }
 
     return {
       totalIncome,
       totalFixedCosts,
       totalExpenses,
+      totalInstallments,
       available,
       categoriesProgress,
+      categoryExpenseCounts,
     };
-  }, [currentMonthBudget]);
+  }, [currentMonthBudget, expiringObligations, monthKey]);
 
   // Wyliczenia dla Celów Finansowych (globalnie po wszystkich miesiącach)
   const { goalsProgress, goalsProgressMap } = useMemo(() => {
@@ -300,16 +347,45 @@ export function BudgetView({
     });
   };
 
-  // Zwiększenie liczby spłaconych rat o 1
+  // Opłacenie raty w wybranym miesiącu (Model A)
   const handleIncrementObligationPaid = (id) => {
     const nextObligations = expiringObligations.map((o) => {
       if (o.id !== id) return o;
-      const nextPaid = o.paidInstallments + 1;
-      const isCompleted = nextPaid >= o.totalInstallments;
+      const state = getObligationMonthState(o, monthKey);
+      if (state.isMaxReached || state.isPaidInMonth) return o;
+
+      const nextPaidMonths = [...state.paidMonths, monthKey];
+      const nextPaid = Math.min(o.totalInstallments, state.basePaid + nextPaidMonths.length);
       return {
         ...o,
+        initialPaidInstallments: state.basePaid,
+        paidMonths: nextPaidMonths,
         paidInstallments: nextPaid,
-        isCompleted,
+        isCompleted: nextPaid >= o.totalInstallments,
+      };
+    });
+
+    onUpdateData({
+      ...data,
+      expiringObligations: nextObligations,
+    });
+  };
+
+  // Cofnięcie opłacenia raty w wybranym miesiącu
+  const handleUndoObligationPaid = (id) => {
+    const nextObligations = expiringObligations.map((o) => {
+      if (o.id !== id) return o;
+      const state = getObligationMonthState(o, monthKey);
+      if (!state.isPaidInMonth) return o;
+
+      const nextPaidMonths = state.paidMonths.filter((m) => m !== monthKey);
+      const nextPaid = Math.max(0, state.basePaid + nextPaidMonths.length);
+      return {
+        ...o,
+        initialPaidInstallments: state.basePaid,
+        paidMonths: nextPaidMonths,
+        paidInstallments: nextPaid,
+        isCompleted: nextPaid >= o.totalInstallments,
       };
     });
 
@@ -376,74 +452,50 @@ export function BudgetView({
     }).format(val || 0);
   };
 
-  // Znajdź osobę po ID
-  const getPerson = (pId) => {
-    if (!pId) return null;
-    return people.find((p) => p.id === pId) || null;
-  };
+  // Dane dla modalu szczegółów (Przychody / Koszty stałe / Kategoria)
+  const activeDetailsData = useMemo(() => {
+    if (!detailsModal || !currentMonthBudget) return null;
 
-  // Połączona lista operacji
-  const combinedTransactions = useMemo(() => {
-    if (!currentMonthBudget) return [];
-
-    const list = [];
-    if (filterType === 'all' || filterType === 'income') {
-      (currentMonthBudget.incomes || []).forEach((item) => {
-        list.push({
-          ...item,
-          type: 'income',
-          displayDate: 'Miesiąc',
-          displayTitle: item.title,
-          categoryName: 'Przychód stały',
-        });
-      });
+    if (detailsModal.mode === 'incomes') {
+      return {
+        mode: 'incomes',
+        category: null,
+        items: currentMonthBudget.incomes || [],
+      };
     }
 
-    if (filterType === 'all' || filterType === 'fixedCost') {
-      (currentMonthBudget.fixedCosts || []).forEach((item) => {
-        list.push({
-          ...item,
-          type: 'fixedCost',
-          displayDate: 'Miesiąc',
-          displayTitle: item.title,
-          categoryName: 'Koszt stały',
-        });
-      });
+    if (detailsModal.mode === 'fixedCosts') {
+      return {
+        mode: 'fixedCosts',
+        category: null,
+        items: currentMonthBudget.fixedCosts || [],
+      };
     }
 
-    if (filterType === 'all' || filterType === 'expense') {
-      (currentMonthBudget.expenses || []).forEach((item) => {
-        if (filterType === 'expense' && item.goalId) return; // W filtrze 'Wydatki' pokazujemy zwykłe wydatki
-        list.push({
-          ...item,
-          type: 'expense',
-          displayDate: item.date,
-          displayTitle: item.description || item.categoryName || 'Wydatek',
-        });
-      });
+    if (detailsModal.mode === 'category') {
+      const cat = summary.categoriesProgress.find((c) => c.id === detailsModal.categoryId);
+      if (!cat) return null;
+
+      const validCategoryIds = new Set((currentMonthBudget.categories || []).map((c) => c.id));
+      const items = (currentMonthBudget.expenses || [])
+        .filter((exp) => {
+          if (exp.goalId) return false;
+          if (cat.isFallback) {
+            return !exp.categoryId || !validCategoryIds.has(exp.categoryId);
+          }
+          return exp.categoryId === cat.id;
+        })
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+      return {
+        mode: 'category',
+        category: cat,
+        items,
+      };
     }
 
-    if (filterType === 'goal') {
-      (currentMonthBudget.expenses || []).forEach((item) => {
-        if (item.goalId) {
-          list.push({
-            ...item,
-            type: 'expense',
-            displayDate: item.date,
-            displayTitle: item.description || item.goalName || 'Wpłata na cel',
-          });
-        }
-      });
-    }
-
-    // Sortowanie: najnowsze wydatki na górze
-    return list.sort((a, b) => {
-      if (a.date && b.date) return b.date.localeCompare(a.date);
-      if (a.date) return -1;
-      if (b.date) return 1;
-      return (b.createdAt || '').localeCompare(a.createdAt || '');
-    });
-  }, [currentMonthBudget, filterType]);
+    return null;
+  }, [detailsModal, currentMonthBudget, summary.categoriesProgress]);
 
   return (
     <div className="space-y-5 animate-fadeIn pb-14">
@@ -549,48 +601,73 @@ export function BudgetView({
                 </div>
 
                 <p className="text-xs text-stone-400 mt-2">
-                  Przychody ({formatPLN(summary.totalIncome)}) – Stałe ({formatPLN(summary.totalFixedCosts)}) – Wydatki ({formatPLN(summary.totalExpenses)})
+                  Przychody ({formatPLN(summary.totalIncome)}) – Stałe ({formatPLN(summary.totalFixedCosts)}) – Wydatki ({formatPLN(summary.totalExpenses)}) – Raty ({formatPLN(summary.totalInstallments)})
                 </p>
               </div>
 
               {/* Równanie / Kafelki składowe */}
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                <div
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDetailsModal({ mode: 'incomes' })}
                   style={{ background: COLORS.surface, borderColor: COLORS.border }}
-                  className="p-3 sm:p-4 rounded-xl border flex flex-col justify-between"
+                  className="p-3 sm:p-4 rounded-xl border flex flex-col justify-between text-left hover:border-emerald-500/40 hover:bg-stone-900/60 transition cursor-pointer group"
+                  title="Kliknij, aby zobaczyć i modyfikować przychody"
                 >
-                  <div className="flex items-center gap-1.5 text-emerald-400 mb-1">
-                    <TrendingUp size={14} />
-                    <span className="text-[11px] sm:text-xs font-semibold">Przychody</span>
+                  <div className="flex items-center justify-between gap-1 text-emerald-400 mb-1 w-full">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <TrendingUp size={14} className="shrink-0" />
+                      <span className="text-[11px] sm:text-xs font-semibold truncate">Przychody</span>
+                    </div>
+                    <ChevronRight size={13} className="text-stone-500 group-hover:text-emerald-400 transition shrink-0" />
                   </div>
                   <span className="text-xs sm:text-sm md:text-base font-bold text-stone-100 font-mono truncate">
                     {formatPLN(summary.totalIncome)}
                   </span>
-                </div>
+                </button>
 
-                <div
+                <button
+                  type="button"
+                  onClick={() => setDetailsModal({ mode: 'fixedCosts' })}
                   style={{ background: COLORS.surface, borderColor: COLORS.border }}
-                  className="p-3 sm:p-4 rounded-xl border flex flex-col justify-between"
+                  className="p-3 sm:p-4 rounded-xl border flex flex-col justify-between text-left hover:border-orange-500/40 hover:bg-stone-900/60 transition cursor-pointer group"
+                  title="Kliknij, aby zobaczyć i modyfikować koszty stałe"
                 >
-                  <div className="flex items-center gap-1.5 text-orange-400 mb-1">
-                    <Landmark size={14} />
-                    <span className="text-[11px] sm:text-xs font-semibold">Koszty stałe</span>
+                  <div className="flex items-center justify-between gap-1 text-orange-400 mb-1 w-full">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Landmark size={14} className="shrink-0" />
+                      <span className="text-[11px] sm:text-xs font-semibold truncate">Koszty stałe</span>
+                    </div>
+                    <ChevronRight size={13} className="text-stone-500 group-hover:text-orange-400 transition shrink-0" />
                   </div>
                   <span className="text-xs sm:text-sm md:text-base font-bold text-stone-100 font-mono truncate">
                     {formatPLN(summary.totalFixedCosts)}
                   </span>
-                </div>
+                </button>
 
                 <div
                   style={{ background: COLORS.surface, borderColor: COLORS.border }}
                   className="p-3 sm:p-4 rounded-xl border flex flex-col justify-between"
                 >
                   <div className="flex items-center gap-1.5 text-amber-400 mb-1">
-                    <TrendingDown size={14} />
-                    <span className="text-[11px] sm:text-xs font-semibold">Bieżące</span>
+                    <TrendingDown size={14} className="shrink-0" />
+                    <span className="text-[11px] sm:text-xs font-semibold truncate">Bieżące</span>
                   </div>
                   <span className="text-xs sm:text-sm md:text-base font-bold text-stone-100 font-mono truncate">
                     {formatPLN(summary.totalExpenses)}
+                  </span>
+                </div>
+
+                <div
+                  style={{ background: COLORS.surface, borderColor: COLORS.border }}
+                  className="p-3 sm:p-4 rounded-xl border flex flex-col justify-between"
+                >
+                  <div className="flex items-center gap-1.5 text-amber-300 mb-1">
+                    <Clock size={14} className="shrink-0" />
+                    <span className="text-[11px] sm:text-xs font-semibold truncate">Raty (opłacone)</span>
+                  </div>
+                  <span className="text-xs sm:text-sm md:text-base font-bold text-stone-100 font-mono truncate">
+                    {formatPLN(summary.totalInstallments)}
                   </span>
                 </div>
               </div>
@@ -606,7 +683,7 @@ export function BudgetView({
                   <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-base font-bold">
                     Kategorie wydatków
                   </h3>
-                  <p className="text-xs text-stone-400">Kontrola wydatków i limitów w bieżącym miesiącu</p>
+                  <p className="text-xs text-stone-400">Kliknij kategorię, aby zobaczyć, dodać lub edytować jej operacje</p>
                 </div>
 
                 <button
@@ -623,18 +700,25 @@ export function BudgetView({
               <div className="space-y-3 pt-1">
                 {summary.categoriesProgress.map((cat) => {
                   const isOver = cat.isExceeded;
-                  const barWidth = Math.min(100, Math.max(2, cat.percent));
+                  const barWidth = cat.isFallback ? 100 : Math.min(100, Math.max(2, cat.percent));
 
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={cat.id}
+                      onClick={() => setDetailsModal({ mode: 'category', categoryId: cat.id })}
                       style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
-                      className="p-3 sm:p-3.5 rounded-xl border space-y-2.5"
+                      className="w-full text-left p-3 sm:p-3.5 rounded-xl border space-y-2.5 hover:border-amber-500/40 hover:bg-stone-800/40 transition cursor-pointer group"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-base shrink-0">{cat.icon || '🏷️'}</span>
                           <span className="text-sm font-semibold text-stone-200 truncate">{cat.name}</span>
+                          {cat.count > 0 && (
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-stone-900 text-stone-400 border border-stone-800 shrink-0">
+                              {cat.count}
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
@@ -642,32 +726,41 @@ export function BudgetView({
                             <span className={isOver ? 'text-rose-400 font-bold' : 'text-stone-100 font-bold'}>
                               {formatPLN(cat.spent)}
                             </span>
-                            <span className="text-stone-500 mx-1">/</span>
-                            <span className="text-stone-400">{formatPLN(cat.limit)}</span>
+                            {!cat.isFallback && (
+                              <>
+                                <span className="text-stone-500 mx-1">/</span>
+                                <span className="text-stone-400">{formatPLN(cat.limit)}</span>
+                              </>
+                            )}
                           </div>
 
-                          {isOver ? (
-                            <span className="text-[11px] bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-md border border-rose-500/30 font-semibold shrink-0">
-                              +{formatPLN(cat.diff)}
-                            </span>
-                          ) : (
-                            <span className="text-[11px] text-stone-500 font-mono shrink-0">
-                              {cat.percent}%
-                            </span>
-                          )}
+                          {!cat.isFallback &&
+                            (isOver ? (
+                              <span className="text-[11px] bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-md border border-rose-500/30 font-semibold shrink-0">
+                                +{formatPLN(cat.diff)}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-stone-500 font-mono shrink-0">
+                                {cat.percent}%
+                              </span>
+                            ))}
+
+                          <ChevronRight size={14} className="text-stone-500 group-hover:text-amber-400 transition shrink-0" />
                         </div>
                       </div>
 
-                      <div className="w-full bg-stone-900 rounded-full h-2.5 overflow-hidden border border-stone-800">
-                        <div
-                          style={{
-                            width: `${barWidth}%`,
-                            backgroundColor: isOver ? COLORS.warn : COLORS.accent,
-                          }}
-                          className="h-full rounded-full transition-all duration-500"
-                        />
-                      </div>
-                    </div>
+                      {!cat.isFallback && (
+                        <div className="w-full bg-stone-900 rounded-full h-2.5 overflow-hidden border border-stone-800">
+                          <div
+                            style={{
+                              width: `${barWidth}%`,
+                              backgroundColor: isOver ? COLORS.warn : COLORS.accent,
+                            }}
+                            className="h-full rounded-full transition-all duration-500"
+                          />
+                        </div>
+                      )}
+                    </button>
                   );
                 })}
 
@@ -682,224 +775,6 @@ export function BudgetView({
                     >
                       + Dodaj pierwszą kategorię
                     </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 3. OKNO OPERACJI Z DANEGO MIESIĄCA (SCROLLOWANE + ZOPTYMALIZOWANE MOBILNIE) */}
-            <div
-              style={{ background: COLORS.surface, borderColor: COLORS.border }}
-              className="rounded-2xl p-4 sm:p-5 border space-y-4 shadow-sm"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center justify-between">
-                  <h3 style={{ fontFamily: 'Fraunces', color: COLORS.ink }} className="text-base font-bold">
-                    Operacje ({combinedTransactions.length})
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedGoalForTx(null);
-                      setEditingTransaction(null);
-                      setActiveModal('add-transaction');
-                    }}
-                    style={{ background: COLORS.accent, color: '#121214' }}
-                    className="sm:hidden px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow hover:opacity-90 transition cursor-pointer"
-                  >
-                    <Plus size={14} />
-                    <span>Dodaj</span>
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {/* Filtry */}
-                  <div
-                    style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
-                    className="flex p-0.5 rounded-xl border text-xs font-semibold overflow-x-auto no-scrollbar w-full sm:w-auto"
-                  >
-                    <button
-                      onClick={() => setFilterType('all')}
-                      style={{
-                        background: filterType === 'all' ? COLORS.accent : 'transparent',
-                        color: filterType === 'all' ? '#121214' : COLORS.inkSoft,
-                      }}
-                      className="px-2.5 sm:px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
-                    >
-                      Wszystkie
-                    </button>
-                    <button
-                      onClick={() => setFilterType('expense')}
-                      style={{
-                        background: filterType === 'expense' ? COLORS.accent : 'transparent',
-                        color: filterType === 'expense' ? '#121214' : COLORS.inkSoft,
-                      }}
-                      className="px-2.5 sm:px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
-                    >
-                      Wydatki
-                    </button>
-                    <button
-                      onClick={() => setFilterType('fixedCost')}
-                      style={{
-                        background: filterType === 'fixedCost' ? COLORS.accent : 'transparent',
-                        color: filterType === 'fixedCost' ? '#121214' : COLORS.inkSoft,
-                      }}
-                      className="px-2.5 sm:px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
-                    >
-                      Stałe
-                    </button>
-                    <button
-                      onClick={() => setFilterType('goal')}
-                      style={{
-                        background: filterType === 'goal' ? COLORS.accent : 'transparent',
-                        color: filterType === 'goal' ? '#121214' : COLORS.inkSoft,
-                      }}
-                      className="px-2.5 sm:px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
-                    >
-                      Cele
-                    </button>
-                    <button
-                      onClick={() => setFilterType('income')}
-                      style={{
-                        background: filterType === 'income' ? COLORS.accent : 'transparent',
-                        color: filterType === 'income' ? '#121214' : COLORS.inkSoft,
-                      }}
-                      className="px-2.5 sm:px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
-                    >
-                      Przychody
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedGoalForTx(null);
-                      setEditingTransaction(null);
-                      setActiveModal('add-transaction');
-                    }}
-                    style={{ background: COLORS.accent, color: '#121214' }}
-                    className="hidden sm:flex px-3 py-1.5 rounded-xl text-xs font-bold items-center gap-1.5 shadow hover:opacity-90 transition shrink-0 cursor-pointer"
-                  >
-                    <Plus size={15} />
-                    <span>Dodaj operację</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Scrollowane okno operacji */}
-              <div className="max-h-[460px] overflow-y-auto pr-1 sm:pr-2 space-y-2.5">
-                {combinedTransactions.map((tx) => {
-                  const isIncome = tx.type === 'income';
-                  const isFixed = tx.type === 'fixedCost';
-                  const person = getPerson(tx.personId);
-
-                  return (
-                    <div
-                      key={tx.id}
-                      style={{ background: COLORS.surfaceHighlight, borderColor: COLORS.border }}
-                      className="p-3 sm:p-3.5 rounded-xl border transition hover:border-stone-700 space-y-2"
-                    >
-                      {/* Górna linia: Ikona + Tytuł vs Kwota (nigdy się nie rozjeżdża) */}
-                      <div className="flex items-center justify-between gap-2.5">
-                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                          <div
-                            className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                              isIncome
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                : isFixed
-                                ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
-                                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                            }`}
-                          >
-                            {isIncome && <TrendingUp size={16} />}
-                            {isFixed && <Landmark size={16} />}
-                            {!isIncome && !isFixed && <TrendingDown size={16} />}
-                          </div>
-
-                          <span className="text-sm font-bold text-stone-100 truncate">
-                            {tx.displayTitle}
-                          </span>
-                        </div>
-
-                        <span
-                          className={`font-mono text-sm sm:text-base font-bold shrink-0 whitespace-nowrap ${
-                            isIncome ? 'text-emerald-400' : 'text-stone-100'
-                          }`}
-                        >
-                          {isIncome ? '+' : '-'}{formatPLN(tx.amount)}
-                        </span>
-                      </div>
-
-                      {/* Dolna linia: Etykiety metadanych po lewej vs Akcje po prawej */}
-                      <div className="flex items-center justify-between gap-2 pt-0.5 text-xs text-stone-400">
-                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                          {/* Kategoria */}
-                          <span className="text-stone-300 font-medium px-2 py-0.5 rounded-md bg-stone-800/80 border border-stone-700/50 text-[11px] shrink-0 whitespace-nowrap">
-                            {tx.categoryName || 'Brak kategorii'}
-                          </span>
-
-                          {/* Oznaczenie celu finansowego */}
-                          {tx.goalName && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[11px] font-medium shrink-0 whitespace-nowrap">
-                              <span>{tx.goalIcon || '🎯'}</span>
-                              <span className="truncate max-w-[120px]">{tx.goalName}</span>
-                            </span>
-                          )}
-
-                          {/* Data */}
-                          {tx.date && (
-                            <span className="inline-flex items-center gap-1 font-mono text-stone-400 text-[11px] shrink-0 whitespace-nowrap">
-                              <Calendar size={11} /> {tx.date}
-                            </span>
-                          )}
-
-                          {/* Osoba */}
-                          {person && (
-                            <span
-                              style={{
-                                borderColor: `${person.color}40`,
-                                background: `${person.color}15`,
-                                color: person.color,
-                              }}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium shrink-0 whitespace-nowrap"
-                            >
-                              <Chip person={person} size="sm" />
-                              <span>{person.name}</span>
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Akcje: Edycja i Usuwanie */}
-                        <div className="flex items-center gap-1 shrink-0 ml-auto">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingTransaction(tx);
-                              setActiveModal('edit-transaction');
-                            }}
-                            className="p-1.5 rounded-lg text-stone-400 hover:text-amber-400 hover:bg-stone-800 transition cursor-pointer"
-                            title="Edytuj operację"
-                          >
-                            <Pencil size={14} />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteItem(tx.type, tx.id)}
-                            className="p-1.5 rounded-lg text-stone-400 hover:text-rose-400 hover:bg-stone-800 transition cursor-pointer"
-                            title="Usuń operację"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {combinedTransactions.length === 0 && (
-                  <div className="text-center py-8 text-stone-500 text-xs italic">
-                    Brak operacji dla wybranego filtru w tym miesiącu.
                   </div>
                 )}
               </div>
@@ -1035,15 +910,67 @@ export function BudgetView({
                       Stan początkowy: <span className="font-mono text-stone-400">{formatPLN(goal.initialAmount)}</span>
                     </div>
                   )}
+
+                  {/* Wpłaty na cel w wybranym miesiącu */}
+                  {(() => {
+                    const monthDeposits = (currentMonthBudget?.expenses || []).filter((e) => e.goalId === goal.id);
+                    if (monthDeposits.length === 0) return null;
+                    return (
+                      <div className="pt-2 border-t border-stone-800/60 space-y-1.5">
+                        <div className="text-[10px] uppercase tracking-wider text-stone-500 font-semibold">
+                          Wpłaty w tym miesiącu
+                        </div>
+                        {monthDeposits.map((dep) => (
+                          <div
+                            key={dep.id}
+                            className="flex items-center justify-between gap-2 text-xs bg-stone-900/60 px-2.5 py-1.5 rounded-lg border border-stone-800/80"
+                          >
+                            <div className="min-w-0 flex-1 truncate text-stone-300">
+                              <span className="font-mono text-[11px] text-stone-500 mr-1.5">
+                                {dep.date ? dep.date.slice(5) : ''}
+                              </span>
+                              <span>{dep.description || 'Wpłata na cel'}</span>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <span className="font-mono font-bold text-amber-300 mr-1">
+                                +{formatPLN(dep.amount)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingTransaction({ ...dep, type: 'goal' });
+                                  setActiveModal('edit-transaction');
+                                }}
+                                className="p-1 rounded text-stone-500 hover:text-amber-400 hover:bg-stone-800 transition cursor-pointer"
+                                title="Edytuj wpłatę"
+                              >
+                                <Pencil size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteItem('expense', dep.id)}
+                                className="p-1 rounded text-stone-500 hover:text-rose-400 hover:bg-stone-800 transition cursor-pointer"
+                                title="Usuń wpłatę"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
 
-                {/* Akcja wpłaty na cel - odzwierciedla się w Operacjach */}
+                {/* Akcja wpłaty na cel */}
                 {!isCompleted && (
                   <div className="pt-1 border-t border-stone-800/60 flex justify-end">
                     <button
                       type="button"
                       onClick={() => {
+                        setSelectedCategoryForTx(null);
                         setSelectedGoalForTx(goal.id);
+                        setInitialTxType('goal');
                         setActiveModal('add-transaction');
                       }}
                       className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border border-amber-500/30 transition flex items-center gap-1.5 cursor-pointer"
@@ -1076,9 +1003,10 @@ export function BudgetView({
         </div>
       </div>
 
-      {/* 5. ZOBOWIĄZANIA TERMINOWE I RATY */}
+      {/* 5. RATY */}
       <ExpiringObligationsSection
         obligations={expiringObligations}
+        monthKey={monthKey}
         onOpenAddModal={() => {
           setEditingObligation(null);
           setActiveModal('add-obligation');
@@ -1088,8 +1016,56 @@ export function BudgetView({
           setActiveModal('edit-obligation');
         }}
         onIncrementPaid={handleIncrementObligationPaid}
+        onUndoPaid={handleUndoObligationPaid}
         onDeleteObligation={handleDeleteObligation}
       />
+
+      {/* MODAL SZCZEGÓŁÓW (PRZYCHODY / KOSZTY STAŁE / KATEGORIA) */}
+      {activeDetailsData && (
+        <BudgetDetailsModal
+          mode={activeDetailsData.mode}
+          category={activeDetailsData.category}
+          items={activeDetailsData.items}
+          people={people}
+          onClose={() => setDetailsModal(null)}
+          onAdd={() => {
+            setEditingTransaction(null);
+            setSelectedGoalForTx(null);
+            if (activeDetailsData.mode === 'incomes') {
+              setSelectedCategoryForTx(null);
+              setInitialTxType('income');
+            } else if (activeDetailsData.mode === 'fixedCosts') {
+              setSelectedCategoryForTx(null);
+              setInitialTxType('fixedCost');
+            } else {
+              setSelectedCategoryForTx(
+                activeDetailsData.category?.isFallback ? null : activeDetailsData.category?.id || null
+              );
+              setInitialTxType('expense');
+            }
+            setActiveModal('add-transaction');
+          }}
+          onEdit={(item) => {
+            const txType =
+              activeDetailsData.mode === 'incomes'
+                ? 'income'
+                : activeDetailsData.mode === 'fixedCosts'
+                ? 'fixedCost'
+                : 'expense';
+            setEditingTransaction({ ...item, type: txType });
+            setActiveModal('edit-transaction');
+          }}
+          onDelete={(item) => {
+            const txType =
+              activeDetailsData.mode === 'incomes'
+                ? 'income'
+                : activeDetailsData.mode === 'fixedCosts'
+                ? 'fixedCost'
+                : 'expense';
+            handleDeleteItem(txType, item.id);
+          }}
+        />
+      )}
 
       {/* MODAL DODAWANIA I EDYCJI TRANSAKCJI */}
       {(activeModal === 'add-transaction' || activeModal === 'edit-transaction') && (
@@ -1100,11 +1076,14 @@ export function BudgetView({
           people={people}
           currentPersonId={currentPersonId}
           initialGoalId={selectedGoalForTx}
-          initialType={selectedGoalForTx ? 'goal' : 'expense'}
+          initialCategoryId={selectedCategoryForTx}
+          initialType={selectedGoalForTx ? 'goal' : initialTxType}
           initialTransaction={activeModal === 'edit-transaction' ? editingTransaction : null}
           onClose={() => {
             setActiveModal(null);
             setSelectedGoalForTx(null);
+            setSelectedCategoryForTx(null);
+            setInitialTxType('expense');
             setEditingTransaction(null);
           }}
           onSave={handleSaveTransaction}
@@ -1115,6 +1094,7 @@ export function BudgetView({
       {activeModal === 'manage-categories' && (
         <ManageCategoriesModal
           categories={currentMonthBudget?.categories || []}
+          categoryExpenseCounts={summary.categoryExpenseCounts}
           onClose={() => setActiveModal(null)}
           onSave={handleSaveCategories}
         />
